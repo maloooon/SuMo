@@ -60,20 +60,6 @@ class MultiviewDataset(Dataset[List[torch.Tensor]]):
         return self.X
 
 
-class MultiviewDatasetClf(MultiviewDataset):
-    """Classification
-       y : classification value"""
-    y: torch.Tensor
-
-    def __init__(self, *X, y: torch.Tensor, **kwargs) -> None:
-        super().__init__(*X, **kwargs)
-        assert y.size(0) == self.n_samples, "Shape mismatch between `X` and `y`"
-        self.y = y
-
-    def __getitem__(self, index):
-        X, mask = super().__getitem__(index)
-        return X, mask, self.y[index]
-
 
 class MultiviewDatasetSurv(MultiviewDataset):
     """Survival data,
@@ -192,10 +178,6 @@ class SurvMultiviewDataModule(pl.LightningDataModule):
                 col for col in self.df.columns if col not in cols_leave + cols_drop
             ]
 
-        # self.meta_data_train, self.meta_data_test = torch.from_numpy(
-        #     df_train[cols_meta].values
-        # ), torch.from_numpy(df_test[cols_meta].values)
-
         # ???
         self.meta_data_train, self.meta_data_test = (
             df_train[cols_meta],
@@ -203,13 +185,20 @@ class SurvMultiviewDataModule(pl.LightningDataModule):
         )
 
         # Preprocess train and test data with programmed function
-
         self.x_train, self.x_test = preprocess_features(
-            df_train=df_train.drop(cols_drop, axis=1), # drop duration/event from df, as we only want the numeric values
-            df_test=df_test.drop(cols_drop, axis=1),   # for training and testing
+            df_train=df_train, # drop duration/event from df, as we only want the numeric values
+            df_test=df_test,   # for training and testing
             cols_std=cols_std,
             cols_leave=cols_leave,
         )
+
+        # Save event,duration for train and test set
+        self.label_train = df_train[["event","duration"]]
+        self.label_test = df_test[["event","duration"]]
+
+        #drop
+        df_train.drop(cols_drop, axis=1)
+        df_test.drop(cols_drop, axis=1)
 
         #LabTransDiscreteTime : Discretize continuous (duration, event) pairs based on a set of cut points.
         # no parameter given, so I think equidistant discretization (scheme='equidistant' in pycox module)
@@ -228,12 +217,12 @@ class SurvMultiviewDataModule(pl.LightningDataModule):
         # cuts : cuts {int, array} -- Defining cut points, either the number of cuts, or the actual cut points.
         # in our case we take the times until event happens/person is right-censored as cut points
         #   self.labtrans = logistic_hazard.LabTransDiscreteTime(self.n_durations)
-        self.labtrans = LabTransDiscreteTime(self.n_durations)
+    #    self.labtrans = LabTransDiscreteTime(self.n_durations)
         if stage == "fit" or stage is None:
             # Pre-process features and targets
-            self.y_train = self.labtrans.fit_transform(duration_train, event_train)
-            self.y_train_duration = torch.from_numpy(self.y_train[0])
-            self.y_train_event = torch.from_numpy(self.y_train[1])
+    #        self.y_train = self.labtrans.fit_transform(duration_train, event_train)
+    #        self.y_train_duration = torch.from_numpy(self.y_train[0])
+    #        self.y_train_event = torch.from_numpy(self.y_train[1])
             # Input train_set as list of lists , with each view in a singe list (test ! )
             self.train_set = MultiviewDatasetSurv(
                 *[
@@ -242,16 +231,16 @@ class SurvMultiviewDataModule(pl.LightningDataModule):
                     ]
                     for m in range(self.n_views)
                 ],
-                duration=self.y_train_duration,
-                event=self.y_train_event,
-                meta_data=self.meta_data_train,
+                duration=torch.tensor(self.label_train["duration"].values),
+                event=torch.tensor(self.label_train["event"].values),
             )
 
-            self.n_out_features = self.labtrans.out_features
+        #    self.n_out_features = self.labtrans.out_features
 
         if stage == "test" or stage is None:
-            # TODO: fix
-            # Return test dataframe
+          #  self.test_set =
+
+
             self.df_test = df_test
 
     def train_dataloader(self):
@@ -268,18 +257,6 @@ class SurvMultiviewDataModule(pl.LightningDataModule):
             **self.kwargs,
         )
         return train_loader
-
-
-# if __name__ == "__main__":
-#     df = metabric.read_df()
-#     og_cols = ['x0', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6', 'x7', 'x8', 'duration', 'event']
-#     new_cols = ['x0', 'x1', 'x2', 'x3', 'x8', 'x4', 'x5', 'x6', 'x7', 'duration', 'event']
-#     df = df[new_cols]
-#     feature_offsets = [0, 5, 9]
-#     data = SurvMultiviewDataModule(df, feature_offsets=feature_offsets)
-#     data.setup(cols_std=new_cols[:feature_offsets[1]], cols_leave=new_cols[feature_offsets[1]:feature_offsets[2]])
-#     data_loader = data.train_dataloader()
-#     x_train, x_mask, y_train_duration, y_train_event = next(iter(data_loader))
 
 
 
@@ -349,7 +326,9 @@ if __name__ == "__main__":
 
 
     df = pd.concat([data_mRNA, data_DNA, data_microRNA, data_RPPA, data_survival], axis=1)
-    # ROW NAMES
+
+
+    """
     row_names = []
     for row in df.index:
         row_names.append(row)
@@ -379,57 +358,18 @@ if __name__ == "__main__":
     #rename columns and rows (index)
     df.columns = column_names
     df.index = row_names
+    """
+    data_test = MultiviewDataset(torch.tensor(df))
 
-
-    # full data frame : rows represent samples, columns of all features of all data types, access
-    # ones you need via feature offset
     #print(df.shape) # 498 x 12486
-
     data = SurvMultiviewDataModule(df,feature_offsets)
     data.setup()
+    # print(data.df.isnull().values.any())
     data_loader = data.train_dataloader()
     x_train, x_mask, y_train_duration, y_train_event = next(iter(data_loader))
+    print(x_train)
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-    #**** not implemented, different dataset ****
-    """
-    cluster_id = pd.read_csv(
-        os.path.join("examples", "TCGA", "tgca_multi_view_clusters.csv"), index_col=0
-    )
-    cluster_id = cluster_id.astype("category")
-
-    full_df = pd.merge(
-        df, cluster_id, left_index=True, right_index=True, how="inner"
-    ).rename({"0": "cancer_type"}, axis="columns")
-
-    # full_df['cancer_type'] = full_df['cancer_type'].astype('category')
-    full_df["cancer_type"] = preprocessing.LabelEncoder().fit_transform(
-        full_df["cancer_type"]
-    )
-    
-    
-    """
-
-    """
-
-    data_module = SurvMultiviewDataModule(
-        full_df.sample(100), feature_offsets=feature_offsets, batch_size=10
-    )
-    data_module.setup(cols_std=full_df.columns[:-3], cols_meta=["cancer_type"])
-    data_loader = data_module.train_dataloader()
-    x_train, x_mask, y_train_duration, y_train_event, meta_data = next(
-        iter(data_loader)
-    ) """
-
+#%%

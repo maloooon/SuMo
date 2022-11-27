@@ -1,0 +1,284 @@
+from typing import Dict, List, Tuple
+import os
+import numpy as np
+import pandas as pd
+import pytorch_lightning as pl
+import torch
+from pycox.datasets import metabric
+from pycox.models import logistic_hazard
+from sklearn import preprocessing
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn_pandas import DataFrameMapper
+from torch.utils.data import DataLoader, Dataset
+
+
+
+class MultiOmicsDataset(Dataset):
+
+    # [tensor von allen samples view 1,  tensor von allen samples view 2, ... ]
+    # in dem tensor jeweils features sample1, features sample 2, ...
+
+    def __init__(self, X, duration, event):
+        self.X = [torch.nan_to_num(x_view) for x_view in X]
+        self.n_samples = X[0].size(0) # number samples
+        self.n_views = len(X) # number views (mRNA, DNA, microRNA, RPPA)
+        self.mask = [torch.isnan(x_view) for x_view in X] #List of booleans for each numeric value in samples ;True : NaN values
+        self.duration = duration
+        self.event = event
+
+
+        # Check if for each view (each tensor containing all samples for one view) the amount of samples
+        # is the same as the sample size, otherwise print mismatch
+        assert all(
+            view.size(0) == self.n_samples for view in X
+        ), "Size mismatch between tensors"
+
+
+
+    def __len__(self):
+        """Return the amount of samples"""
+        return self.n_samples
+
+
+    def __getitem__(self, index):
+        """return the whole sample (all views)"""
+        #index, : slicing for multidimensional array (multidim tensor)
+        return [self.X[m][index, :] for m in range(self.n_views)], \
+               [self.mask[m][index, :] for m in range(self.n_views)], \
+               self.duration[index], self.event[index]
+
+
+
+def preprocess_features(
+        df_train: pd.DataFrame, # train dataset
+        df_test: pd.DataFrame, # test dataset
+        cols_std: List[str], # feature names, numeric variables
+        cols_leave: List[str], # feature names, binary variables
+        feature_offset : List[int]
+) -> Tuple[torch.Tensor]:
+    """Preprocess different data
+    #Numeric variables: Standardize
+    #Binary variables: No preprocessing necessary
+    (#Categorical variables: Create embeddings)
+    see pycox tutorial  : https://nbviewer.org/github/havakv/pycox/blob/master/examples/01_introduction.ipynb
+    or https://towardsdatascience.com/how-to-implement-deep-neural-networks-for-time-to-event-analyses-9aa0aeac4717
+    """
+    if cols_std is not None:
+        standardize = [([col], StandardScaler()) for col in cols_std]
+        leave = [(col, None) for col in cols_leave]
+        # map together so we have all features present again
+        mapper = DataFrameMapper(standardize + leave)
+        x_train = mapper.fit_transform(df_train).astype(np.float32)
+        x_test = mapper.transform(df_test).astype(np.float32)
+        x_train_df = pd.DataFrame(x_train)
+        x_test_df = pd.DataFrame(x_test)
+
+        # Order by view so it works with Dataset class
+        x_train_ordered_by_view = []
+        x_test_ordered_by_view = []
+
+        for x in range(len(feature_offset) - 3): # -3 bc we don't have duration/event in training tensor
+            x_train_ordered_by_view.append(torch.tensor((x_train_df.iloc[:, feature_offsets[x]: feature_offsets[x + 1]]).values))
+            x_test_ordered_by_view.append(torch.tensor((x_train_df.iloc[:, feature_offsets[x]: feature_offsets[x + 1]]).values))
+
+
+
+
+    else:
+        # Order by view so it works with Dataset class
+        x_train_ordered_by_view = []
+        x_test_ordered_by_view = []
+        for x in range(len(feature_offset) - 3): # -3 bc we don't have duration/event in training tensor
+            x_train_ordered_by_view.append(torch.tensor((df_train.iloc[:, feature_offsets[x]: feature_offsets[x + 1]]).values))
+            x_test_ordered_by_view.append(torch.tensor((df_train.iloc[:, feature_offsets[x]: feature_offsets[x + 1]]).values))
+
+
+
+    return x_train_ordered_by_view, x_test_ordered_by_view
+
+
+class SurvMultiOmicsDataModule(pl.LightningDataModule):
+    """Input is the whole dataframe : We merge all data types together, with the feature offsets we can access
+       certain data types"""
+    def __init__(
+            self, df, feature_offsets, n_durations = 10, batch_size = 389): # 389 all training samples
+        super().__init__()
+        self.df = df
+        self.feature_offsets = feature_offsets # cumulative sum of features in list of features [6000, 6000, 336, 148]
+        self.n_views = len(feature_offsets) - 1
+        self.n_durations = n_durations
+        self.batch_size = batch_size
+
+    def setup(
+            self,
+            test_size=0.2,
+            cols_std=None,   #numeric feature names
+            cols_leave=None, #binary feature names
+            col_duration="duration",
+            col_event="event",
+            stage=None, #current stage of program (fit,test)
+    ):
+
+        """Split data into test and training set, preprocess this data with preprocess_features"""
+        df_train, df_test = train_test_split(self.df, test_size=test_size)
+
+        duration_train, duration_test = (
+            df_train[col_duration].values,
+            df_test[col_duration].values,
+        )
+        event_train, event_test = df_train[col_event].values, df_test[col_event].values
+
+        cols_survival = [col_duration, col_event]
+        cols_drop = cols_survival
+
+
+
+        if cols_leave is None:
+            cols_leave = []
+
+        # features with numeric values
+        if cols_std is None:
+            cols_std = [
+                col for col in self.df.columns if col not in cols_leave + cols_drop
+            ]
+
+
+
+        # Preprocess train and test data with programmed function
+        self.x_train, self.x_test = preprocess_features(
+            df_train=df_train.drop(cols_drop, axis = 1), # drop duration/event from df, as we don't want these
+            df_test=df_test.drop(cols_drop, axis = 1),   # for training and testing sets
+            cols_std=cols_std,
+            cols_leave=cols_leave,
+            feature_offset= self.feature_offsets
+        )
+
+
+        #LabTransDiscreteTime : Discretize continuous (duration, event) pairs based on a set of cut points.
+        # no parameter given, so I think equidistant discretization (scheme='equidistant' in pycox module)
+        #logistic_hazard : A discrete-time survival model that minimize the likelihood for right-censored data by
+        #parameterizing the hazard function
+        #example : dog and human life span : dog grow older seven times faster than humans
+        # -->  SD(t) = SH(7t), where t is time, SD survival function dog, SH survival function human
+        # smoker/ non smoker : Snonsmoker(t) = Ssmoker(a*t) (Der nicht Raucher ist, wenn er 20 Jahre alt ist, so alt wie
+        # der Raucher, wenn er a * 20 Jahre alt ist)
+        # a : acceleration factor which can be parameterized as exp(a) in a regression framework, a is to be estimated
+        #(learnt) from the data --> Snonsmoker(t) = Ssmoker(exp(a)*t)
+        # Needed later on to distinguish between multiple cancer types ? or also within one cancer ?
+
+
+        #LabTransDiscreteTime : init(self, cuts, scheme='equidistant', min_=0., dtype=None)
+        # cuts : cuts {int, array} -- Defining cut points, either the number of cuts, or the actual cut points.
+        # in our case we take the times until event happens/person is right-censored as cut points
+        #   self.labtrans = logistic_hazard.LabTransDiscreteTime(self.n_durations)
+        #    self.labtrans = LabTransDiscreteTime(self.n_durations)
+        if stage == "fit" or stage is None:
+            # Pre-process features and targets
+            #        self.y_train = self.labtrans.fit_transform(duration_train, event_train)
+            #        self.y_train_duration = torch.from_numpy(self.y_train[0])
+            #        self.y_train_event = torch.from_numpy(self.y_train[1])
+            # Input train_set as list of lists , with each view in a singe list (test ! )
+            self.train_set = MultiOmicsDataset(
+                self.x_train, duration_train, event_train)
+
+
+
+    #    if stage == "test" or stage is None:
+    #          self.test_set = MultiOmicsDataset(
+    #              self.x_test)
+
+
+
+    def train_dataloader(self, batch_size):
+        """
+        Build training dataloader
+        num_workers set to 0 by default because of some thread issue
+        """
+        train_loader = DataLoader(
+            dataset=self.train_set,
+            batch_size=batch_size,
+            shuffle=True,
+            drop_last=True)
+        return train_loader
+
+
+
+
+#if __name__ == '__main__':
+
+data_mRNA = pd.read_csv(
+os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+                 "TCGA_PRAD_1_mrna.csv"), index_col=0
+)
+data_DNA = pd.read_csv(
+os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+             "TCGA_PRAD_2_dna.csv"), index_col=0
+)
+data_microRNA = pd.read_csv(
+os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+             "TCGA_PRAD_3_microrna.csv"), index_col=0
+)
+data_RPPA = pd.read_csv(
+os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+             "TCGA_PRAD_4_rppa.csv"), index_col=0
+)
+data_survival = pd.read_csv(
+os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+             "TCGA_PRAD_meta.csv"), index_col=0
+)
+
+
+data_survival.rename(
+{"vital_status": "event", "duration": "duration"}, axis="columns", inplace=True
+)
+data_survival.drop(labels= 'cancer_type', axis='columns', inplace=True)
+
+data_event = data_survival.iloc[:, 0]
+data_duration = data_survival.iloc[:, 1]
+
+
+n_samples = data_survival.shape[0]
+n_features = [len(data_mRNA.columns),
+              len(data_DNA.columns),
+              len(data_microRNA.columns),
+              len(data_RPPA.columns),
+              1,                    # event
+              1]                    # duration
+#print(n_features) # 6000, 6000, 336, 148
+
+# cumulative sum of features in list
+feature_offsets = [0] + np.cumsum(n_features).tolist()
+#print("foff", feature_offsets) # 0,6000,12000,12336,12484,12485,12486
+
+
+
+df_all = pd.concat([data_mRNA, data_DNA, data_microRNA, data_RPPA, data_survival], axis=1)
+
+
+# drop unnecessary samples
+df_all.drop(df_all[df_all["duration"] <= 0].index, axis = 0, inplace= True)
+
+
+
+tensor_data_order_by_sample = torch.tensor(df_all.values)
+tensor_data_order_by_view = []
+
+for x in range(len(n_features)):
+    tensor_data_order_by_view.append(torch.tensor((df_all.iloc[:, feature_offsets[x]: feature_offsets[x + 1]]).values))
+
+multimodule = SurvMultiOmicsDataModule(df_all, feature_offsets)
+multimodule.setup()
+    #train_loader = multimodule.train_dataloader()
+ #   for data,mask, duration, event in train_loader:
+ #       print(data)
+ #       print(mask)
+ #       print(duration)
+ #       print(event)
+ #       break
+
+
+
+
+
+

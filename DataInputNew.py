@@ -102,7 +102,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
     """Input is the whole dataframe : We merge all data types together, with the feature offsets we can access
        certain data types"""
     def __init__(
-            self, df, feature_offsets, n_durations = 10, batch_size = 389): # 389 all training samples
+            self, df, feature_offsets, n_durations = 10, batch_size = 100): # 389 all training samples
         super().__init__()
         self.df = df
         self.feature_offsets = feature_offsets # cumulative sum of features in list of features [6000, 6000, 336, 148]
@@ -155,30 +155,9 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         )
 
 
-        #LabTransDiscreteTime : Discretize continuous (duration, event) pairs based on a set of cut points.
-        # no parameter given, so I think equidistant discretization (scheme='equidistant' in pycox module)
-        #logistic_hazard : A discrete-time survival model that minimize the likelihood for right-censored data by
-        #parameterizing the hazard function
-        #example : dog and human life span : dog grow older seven times faster than humans
-        # -->  SD(t) = SH(7t), where t is time, SD survival function dog, SH survival function human
-        # smoker/ non smoker : Snonsmoker(t) = Ssmoker(a*t) (Der nicht Raucher ist, wenn er 20 Jahre alt ist, so alt wie
-        # der Raucher, wenn er a * 20 Jahre alt ist)
-        # a : acceleration factor which can be parameterized as exp(a) in a regression framework, a is to be estimated
-        #(learnt) from the data --> Snonsmoker(t) = Ssmoker(exp(a)*t)
-        # Needed later on to distinguish between multiple cancer types ? or also within one cancer ?
 
-
-        #LabTransDiscreteTime : init(self, cuts, scheme='equidistant', min_=0., dtype=None)
-        # cuts : cuts {int, array} -- Defining cut points, either the number of cuts, or the actual cut points.
-        # in our case we take the times until event happens/person is right-censored as cut points
-        #   self.labtrans = logistic_hazard.LabTransDiscreteTime(self.n_durations)
-        #    self.labtrans = LabTransDiscreteTime(self.n_durations)
         if stage == "fit" or stage is None:
-            # Pre-process features and targets
-            #        self.y_train = self.labtrans.fit_transform(duration_train, event_train)
-            #        self.y_train_duration = torch.from_numpy(self.y_train[0])
-            #        self.y_train_event = torch.from_numpy(self.y_train[1])
-            # Input train_set as list of lists , with each view in a singe list (test ! )
+
             self.train_set = MultiOmicsDataset(
                 self.x_train, duration_train, event_train)
 
@@ -260,6 +239,17 @@ df_all = pd.concat([data_mRNA, data_DNA, data_microRNA, data_RPPA, data_survival
 df_all.drop(df_all[df_all["duration"] <= 0].index, axis = 0, inplace= True)
 
 
+#Get names of features
+features = []
+for a in range(len(n_features)):
+    features.append(list(df_all.columns.values[feature_offsets[a]:feature_offsets[a+1]]))
+
+
+
+
+
+
+
 
 tensor_data_order_by_sample = torch.tensor(df_all.values)
 tensor_data_order_by_view = []
@@ -282,3 +272,5 @@ multimodule.setup()
 
 
 
+
+#%%

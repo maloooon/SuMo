@@ -165,7 +165,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
     #    if stage == "test" or stage is None:
     #          self.test_set = MultiOmicsDataset(
-    #              self.x_test)
+    #              self.x_test, duration_test, event_test)
 
 
 
@@ -259,11 +259,21 @@ for x in range(len(n_features)):
 
 multimodule = SurvMultiOmicsDataModule(df_all, feature_offsets)
 multimodule.setup()
-    #train_loader = multimodule.train_dataloader()
- #   for data,mask, duration, event in train_loader:
+
+
+
+
+
+
+
+
+
+
+
+
  #       print(data)
  #       print(mask)
- #       print(duration)
+ #      print(duration)
  #       print(event)
  #       break
 

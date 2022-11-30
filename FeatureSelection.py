@@ -125,6 +125,9 @@ class F_eigengene_matrices():
     pass
 
 
+
+
+
 class F_AE(nn.Module):
     """Use the hidden layer between Encoder and Decoder.
     Based on : https://medium.com/pytorch/implementing-an-autoencoder-in-pytorch-19baa22647d1

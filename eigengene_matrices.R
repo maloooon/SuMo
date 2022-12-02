@@ -37,11 +37,24 @@
 #' @import stats
 
 
+if (!require("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+
+BiocManager::install("Biobase")
+
+
+library(Biobase)
+
+
+install.packages("matrixStats")
+
+library("matrixStats")
+
 
 .onAttach = function(libname, pkgname)
 {
   ourVer = try( gsub("[^0-9_.-]", "", utils::packageVersion("lmQCM"), fixed = FALSE) );
-  
+
   if (inherits(ourVer, "try-error")) ourVer = "";
   packageStartupMessage(paste("  Package lmQCM", ourVer, "loaded.\n"))
   packageStartupMessage("==========================================================================\n");
@@ -64,19 +77,24 @@ merging_lmQCM <- function(C, beta=0.4, minClusterSize=10){
   res <- sort.int(sizeC, decreasing = TRUE, index.return=TRUE)
   sortC <- res$x
   sortInd <- res$ix
-  
+
   C <- C[sortInd] # Still C, but sorted based on number of elements in each cell
-  
+
+
   ind <- which(sortC >= minClusterSize)
-  
+
   mergedCluster <- C[ind]
+
+  #  print(C[sortInd])
   mergeOccur <- 1
   currentInd <- 0
-  
+
   message(sprintf(" %d Modules before merging.", length(C)))
+
   while (mergeOccur == 1) {
     mergeOccur <- 0
     while (currentInd < length(mergedCluster)){
+
       currentInd <- currentInd + 1
       if (currentInd < length(mergedCluster)){
         keepInd <- 1:currentInd
@@ -91,24 +109,60 @@ merging_lmQCM <- function(C, beta=0.4, minClusterSize=10){
           }
         }
         mergedCluster <- mergedCluster[keepInd]
-        # message(sprintf("The length of merged Cluster: %d", length(mergedCluster)))
+        message(sprintf("The length of merged Cluster: %d", length(mergedCluster)))
       }
     }
+
     sizeMergedCluster <- matrix(0, nrow = 0, ncol = length(mergedCluster))
-    for (i in 1 : length(mergedCluster)) {
-      sizeMergedCluster[i] <- length(mergedCluster[[i]])
+
+    if (length(mergedCluster) == 0) { # ADDED
+
+
     }
+    else {
+      for (i in 1 : length(mergedCluster)) {
+        #  print(i)
+        #  print(length(mergedCluster[[i]])) #
+
+        sizeMergedCluster[i] <- length(mergedCluster[[i]]) # ERROR HERE
+      }
+
+    }
+
+
+
+
+
     res <- sort.int(sizeMergedCluster, decreasing = TRUE, index.return=TRUE)
     sortSize <- res$x
     sortMergedInd <- res$ix
     mergedCluster <- mergedCluster[sortMergedInd]
     currentInd <- 0
+
+
   }
-  for (i in 1:length(mergedCluster)){
-    mergedCluster[[i]] <- unname(mergedCluster[[i]])
+  if (length(mergedCluster) == 0) { # ADDED
+
+
+  }
+  else {
+    for (i in 1:length(mergedCluster)){
+
+      mergedCluster[[i]] <- unname(mergedCluster[[i]])
+
+
+    }
+
   }
   message(sprintf(" %d Modules remain after merging.", length(mergedCluster)))
-  return(mergedCluster)
+
+  if (length(mergedCluster) == 0) { #ADDED
+    return (C)
+  }
+  else {
+    return(mergedCluster)
+  }
+
 }
 
 
@@ -138,7 +192,7 @@ fastFilter <- function (RNA, lowest_percentile_mean = 0.2, lowest_percentile_var
     }
     return(selected)
   }
-  
+
   # Remove data with lowest m% mean exp value shared by all samples
   message("Note: For RNA data, we suppose input matrix (data frame) is with:")
   message("      Row: Genes;    Columns: Samples.")
@@ -154,7 +208,7 @@ fastFilter <- function (RNA, lowest_percentile_mean = 0.2, lowest_percentile_var
   }
   message(sprintf("(%d genes, %d samples) after removing lowest %.2f%% mean expression value.",
                   dim(RNA_filtered1)[1], dim(RNA_filtered1)[2], percentile*100))
-  
+
   # Remove data with lowest 10% variance across samples
   percentile = lowest_percentile_variance
   if (percentile > 0){
@@ -171,7 +225,7 @@ fastFilter <- function (RNA, lowest_percentile_mean = 0.2, lowest_percentile_var
     RNA_filtered2 = RNA_filtered1
     geneID_filtered2 = geneID_filtered1
   }
-  
+
   message(sprintf("(%d genes, %d samples) after removing lowest %.2f%% variance expression value.",
                   dim(RNA_filtered2)[1], dim(RNA_filtered2)[2], lowest_percentile_variance*100))
   return(RNA_filtered2)
@@ -183,10 +237,10 @@ fastFilter <- function (RNA, lowest_percentile_mean = 0.2, lowest_percentile_var
 localMaximumQCM <- function (cMatrix, gamma = 0.55, t = 1, lambda = 1){
   C <- list()
   nRow <- nrow(cMatrix)
-  maxV <- apply(cMatrix, 2, max)
-  maxInd <- apply(cMatrix, 2, which.max) # several diferrences comparing with Matlab results
-  
-  
+  maxV <- apply(cMatrix, 2, max) # max correlation value in columns of correlation matrix (represented as vector)
+  maxInd <- apply(cMatrix, 2, which.max) # several diferrences comparing with Matlab results ; # index of max
+
+
   # Step 1 - find the local maximal edges
   # maxEdges <- matrix(0, nrow = 0, ncol = 2)
   # maxW <- matrix(0, nrow = 0, ncol = 1)
@@ -196,26 +250,27 @@ localMaximumQCM <- function (cMatrix, gamma = 0.55, t = 1, lambda = 1){
   #     maxW <- rbind(maxW, maxV[i])
   #   }
   # }
-  lm.ind <- which(maxV == sapply(maxInd, function(x) max(cMatrix[x,])))
-  maxEdges <- cbind(maxInd[lm.ind], lm.ind)
+  lm.ind <- which(maxV == sapply(maxInd, function(x) max(cMatrix[x,]))) # sapply() function takes list,
+  #vector or data frame as input and gives output in vector or matrix. It is useful for operations on list objects and returns a list object of same length of original set
+  maxEdges <- cbind(maxInd[lm.ind], lm.ind) # Take a sequence of vector, matrix or data-frame arguments and combine by columns or rows, respectively.
   maxW <- maxV[lm.ind]
-  
+
   res <- sort.int(maxW, decreasing = TRUE, index.return=TRUE)
   sortMaxV <- res$x
   sortMaxInd <- res$ix
   sortMaxEdges <- maxEdges[sortMaxInd,]
   message(sprintf("Number of Maximum Edges: %d", length(sortMaxInd)))
-  
+
   currentInit <- 1
   noNewInit <- 0
-  
+
   nodesInCluster <- matrix(0, nrow = 0, ncol = 1)
-  
- 
-  
-  
+
+
+
+
   while ((currentInit <= length(sortMaxInd)) & (noNewInit == 0)) {
-    
+
     if (sortMaxV[currentInit] < (gamma * sortMaxV[1]) ) {
       noNewInit <- 1
     }
@@ -289,24 +344,25 @@ setClass("QCMObject", representation(clusters.id = "list", clusters.names = "lis
 #' @export
 lmQCM <- function(data_in,gamma=0.55,t=1,lambda=1,beta=0.4,minClusterSize=10,CCmethod="pearson",positiveCorrelation=F,normalization=F) {
   message("Calculating massive correlation coefficient ...")
-  cMatrix <- cor(t(data_in), method = CCmethod)
-  diag(cMatrix) <- 0
-  
+  cMatrix <- cor(t(data_in), method = CCmethod) # Correlation coefficient, with pearson, matrix (nxn, n : features ?)
+  diag(cMatrix) <- 0 # each feature with itself has a variance of 0
+
   if (positiveCorrelation){
     cMatrix <- abs(cMatrix)
   }
-  
+
   if(normalization){
     # Normalization
     D <- rowSums(cMatrix)
     D.half <- 1/sqrt(D)
-    
-    cMatrix <- apply(cMatrix, 2, function(x) x*D.half )
-    cMatrix <- t(apply(cMatrix, 1, function(x) x*D.half ))
+
+    cMatrix <- apply(cMatrix, 2, function(x) x*D.half ) # apply() takes Data frame or matrix as an input and gives output in vector, 2 means performed on columns
+    cMatrix <- t(apply(cMatrix, 1, function(x) x*D.half )) #1 means performed on rows
+
   }
-  
+
   C <- localMaximumQCM(cMatrix, gamma, t, lambda)
-  
+
   clusters <- merging_lmQCM(C, beta, minClusterSize)
   # map rownames to clusters
   clusters.names = list()
@@ -316,7 +372,7 @@ lmQCM <- function(data_in,gamma=0.55,t=1,lambda=1,beta=0.4,minClusterSize=10,CCm
   }
   # calculate eigengene
   eigengene.matrix <- matrix(0, nrow = length(clusters), ncol = dim(data_in)[2]) # Clusters * Samples
-  
+
   for (i in 1:(length(clusters.names))) {
     geneID <- as.matrix(clusters.names[[i]])
     X <- data_in[geneID,]
@@ -326,44 +382,33 @@ lmQCM <- function(data_in,gamma=0.55,t=1,lambda=1,beta=0.4,minClusterSize=10,CCm
     XNorm <- apply(XNorm, 2, function(x) x/stddev)
     SVD <- svd(XNorm)
     eigenvector.first = SVD$v[,1]
-    
-    
+
+
     # Compute the sign of the eigengene.
     # 1. Correlate the eigengene value with each of the gene's expression in that module across all samples used to generate the module.
     # 2. If >50% of the correlations is negative, then assign a – sign to the eigengene.
     # 3. If 50% or more correlation is positive, the eigengene remains positive.
     # 4. Output the eigene value table with the sign carried (if it is negative).
-    
+
     negative_ratio = sum(cor(t(X), eigenvector.first) < 0)/dim(X)[1]
     if (negative_ratio > 0.5){
       eigenvector.first = -eigenvector.first
     }
-    
+
     eigengene.matrix[i,] <- t(eigenvector.first)
   }
   eigengene.matrix = data.frame(eigengene.matrix)
   colnames(eigengene.matrix) = colnames(data_in)
-  
+
   QCMObject <- methods::new("QCMObject", clusters.id = clusters, clusters.names = clusters.names,
                             eigengene.matrix = eigengene.matrix)
-  
+
   message("Done.")
   return(eigengene.matrix)
-  
+
 }
 
-if (!require("BiocManager", quietly = TRUE))
-  install.packages("BiocManager")
 
-BiocManager::install("Biobase")
-
-
-library(Biobase)
-
-
-install.packages("matrixStats")
-
-library("matrixStats")
 
 
 #data <- data(sample.ExpressionSet)
@@ -371,14 +416,48 @@ library("matrixStats")
 #lmQCM(data)
 #print(data)
 
-data <- read.csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/RPPA_for_r.csv")
-data = subset(data, select= -c(X)) # remove added X column 
-matrix <- t(as.matrix(data))
-class(matrix) <- "numeric"
-eset <- new("ExpressionSet", expr = matrix)
-data_new = assayData(eset)$exprs
+data_DNA <- read.csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/DNA_for_r.csv")
+data_DNA = subset(data_DNA, select= -c(X)) # remove added X column
+matrix_DNA <- t(as.matrix(data_DNA))
+class(matrix_DNA) <- "numeric"
+eset_DNA <- new("ExpressionSet", expr = matrix_DNA)
+data_new_DNA = assayData(eset_DNA)$exprs
 
-print(data_new)
-#lmQCM(data_new)
 
+eigengene_DNA = lmQCM(data_new_DNA)
+#print(eigengene_dna)
+
+data_mRNA <- read.csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/mRNA_for_r.csv")
+data_mRNA = subset(data_mRNA, select= -c(X)) # remove added X column
+matrix_mRNA <- t(as.matrix(data_mRNA))
+class(matrix_mRNA) <- "numeric"
+eset_mRNA <- new("ExpressionSet", expr = matrix_mRNA)
+data_new_mRNA = assayData(eset_mRNA)$exprs
+
+eigengene_mRNA = lmQCM(data_new_mRNA)
+
+data_RPPA <- read.csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/RPPA_for_r.csv")
+data_RPPA = subset(data_RPPA, select= -c(X)) # remove added X column
+matrix_RPPA <- t(as.matrix(data_RPPA))
+class(matrix_RPPA) <- "numeric"
+eset_RPPA <- new("ExpressionSet", expr = matrix_RPPA)
+data_new_RPPA = assayData(eset_RPPA)$exprs
+
+eigengene_RPPA = lmQCM(data_new_RPPA)
+
+
+data_microRNA <- read.csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/microRNA_for_r.csv")
+data_microRNA = subset(data_microRNA, select= -c(X)) # remove added X column
+matrix_microRNA <- t(as.matrix(data_microRNA))
+class(matrix_microRNA) <- "numeric"
+eset_microRNA <- new("ExpressionSet", expr = matrix_microRNA)
+data_new_microRNA = assayData(eset_microRNA)$exprs
+
+eigengene_microRNA = lmQCM(data_new_microRNA)
+
+
+write.csv(eigengene_DNA, "/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/DNA_eigengene_matrix.csv", row.names = TRUE)
+write.csv(eigengene_mRNA, "/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/mRNA_eigengene_matrix.csv", row.names = TRUE)
+write.csv(eigengene_microRNA, "/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/microRNA_eigengene_matrix.csv", row.names = TRUE)
+write.csv(eigengene_RPPA, "/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/RPPA_eigengene_matrix.csv", row.names = TRUE)
 

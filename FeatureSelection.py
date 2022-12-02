@@ -14,6 +14,8 @@ import pandas as pd
 from sklearn.feature_selection import VarianceThreshold
 from torch import nn
 from torch.optim import Adam
+import os
+import time
 
 
 
@@ -68,6 +70,7 @@ class F_PCA():
         plt.xlabel('Principal Component')
         plt.title('PCA Plot')
         plt.show()
+        #TODO : in Jupyter Notebooks
 
 
 
@@ -118,12 +121,57 @@ class F_mRMR():
 
 
 class F_eigengene_matrices():
-    """To be implemented with R :
+    """Implemented with R :
        https://github.com/huangzhii/lmQCM
     """
 
-    pass
+    def __init__(self, train, mask,view, test = None ):
+        self.train = train
+        self.test = test
+        self.mask = mask
+        self.view = view
 
+
+    def preprocess(self):
+        """For the eigengene matrices computation, we need to remove rows (samples) which had all NaN values
+        (missing sample) aswell as each column (feature), which had value 0 for each patient (sample) (this feature
+        is irrelevant either way, as it doesn't have any impact on any patient)"""
+
+
+        train_df = pd.DataFrame(self.train.numpy())
+
+        to_drop_columns = []
+
+        for x in range(len(train_df.columns)):
+            if (train_df.iloc[:, x] == train_df.iloc[:, x][0]).all():
+
+                to_drop_columns.append(x)
+
+        train_df = train_df.drop(train_df.columns[to_drop_columns], axis = 1)
+
+        to_drop_index = []
+
+        for x in range(len(train_df.index)):
+            if torch.all(self.mask[x] == True):
+
+                to_drop_index.append(x)
+
+        train_df = train_df.drop(to_drop_index, axis = 0)
+
+        train_df.to_csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/{}_for_r.csv".format(self.view))
+
+    # TODO : R Implementation in Python, sodass man Code nicht getrennt ausführen muss
+    def get_eigengene_matrix(self):
+        """Loading the eigengene matrix as a panda Dataframe created from R._"""
+        while not os.path.exists(os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+                                              "{}_eigengene_matrix.csv".format(self.view))):
+            time.sleep(1)
+
+        eigengene_matrix = pd.read_csv(os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+                                                     "{}_eigengene_matrix.csv".format(self.view)), index_col=0)
+
+
+        return eigengene_matrix
 
 
 
@@ -132,6 +180,10 @@ class F_AE(nn.Module):
     """Use the hidden layer between Encoder and Decoder.
     Based on : https://medium.com/pytorch/implementing-an-autoencoder-in-pytorch-19baa22647d1
     """
+# TODO : Modell konvergiert ?
+# TODO : test : variance-explained : wv varianz explained die approximation (encoder_output_layer) vs original daten
+# TODO : preprocessing AE centering & standardizing
+# normalize ? was genau gemeint ?
     def __init__(self, train, **kwargs):
         super().__init__()
         self.train = train
@@ -206,10 +258,12 @@ if __name__ == '__main__':
     train_loader = DataInputNew.multimodule.train_dataloader(batch_size = 389)
 
     train_data = []
+    mask_data = []
 
 
     for data,mask, duration, event in train_loader:
         train_data.append(data)
+        mask_data.append(mask)
 
 
 
@@ -270,7 +324,7 @@ if __name__ == '__main__':
                                                                                                                         # TODO : variance based features change for different training sets ;
                                                                                                                         # TODO :  Rather do on all data and pick best there ?
                                                                                                                         # TODO : in ConcatAE paper 1000 best features chosen, but for mRNA and DNA
-                                                                                                                        # TODO : we get about 1000-2000 even with a threshold of 1
+      # variance based : 50% reduction                                                                                                                  # TODO : we get about 1000-2000 even with a threshold of 1
 
     mRNA_variance = F_VARIANCE(train_data[0][0], threshold= 1)
     DNA_variance = F_VARIANCE(train_data[0][1], threshold= 1)
@@ -293,9 +347,10 @@ if __name__ == '__main__':
     print("Reduction DNA data with variance :", 1 - (len(DNA_features_selected) / len(DataInputNew.features[1])))
     print("Reduction microRNA data with variance :", 1 - (len(microRNA_features_selected) / len(DataInputNew.features[2])))
     print("Reduction RPPA data with variance :", 1 - (len(RPPA_features_selected) / len(DataInputNew.features[3])))
+    print()
 
 
-
+    print("Autoencoder based selection")
     # F_AE
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # mRNA
@@ -340,6 +395,17 @@ if __name__ == '__main__':
         print("epoch : {}/{}, loss = {:.6f}".format(epoch + 1, epochs, loss))
       # after 1000 epochs still 0.586 loss --> too high                                                                 # TODO : Smaller loss (weniger layers? weniger input ? vllt feature selection
                                                                                                                         # TODO : vor dem AE schon und mit AE nochmal ?
+    print()
+    print("Eigengene matrices")
+
+    # mRNA, works
+    a = F_eigengene_matrices(train= data[0][0], mask= mask[0][0], view = 'mRNA')
+    a.preprocess()
+    mRNA_eigengene_matrix = (a.get_eigengene_matrix()).transpose()
+
+
+
+
 
 
 

@@ -22,6 +22,8 @@ class Pooling():
             pass
 
 
+# Mixture of experts
+
 
     def MaxPooling(self, type, size):
         """

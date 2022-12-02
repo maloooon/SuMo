@@ -4,9 +4,11 @@ import os
 import pandas as pd
 
 if __name__ == '__main__':
-    x = torch.randn(489,6000)
+    x = torch.randn(10,10)
 
-    for a in x:
-        print(a)
-        print(a[0:2])
-        break
+    df = pd.DataFrame(x)
+
+    print(df)
+    if (df.iloc[:,0][0] == df.iloc[:,0]).all():
+        print("fuego")
+

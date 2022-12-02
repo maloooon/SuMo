@@ -222,8 +222,8 @@ n_features = [len(data_mRNA.columns),
               len(data_DNA.columns),
               len(data_microRNA.columns),
               len(data_RPPA.columns),
-              1,                    # event
-              1]                    # duration
+              1,                    # event (no feature)
+              1]                    # duration (no feature)
 #print(n_features) # 6000, 6000, 336, 148
 
 # cumulative sum of features in list
@@ -231,6 +231,7 @@ feature_offsets = [0] + np.cumsum(n_features).tolist()
 #print("foff", feature_offsets) # 0,6000,12000,12336,12484,12485,12486
 
 
+# TODO : feature selection in module
 
 df_all = pd.concat([data_mRNA, data_DNA, data_microRNA, data_RPPA, data_survival], axis=1)
 

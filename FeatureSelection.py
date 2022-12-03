@@ -186,7 +186,7 @@ class F_AE(nn.Module):
 # normalize ? was genau gemeint ?
     def __init__(self, train, **kwargs):
         super().__init__()
-        self.train = train
+        self.train = train # Need train for the dimension of features for current view
 
         self.encoder_hidden_1 = nn.Linear(in_features= train.size(dim=1), out_features= 512)
         self.encoder_hidden_2 = nn.Linear(in_features= 512, out_features= 256)
@@ -247,138 +247,143 @@ class F_AE(nn.Module):
 
 
 
-
-
-
 # TODO : allgemein je nachdem wv features eine view hat, relativ davon nur bestimmt viele für feature selection nehmen?
 
-if __name__ == '__main__':
+#if __name__ == '__main__':
     # Set batch size to size of training set ; We are currently preparing data,
     # thus we can use all samples as one batch (train with single batches later)
-    train_loader = DataInputNew.multimodule.train_dataloader(batch_size = 389)
+train_loader = DataInputNew.multimodule.train_dataloader(batch_size = 10)
 
-    train_data = []
-    mask_data = []
-
-
-    for data,mask, duration, event in train_loader:
-        train_data.append(data)
-        mask_data.append(mask)
+train_data = []
+mask_data = []
 
 
-
-    #print(train_data[0][0]) # data all samples view 1 . shape (389, 6000)
-
-    print("PCA based selection")
-    mRNA_PCA = F_PCA(train_data[0][0], keep_variance= 0.9)
-    principal_components_mRNA = mRNA_PCA.apply_pca()
-    plot = mRNA_PCA.plot()
-    rows, columns = principal_components_mRNA.shape
-    principal_components_mRNA_df = pd.DataFrame(principal_components_mRNA,
-                                                columns= [["PC {}".format(x) for x in range(columns)]])
-
-    print("Reduction mRNA data with PCA :", 1 - (columns / len(DataInputNew.features[0])))
+for data,mask, duration, event in train_loader:
+    train_data.append(data)
+    mask_data.append(mask)
+   # print(data)
+   # print(data[0]) # mRNA data
+    break
 
 
 
-    DNA_PCA = F_PCA(train_data[0][1], keep_variance= 0.9)
-    principal_components_DNA = DNA_PCA.apply_pca()
-    rows, columns = principal_components_DNA.shape
-    principal_components_DNA_df = pd.DataFrame(principal_components_DNA,
+views = len(train_data[0])
+
+#   print(train_data)
+
+#print(train_data[0][0]) # data all samples view 1 . shape (389, 6000)
+
+print("PCA based selection")
+mRNA_PCA = F_PCA(train_data[0][0], keep_variance= 0.9)
+principal_components_mRNA = mRNA_PCA.apply_pca()
+plot = mRNA_PCA.plot()
+rows, columns = principal_components_mRNA.shape
+principal_components_mRNA_df = pd.DataFrame(principal_components_mRNA,
+                                            columns= [["PC {}".format(x) for x in range(columns)]])
+
+print("Reduction mRNA data with PCA :", 1 - (columns / len(DataInputNew.features[0])))
+
+
+
+DNA_PCA = F_PCA(train_data[0][1], keep_variance= 0.9)
+principal_components_DNA = DNA_PCA.apply_pca()
+rows, columns = principal_components_DNA.shape
+principal_components_DNA_df = pd.DataFrame(principal_components_DNA,
+                                           columns= [["PC {}".format(x) for x in range(columns)]])
+
+print("Reduction DNA data with PCA :", 1 - (columns / len(DataInputNew.features[1])))
+
+
+microRNA_PCA = F_PCA(train_data[0][2], keep_variance= 0.7)
+
+principal_components_microRNA = microRNA_PCA.apply_pca()
+rows, columns = principal_components_microRNA.shape
+
+principal_components_microRNA_df = pd.DataFrame(principal_components_microRNA,
                                                columns= [["PC {}".format(x) for x in range(columns)]])
 
-    print("Reduction DNA data with PCA :", 1 - (columns / len(DataInputNew.features[1])))
 
-
-    microRNA_PCA = F_PCA(train_data[0][2], keep_variance= 0.7)
-
-    principal_components_microRNA = microRNA_PCA.apply_pca()
-    rows, columns = principal_components_microRNA.shape
-
-    principal_components_microRNA_df = pd.DataFrame(principal_components_microRNA,
-                                                   columns= [["PC {}".format(x) for x in range(columns)]])
-
-
-    print("Reduction microRNA data with PCA :", 1 - (columns / len(DataInputNew.features[2])))
+print("Reduction microRNA data with PCA :", 1 - (columns / len(DataInputNew.features[2])))
 
 
 
 
 
-    RPPA_PCA = F_PCA(train_data[0][3], keep_variance= 0.7)
-    principal_components_RPPA = RPPA_PCA.apply_pca()
-    rows, columns = principal_components_RPPA.shape
+RPPA_PCA = F_PCA(train_data[0][3], keep_variance= 0.7)
+principal_components_RPPA = RPPA_PCA.apply_pca()
+rows, columns = principal_components_RPPA.shape
 
 
 
-    principal_components_RPPA_df = pd.DataFrame(principal_components_RPPA,
-                                                columns= [["PC {}".format(x) for x in range(columns)]])
+principal_components_RPPA_df = pd.DataFrame(principal_components_RPPA,
+                                            columns= [["PC {}".format(x) for x in range(columns)]])
 
 
-    print("Reduction RPPA data with PCA :", 1 - (columns / len(DataInputNew.features[3])))
+print("Reduction RPPA data with PCA :", 1 - (columns / len(DataInputNew.features[3])))
 
-   # print(principal_components_microRNA_df)
+# print(principal_components_microRNA_df)
 
-    # ADD LABEL
-    #principal_components_RPPA_df['duration'] = duration
-                                                                                                                        # TODO : variance based features change for different training sets ;
-                                                                                                                        # TODO :  Rather do on all data and pick best there ?
-                                                                                                                        # TODO : in ConcatAE paper 1000 best features chosen, but for mRNA and DNA
-      # variance based : 50% reduction                                                                                                                  # TODO : we get about 1000-2000 even with a threshold of 1
+# ADD LABEL
+#principal_components_RPPA_df['duration'] = duration
+                                                                                                                    # TODO : variance based features change for different training sets ;
+                                                                                                                    # TODO :  Rather do on all data and pick best there ?
+                                                                                                                    # TODO : in ConcatAE paper 1000 best features chosen, but for mRNA and DNA
+  # variance based : 50% reduction                                                                                                                  # TODO : we get about 1000-2000 even with a threshold of 1
 
-    mRNA_variance = F_VARIANCE(train_data[0][0], threshold= 1)
-    DNA_variance = F_VARIANCE(train_data[0][1], threshold= 1)
-    microRNA_variance = F_VARIANCE(train_data[0][2], threshold = 0.8)
-    RPPA_variance = F_VARIANCE(train_data[0][3], threshold = 0.6)
+mRNA_variance = F_VARIANCE(train_data[0][0], threshold= 1)
+DNA_variance = F_VARIANCE(train_data[0][1], threshold= 1)
+microRNA_variance = F_VARIANCE(train_data[0][2], threshold = 0.8)
+RPPA_variance = F_VARIANCE(train_data[0][3], threshold = 0.6)
 
-    data_mRNA,mask_mRNA = mRNA_variance.apply_variance()
-    data_DNA,mask_DNA = DNA_variance.apply_variance()
-    data_microRNA,mask_microRNA = microRNA_variance.apply_variance()
-    data_RPPA,mask_RPPA = RPPA_variance.apply_variance()
+data_mRNA,mask_mRNA = mRNA_variance.apply_variance()
+data_DNA,mask_DNA = DNA_variance.apply_variance()
+data_microRNA,mask_microRNA = microRNA_variance.apply_variance()
+data_RPPA,mask_RPPA = RPPA_variance.apply_variance()
 
-    mRNA_features_selected = [DataInputNew.features[0][index] for index in mask_mRNA]
-    DNA_features_selected = [DataInputNew.features[1][index] for index in mask_DNA]
-    microRNA_features_selected = [DataInputNew.features[2][index] for index in mask_microRNA]
-    RPPA_features_selected = [DataInputNew.features[3][index] for index in mask_RPPA]
+mRNA_features_selected = [DataInputNew.features[0][index] for index in mask_mRNA]
+DNA_features_selected = [DataInputNew.features[1][index] for index in mask_DNA]
+microRNA_features_selected = [DataInputNew.features[2][index] for index in mask_microRNA]
+RPPA_features_selected = [DataInputNew.features[3][index] for index in mask_RPPA]
 
-    print()
-    print("Variance based selection")
-    print("Reduction mRNA data with variance :", 1 - (len(mRNA_features_selected) / len(DataInputNew.features[0])))
-    print("Reduction DNA data with variance :", 1 - (len(DNA_features_selected) / len(DataInputNew.features[1])))
-    print("Reduction microRNA data with variance :", 1 - (len(microRNA_features_selected) / len(DataInputNew.features[2])))
-    print("Reduction RPPA data with variance :", 1 - (len(RPPA_features_selected) / len(DataInputNew.features[3])))
-    print()
+print()
+print("Variance based selection")
+print("Reduction mRNA data with variance :", 1 - (len(mRNA_features_selected) / len(DataInputNew.features[0])))
+print("Reduction DNA data with variance :", 1 - (len(DNA_features_selected) / len(DataInputNew.features[1])))
+print("Reduction microRNA data with variance :", 1 - (len(microRNA_features_selected) / len(DataInputNew.features[2])))
+print("Reduction RPPA data with variance :", 1 - (len(RPPA_features_selected) / len(DataInputNew.features[3])))
+print()
 
 
-    print("Autoencoder based selection")
-    # F_AE
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # mRNA
-    model = F_AE(train= train_data[0][0]).to(device)
-    
+print("Autoencoder based selection")
+# F_AE
+
+views_names = ['mRNA','DNA','microRNA','RPPA']
+AE_all_compressed_features = []
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+for x in range(views):
+    model = F_AE(train= train_data[0][x]).to(device)
+
     optimizer = Adam(model.parameters(), lr=1e-3)
 
     criterion = nn.MSELoss() # reconstrution loss
 
-
-    train_loader_2 = DataInputNew.multimodule.train_dataloader(batch_size = 100)
-
- #   for batch_data, mask, duration, event in train_loader_2:
-
- #       print(batch_data[0].size(1)) # mRNA data
-
-    epochs = 20
-
+    train_loader_2 = DataInputNew.multimodule.train_dataloader(batch_size = 80)         # TODO: training samples gibt es 389 viele, Primzahl : kein batch außer 1 um alle durchzugehen ; für 80 werden nur 320 samples durchgegangen und die letzten samples nicht beachtet !
+    epochs = 1
+    temp = []
+    temp2 = []
     for epoch in range(epochs):
         loss = 0
         for batch_data, mask, duration, event in train_loader_2:
-            batch_data = batch_data[0].view(-1, batch_data[0].size(1)).to(device)
+
+            batch_data = batch_data[x].view(-1, batch_data[x].size(1)).to(device) #mRNA
 
             optimizer.zero_grad()
 
             # compressed features is what we are interested in
             reconstructed, compressed_features = model(batch_data)
-           # print(compressed_features)
+            if epoch == epochs - 1: # save compressed_features of last epoch for each batch
+                temp.append(compressed_features) # list of tensors of compressed for each batch
 
             train_loss = criterion(reconstructed, batch_data)
 
@@ -392,29 +397,45 @@ if __name__ == '__main__':
 
         loss = loss / len(train_loader_2)
 
-        print("epoch : {}/{}, loss = {:.6f}".format(epoch + 1, epochs, loss))
-      # after 1000 epochs still 0.586 loss --> too high                                                                 # TODO : Smaller loss (weniger layers? weniger input ? vllt feature selection
-                                                                                                                        # TODO : vor dem AE schon und mit AE nochmal ?
-    print()
-    print("Eigengene matrices")
+        print("epoch : {}/{}, loss = {:.6f} for {} data".format(epoch + 1, epochs, loss, views_names[x]))
+                                                                                                                         # TODO : Smaller loss (weniger layers? weniger input ? vllt feature selection
 
-    # mRNA, works
-    a = F_eigengene_matrices(train= data[0][0], mask= mask[0][0], view = 'mRNA')
-    a.preprocess()
-    mRNA_eigengene_matrix = (a.get_eigengene_matrix()).transpose()
+    compressed_features_view = torch.cat(temp, 0)
+    AE_all_compressed_features.append(compressed_features_view)
 
+for x in range(len(AE_all_compressed_features)):
+    AE_all_compressed_features[x] = torch.detach(AE_all_compressed_features[x]) #detach gradient as we only need
+                                                                          # selected features
 
 
-
+print(AE_all_compressed_features) # TODO : lots of values pressed to 0 ! --> less layers, other activation ?
 
 
 
 
+print()
+print("Eigengene matrices")
 
 
 
 
-    
+# mRNA, works
+a = F_eigengene_matrices(train= data[0][0], mask= mask[0][0], view = 'mRNA')
+a.preprocess()
+mRNA_eigengene_matrix = (a.get_eigengene_matrix()).transpose()
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

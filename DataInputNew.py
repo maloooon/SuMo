@@ -247,7 +247,7 @@ for a in range(len(n_features)):
 
 
 
-
+print(features)
 
 
 

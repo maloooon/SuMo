@@ -184,6 +184,19 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
 
+data_transform = pd.read_csv(
+os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+                 "1.tsv"), index_col=0, sep='\t'
+)
+
+names_mRNA = (data_transform["Entry Name"])
+#names_mRNA.to_csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/mRNA_transf.csv")
+
+#names_mRNA_tensor = torch.tensor(names_mRNA.values)
+
+
+
+
 #if __name__ == '__main__':
 
 data_mRNA = pd.read_csv(
@@ -246,8 +259,150 @@ for a in range(len(n_features)):
     features.append(list(df_all.columns.values[feature_offsets[a]:feature_offsets[a+1]]))
 
 
+# Get features without numbers (needed for conversion)
+features_mRNA_no_numbers = []
+for x in features[0]:
+    features_mRNA_no_numbers.append(''.join([i for i in x if not i.isdigit()]))
 
-print(features)
+
+
+# features to csv file
+df_mRNA_features_no_numbers = pd.DataFrame(features_mRNA_no_numbers)
+
+df_mRNA_features_no_numbers.to_csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/mRNA_feat_for_transf.csv", index=False)
+
+#print(features[1])
+
+# feature to HGNC mapping
+mRNA_HGNC_full = pd.read_excel(
+    os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+                 "mRNA_to_HGNC.xlsx"), index_col=0
+)
+
+mRNA_HGNC_full["features"] = mRNA_HGNC_full.index
+
+mRNA_features_only = mRNA_HGNC_full["features"]
+
+mRNA_features_only = list(mRNA_features_only)
+mRNA_HGNC_dict = {}
+
+# Dictionary ordering HGNC to features
+for feature in mRNA_features_only:
+    mRNA_HGNC_dict[feature] = mRNA_HGNC_full.loc[mRNA_HGNC_full["features"] == feature]["HGNC"].values
+
+
+
+
+
+
+#HGNC to uniprot mapping
+
+uniprot_HGNC_mRNA_full = pd.read_csv(
+    os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+                 "HGNC_mRNA_to_uniprot.tsv"), index_col=0, sep='\t'
+)
+
+
+
+
+uniprot_HGNC_mRNA_HGNC_only = uniprot_HGNC_mRNA_full.index
+uniprot_HGNC_mRNA_HGNC_only = list(uniprot_HGNC_mRNA_HGNC_only)
+
+uniprot_HGNC_mRNA_dict = {}
+
+for HGNC in uniprot_HGNC_mRNA_HGNC_only:
+    uniprot_HGNC_mRNA_dict[HGNC] = uniprot_HGNC_mRNA_full.loc[uniprot_HGNC_mRNA_full.index == HGNC]["Entry"].values
+
+#print(uniprot_HGNC_mRNA_dict)
+
+# Needed for further conversion
+uniprot_HGNC_mRNA_full_entries = uniprot_HGNC_mRNA_full["Entry"]
+
+uniprot_HGNC_mRNA_full_entries.to_csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/uniprot_mRNA_transf.csv", index=False)
+
+
+#Finally, uniprot values to proteins
+uniprot_to_proteins_mRNA_full = pd.read_csv(
+    os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+                 "uniprot_to_protein_mRNA.tsv"), index_col=0, sep="\t"
+)
+
+uniprot_to_proteins_mRNA_dict = {}
+
+
+uniprot_to_proteins_mRNA_uniprot_only = uniprot_to_proteins_mRNA_full.index
+uniprot_to_proteins_mRNA_uniprot_only = list(uniprot_to_proteins_mRNA_uniprot_only)
+
+for uniprot in uniprot_to_proteins_mRNA_uniprot_only:
+    uniprot_to_proteins_mRNA_dict[uniprot] = uniprot_to_proteins_mRNA_full.loc[uniprot_to_proteins_mRNA_full.index == uniprot]["To"].values
+
+
+# Map our features from the beginning to the proteins (the ones that could be mapped : only these will be a part of
+# the GCN
+
+#first from dict(HGNC: uniprot) and dict(uniprot : proteins) to dict(HGNC : proteins)
+
+dict_HGNC_proteins = {}
+
+# Intialize empty dictionary for each HGNC value as key
+print(len(uniprot_HGNC_mRNA_HGNC_only))
+for HGNC in uniprot_HGNC_mRNA_HGNC_only:
+    dict_HGNC_proteins[HGNC] = []
+
+# fill dictionary
+
+for key in uniprot_to_proteins_mRNA_dict:
+    for key2 in uniprot_HGNC_mRNA_dict:
+        if key in uniprot_HGNC_mRNA_dict[key2]:
+            dict_HGNC_proteins[key2].append(uniprot_to_proteins_mRNA_dict[key])
+
+# Wv proteine in HGNC : protein ?
+counter = 0
+for key in dict_HGNC_proteins:
+    if len(dict_HGNC_proteins[key]) != 0:
+        counter += 1
+
+print("counter: {}".format(counter)) #correct
+
+print(dict_HGNC_proteins)
+
+
+# now from dict(HGNC:proteins) and dict(feature:HGNC) to dict(feature:proteins) (by applying the same logic)
+
+dict_features_proteins_mRNA = {}
+
+for features in mRNA_features_only:
+    dict_features_proteins_mRNA[features] = []
+
+
+
+for key in dict_HGNC_proteins:
+    for key2 in mRNA_HGNC_dict:
+        if key in mRNA_HGNC_dict[key2]:
+
+            dict_features_proteins_mRNA[key2].append(dict_HGNC_proteins[key])
+
+
+#print(len(dict_features_proteins_mRNA)) 3020
+
+# How many of our 6000 mRNA features actually have proteins we can look at ?
+proteins = 0
+more_conn = 0
+
+for key in dict_features_proteins_mRNA:
+    if len(dict_features_proteins_mRNA[key]) != 0:
+        proteins += 1
+    if len(dict_features_proteins_mRNA[key]) > 1:
+        more_conn +=1
+
+print("We have {} many feature-protein connections".format(proteins))
+print("We have {} many feature-protein connections where the feature has multiple proteins".format(more_conn))          # TODO : kann das sein ?
+
+
+
+
+
+
 
 
 
@@ -257,6 +412,10 @@ tensor_data_order_by_view = []
 
 for x in range(len(n_features)):
     tensor_data_order_by_view.append(torch.tensor((df_all.iloc[:, feature_offsets[x]: feature_offsets[x + 1]]).values))
+
+
+
+
 
 multimodule = SurvMultiOmicsDataModule(df_all, feature_offsets)
 multimodule.setup()
@@ -283,5 +442,8 @@ multimodule.setup()
 
 
 
+
+
+#%%
 
 #%%

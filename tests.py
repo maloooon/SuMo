@@ -4,6 +4,7 @@ import os
 import pandas as pd
 
 if __name__ == '__main__':
-    x = torch.randn(1,1)
-    print(x.item())
-
+    for x in range(5):
+        if x == 2:
+            print("ja")
+        print(x)

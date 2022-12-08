@@ -32,6 +32,7 @@ class Pooling():
         :param size: pooling size (how many values to look at in one pooling iteration)                                 # TODO : hier nochmal sozusagen feature reduction via höhere size ?
         :return: new data tensor with mean pooled values
         """
+        # TODO : Schleife ersetzen, torch funktion (max/mean)
         # ONLY implemented for size = 1
         mean_pooled_data = []
         mean_pool_for_curr_sample = []

@@ -16,6 +16,7 @@ from torch import nn
 from torch.optim import Adam
 import os
 import time
+import math
 
 
 
@@ -227,13 +228,124 @@ class F_AE(nn.Module):
 
 
 
+class F_PPI_NETWORK():
+    def __init__(self,train):
+        """
+
+        :param train: the PPI-network does feature selection and integration at the same time. Thus the input is the
+                      whole train set
+        """
+        self.train = train
+
+    def setup(self):
+        """
+        We first load the PPI edges & score , the feature spaces of all views to be looked at aswell as the feature
+        to protein mapping of all views. Based on these, we create the adjacency and feature (per sample) matrices
+        :return: adjacency matrix and blueprint for feature matrices (to be created in data loader)
+        """
+
+        ppi_edges_score = pd.read_csv(
+            os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+                         "ppi_edges_score.csv"), index_col=0
+        )
+
+        features_mRNA = pd.read_csv(
+            os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+                         "mRNA_feat_for_transf.csv"), index_col=0
+        )
+
+        features_proteins_mapping_mRNA = pd.read_csv(
+            os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+                         "mRNA_feat_proteins.csv"), index_col=0
+        )
+
+        proteins = pd.read_csv(    os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+                                                "proteins.csv"), index_col=0
+        )
+
+        # Converting data to right structures
+
+
+        features_mRNA = features_mRNA.iloc[:,0].values.tolist()
+
+
+        # mapping feature proteins mRNA
+        features_proteins_mapping_mRNA = features_proteins_mapping_mRNA.to_dict(orient='list')
+
+
+        # removing nan values
+        for key in features_proteins_mapping_mRNA:
+            for x in features_proteins_mapping_mRNA[key]:
+
+                if type(x) is not str:
+                    # since we only have strings in the list (proteins), nan values are the only non-strings
+
+                    features_proteins_mapping_mRNA[key].remove(x)
+
+
+        # ppi nodes & scores
+        nodes1 = (ppi_edges_score.iloc[0].values.tolist())
+        nodes2 = (ppi_edges_score.iloc[1].values.tolist())
+        score = (ppi_edges_score.iloc[2].values.tolist())
+
+        ppi_edges_score = torch.tensor([nodes1,nodes2,score])
+
+       # print(proteins)
+
+
+
+        # Create a list of dictionaries, where each dictionary contains the mapping between proteins and feature
+        # values of all views (TO IMPLEMENT : OTHER FEATURES THAN mRNA)
+
+
+        # We use 389 as batch size, which are all training examples ; needs to be replaced with
+        # something like training_elements_size later on
+        # set feature values to proteins, sample wise
+        train_loader = DataInputNew.multimodule.train_dataloader(batch_size = 20)
+
+
+        sample_to_protein = []
+        # For each sample, make a dictionary with protein : feature value ; save list of dictionaries
+        features_values_proteins_mapping_mRNA = []
+        #print("train ", data)
+        #print("train 0", data[0])
+        #print("sample 0", data[0][0])
+        #print("sample0 first value", data[0][0][0])
+        #mRNA
 
 
 
 
+        for data,mask, duration, event in train_loader:
 
 
+            # Go through each mRNA sample
+            for sample in data[0]:
+                # for each sample dictionary
+                dict_features_proteins_mRNA_values = {}
+                # Through each feature (for mRNA)
+                for feature_idx in range(len(sample)): # len = 6000 features
+                    # If the feature has a mapping in feature to protein
+                    # features_mRNA_no_numbers[feature_idx] : feature name at index
+                    if features_mRNA[feature_idx] in features_proteins_mapping_mRNA:
 
+
+                        # take the proteins at the current index which correspond to the feature we are looking at
+                        protein_list = features_proteins_mapping_mRNA[features_mRNA[feature_idx]]
+
+                        # create dictionary entries for it
+                        for protein in protein_list:
+                            #if key already exists, just append values to protein
+                            if protein in dict_features_proteins_mRNA_values:
+                                dict_features_proteins_mRNA_values[protein].append(sample[feature_idx])
+                            #else create a key entry
+                            else:
+
+                                dict_features_proteins_mRNA_values[protein] = [sample[feature_idx]]
+
+
+                # for each sample, append to list
+                features_values_proteins_mapping_mRNA.append(dict_features_proteins_mRNA_values)
 
 
 
@@ -249,24 +361,29 @@ class F_AE(nn.Module):
 
 # TODO : allgemein je nachdem wv features eine view hat, relativ davon nur bestimmt viele für feature selection nehmen?
 
-#if __name__ == '__main__':
+
+
+if __name__ == '__main__':
     # Set batch size to size of training set ; We are currently preparing data,
     # thus we can use all samples as one batch (train with single batches later)
-train_loader = DataInputNew.multimodule.train_dataloader(batch_size = 10)
+    train_loader = DataInputNew.multimodule.train_dataloader(batch_size = 10)
 
-train_data = []
-mask_data = []
-
-
-for data,mask, duration, event in train_loader:
-    train_data.append(data)
-    mask_data.append(mask)
-   # print(data)
-   # print(data[0]) # mRNA data
-    break
+    train_data = []
+    mask_data = []
 
 
+    for data,mask, duration, event in train_loader:
+        train_data.append(data)
+        mask_data.append(mask)
+       # print(data)
+       # print(data[0]) # mRNA data
+        break
 
+    a = F_PPI_NETWORK(data[0])
+    a.setup()
+
+
+"""
 views = len(train_data[0])
 
 #   print(train_data)
@@ -354,9 +471,12 @@ print("Reduction RPPA data with variance :", 1 - (len(RPPA_features_selected) / 
 print()
 
 
+
+
+
+
 print("Autoencoder based selection")
 # F_AE
-
 views_names = ['mRNA','DNA','microRNA','RPPA']
 AE_all_compressed_features = []
 
@@ -425,6 +545,7 @@ a.preprocess()
 mRNA_eigengene_matrix = (a.get_eigengene_matrix()).transpose()
 
 
+"""
 
 
 
@@ -433,20 +554,4 @@ mRNA_eigengene_matrix = (a.get_eigengene_matrix()).transpose()
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+#%%

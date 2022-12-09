@@ -15,6 +15,7 @@ import math
 import copy
 from itertools import chain
 import CancerDataLoading
+from PPINetworkDataLoading import flatten
 
 
 class MultiOmicsDataset(Dataset):
@@ -188,15 +189,15 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             drop_last=True)
         return train_loader
 
-def flatten(l):
-    return [item for sublist in l for item in sublist]
 
 
 
+# Read PRAD data
 data_PRAD = pd.read_csv(
     os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
                  "PRADData.csv"), index_col=0)
 
+# Read feature offsets of PRAD data
 feat_offsets_PRAD = pd.read_csv(
     os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
                  "PRADDataFeatOffsets.csv"), index_col=0)
@@ -212,13 +213,15 @@ for a in range(len(feat_offsets_PRAD) - 1):
                                                   feat_offsets_PRAD[a+1]]))
 
 
-tensor_data_order_by_sample = torch.tensor(data_PRAD.values)
-tensor_data_order_by_view = []
-
-for x in range(len(feat_offsets_PRAD) - 1):
-    tensor_data_order_by_view.append(torch.tensor((data_PRAD.iloc[:, feat_offsets_PRAD[x]:
-                                                                     feat_offsets_PRAD[x + 1]]).values))
-
-
 multimodule = SurvMultiOmicsDataModule(data_PRAD, feat_offsets_PRAD)
 multimodule.setup()
+
+#tensor_data_order_by_sample = torch.tensor(data_PRAD.values)
+#tensor_data_order_by_view = []
+
+#for x in range(len(feat_offsets_PRAD) - 1):
+#    tensor_data_order_by_view.append(torch.tensor((data_PRAD.iloc[:, feat_offsets_PRAD[x]:
+#                                                                     feat_offsets_PRAD[x + 1]]).values))
+
+# Setting up data (preprocessing, standardizing, preparing so we can use it with dataloader)
+

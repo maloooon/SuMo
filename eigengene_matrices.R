@@ -37,12 +37,12 @@
 #' @import stats
 
 
+options(repos = list(CRAN="http://cran.rstudio.com/"))
+
 if (!require("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 
 BiocManager::install("Biobase")
-
-
 library(Biobase)
 
 
@@ -416,6 +416,16 @@ lmQCM <- function(data_in,gamma=0.55,t=1,lambda=1,beta=0.4,minClusterSize=10,CCm
 #lmQCM(data)
 #print(data)
 
+
+data_RPPA <- read.csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/RPPA_for_r.csv")
+data_RPPA = subset(data_RPPA, select= -c(X)) # remove added X column
+matrix_RPPA <- t(as.matrix(data_RPPA))
+class(matrix_RPPA) <- "numeric"
+eset_RPPA <- new("ExpressionSet", expr = matrix_RPPA)
+data_new_RPPA = assayData(eset_RPPA)$exprs
+
+eigengene_RPPA = lmQCM(data_new_RPPA)
+
 data_DNA <- read.csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/DNA_for_r.csv")
 data_DNA = subset(data_DNA, select= -c(X)) # remove added X column
 matrix_DNA <- t(as.matrix(data_DNA))
@@ -436,14 +446,7 @@ data_new_mRNA = assayData(eset_mRNA)$exprs
 
 eigengene_mRNA = lmQCM(data_new_mRNA)
 
-data_RPPA <- read.csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/RPPA_for_r.csv")
-data_RPPA = subset(data_RPPA, select= -c(X)) # remove added X column
-matrix_RPPA <- t(as.matrix(data_RPPA))
-class(matrix_RPPA) <- "numeric"
-eset_RPPA <- new("ExpressionSet", expr = matrix_RPPA)
-data_new_RPPA = assayData(eset_RPPA)$exprs
 
-eigengene_RPPA = lmQCM(data_new_RPPA)
 
 
 data_microRNA <- read.csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/microRNA_for_r.csv")

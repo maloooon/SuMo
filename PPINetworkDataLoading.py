@@ -4,6 +4,13 @@ import torch
 import DataInputNew
 
 
+def flatten(l):
+    """
+    :param l: list input
+    :return: flattened list (removal of one inner list layer)
+    """
+    return [item for sublist in l for item in sublist]
+
 
 if __name__ == '__main__':
     # Get features without numbers (needed for conversion) ; also remove | and - from strings
@@ -37,15 +44,10 @@ if __name__ == '__main__':
                                      index=True)
 
 
-
-
     # Load proteins and interactions
 
     ppi_data = pd.read_csv(os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
                                         "pp.txt"), sep=" ", header=0)
-
-
-
 
 
     # drop scores below 700 (like in DeepMOCCA)
@@ -99,10 +101,6 @@ if __name__ == '__main__':
     ppi_edges_scores_dataframe = pd.DataFrame(ppi_edges_scores.numpy())
     ppi_edges_scores_dataframe.to_csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/ppi_edges_score.csv",
                                       index=True)
-
-
-
-
 
 
     # Mapping HGNC to uniprot and uniprot to proteins : https://www.uniprot.org/id-mapping
@@ -232,13 +230,6 @@ if __name__ == '__main__':
     for key in uniprot_to_proteins_mRNA_dict:
         uniprot_to_proteins_mRNA_dict[key] = uniprot_to_proteins_mRNA_dict[key].tolist()
 
-    #counter = 0
-    # Remove HGNC-values which couldn't be mapped to uniprot        #TODO : diese funktionen könnten key errors bei dicts zusammenfügen später erzeugen!
-    #for key in list(uniprot_to_proteins_mRNA_dict.keys()):
-    #    if len(uniprot_to_proteins_mRNA_dict[key]) == 0:
-    #        del uniprot_to_proteins_mRNA_dict[key]
-    #        counter += 1
-
 
     print("We have {} successful mappings from uniprots to proteins.".format(len(uniprot_to_proteins_mRNA_dict)))
 
@@ -278,10 +269,6 @@ if __name__ == '__main__':
         dict_features_proteins_mRNA[features] = []
 
 
-    def flatten(l):
-        return [item for sublist in l for item in sublist]
-
-
 
     for key in dict_HGNC_proteins:
         for key2 in mRNA_HGNC_dict:
@@ -291,7 +278,6 @@ if __name__ == '__main__':
 
 
     # todo : pandas rename dict
-
 
 
     counter = 0
@@ -322,130 +308,4 @@ if __name__ == '__main__':
 
 
 
-    # set feature values to proteins, sample wise
-    train_loader = DataInputNew.multimodule.train_dataloader(batch_size = 20)
 
-
-    sample_to_protein = []
-    # For each sample, make a dictionary with protein : feature value ; save list of dictionaries
-    features_proteins_mRNA_values_all = []
-    #print("train ", data)
-    #print("train 0", data[0])
-    #print("sample 0", data[0][0])
-    #print("sample0 first value", data[0][0][0])
-    #mRNA
-
-    print(features_mRNA_no_numbers)
-    print(dict_features_proteins_mRNA)
-
-
-    for data,mask, duration, event in train_loader:
-
-
-        # Go through each mRNA sample
-        for sample in data[0]:
-            # for each sample dictionary
-            dict_features_proteins_mRNA_values = {}
-            # Through each feature (for mRNA)
-            for feature_idx in range(len(sample)): # len = 6000 features
-                temp = []
-                # If the feature has a mapping in feature to protein
-                # features_mRNA_no_numbers[feature_idx] : feature name at index
-                if features_mRNA_no_numbers[feature_idx] in dict_features_proteins_mRNA:
-
-
-                    # take the proteins at the current index which correspond to the feature we are looking at
-                    protein_list = dict_features_proteins_mRNA[features_mRNA_no_numbers[feature_idx]]
-
-                    # create dictionary entries for it
-                    for protein in protein_list:
-                        #if key already exists, just append values to protein
-                        if protein in dict_features_proteins_mRNA_values:
-                            dict_features_proteins_mRNA_values[protein].append(sample[feature_idx])
-                        #else create a key entry
-                        else:
-
-                            dict_features_proteins_mRNA_values[protein] = [sample[feature_idx]]
-
-
-            # for each sample, append to list
-            features_proteins_mRNA_values_all.append(dict_features_proteins_mRNA_values)
-
-
-
-
-
-
-
-
-
-    # Create graph representation
-
-    # feature matrix X |A| x |B| A : number of nodes (proteins), B : number of features per node (value features diff. views)
-    # adjacency matrix Z : |A| x |A|
-
-    #adjacency matrix for protein-protein-network
-    adjacency_matrix_ppi = torch.zeros(len(proteins_data), len(proteins_data))
-
-
-    for protein_idx in range(len(proteins_data)):
-        # for each edge between two nodes, fill in a 1 in adjacency matrix
-        adjacency_matrix_ppi[int((ppi_edges_scores[0, protein_idx]).item()), int((ppi_edges_scores[1, protein_idx]).item())] = torch.tensor(1)
-
-    # todo : adjazenz mit gewichten ?
-
-
-    # feature matrix for each sample
-    #torch tensor with A x B : rows x columns
-    # Initialize
-    feature_matrices_mRNA = []
-    counter = 0
-    #for each sample (we could also use smth diff then len(features...) to access all samples
-    for sample_idx in range(len(features_proteins_mRNA_values_all)):
-
-        # As column size for the tensor, we use the protein (node) which has the most features (values from diff views)
-        # We use the largest as the torch tensor is basically a matrix and we need a fixed size
-        # to test, just implemented for mRNA
-        most_feat_for_protein = len(max(features_proteins_mRNA_values_all[sample_idx].values(), key=len))
-
-        # As rows, we just use all the proteins ; matrix for one sample
-        feature_matrix_mRNA = torch.zeros(len(proteins_data), most_feat_for_protein)
-
-        # fill with data
-
-        # go through each protein
-        for protein in proteins_data:
-            # check if protein in protein :feature values dict
-            if protein in features_proteins_mRNA_values_all[sample_idx]:
-
-                # fill row with according data ; find right row by accesing dict protein data (find the right index)
-
-                # Find index by accessing dict which saves pairs of protein : index
-                index = dict_proteins_data[protein]
-                feature_matrix_mRNA[index, 0:len(features_proteins_mRNA_values_all[sample_idx][protein])] = \
-                    torch.tensor(features_proteins_mRNA_values_all[sample_idx][protein])
-
-
-
-            #else : we leave it as it is (filled with 0s)
-
-        feature_matrices_mRNA.append(feature_matrix_mRNA)
-    #   Todo : normalization before adding into matrices (see DeepMOCCA)
-
-
-
-    #print(feature_matrix_mRNA[0])
-    #print(feature_matrix_mRNA.shape) # 16814,3
-
-
-
-
-
-
-
-    # each protein node has features from different views (features of that node, in deepmocca sind das die 1-8 ?
-    # bei mir dann mRNA und DNA ?
-    # input gcn ist dann das PPI : jeder Node hat best. features und wir kennen die edges
-
-
-#%%

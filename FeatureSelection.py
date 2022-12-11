@@ -382,18 +382,27 @@ class F_PPI_NETWORK():
     
         # feature matrix for each sample
         #torch tensor with A x B : rows x columns
-        # Initialize
-        feature_matrices_mRNA = []
-        counter = 0
-        #for each sample
-        for sample_idx in range(len(features_values_proteins_mapping_mRNA)):
-    
-            # As column size for the tensor, we use the protein (node) which has the most features (values from diff views)
-            # We use the largest as the torch tensor is basically a matrix and we need a fixed size
-            most_feat_for_protein = len(max(features_values_proteins_mapping_mRNA[sample_idx].values(), key=len))
-    
+
+
+        n_samples = len(features_values_proteins_mapping_mRNA)
+        n_proteins = len(proteins_indexed)
+
+        # take protein (node) which has the most features (values from diff views) for matrix column size over all samples
+        # so that we have the same structure for each sample
+        n_features_matrix = 0
+        for sample_idx in range(n_samples):
+            for key, value in features_values_proteins_mapping_mRNA[sample_idx].items():
+                if len(value) > n_features_matrix:
+                    n_features_matrix = len(value)
+
+
+        # Intialize empty tensor in the beginning :
+        feature_matrices_mRNA = torch.empty(size=(n_samples,n_proteins,n_features_matrix))
+
+        for sample_idx in range(n_samples):
+
             # As rows, we just use all the proteins ; matrix for one sample
-            feature_matrix_mRNA = torch.zeros(len(proteins_indexed), most_feat_for_protein)
+            feature_matrix_mRNA = torch.zeros(len(proteins_indexed), n_features_matrix)
     
             # fill with data
     
@@ -413,7 +422,9 @@ class F_PPI_NETWORK():
 
                 #else : we leave it as it is (filled with 0s)
     
-            feature_matrices_mRNA.append(feature_matrix_mRNA)
+            feature_matrices_mRNA[sample_idx] = (feature_matrix_mRNA)
+
+
 
         return adjacency_matrix_ppi, feature_matrices_mRNA
 
@@ -434,228 +445,310 @@ class F_PPI_NETWORK():
 
 
 
-if __name__ == '__main__':
-    # Set batch size to size of training set ; We are currently preparing data,
-    # thus we can use all samples as one batch (train with single batches later)
-    train_loader = DataInputNew.multimodule.train_dataloader(batch_size = 389) # feature selection : Take all training
-                                                                               # examples
+
+# Set batch size to size of training set ; We are currently preparing data,
+# thus we can use all samples as one batch (train with single batches later)
+train_loader = DataInputNew.multimodule.train_dataloader(batch_size = 389) # feature selection : Take all training
+                                                                           # examples
 
 
-    # Load all the training data
-    for data,mask, duration, event in train_loader:
-        break
+# Load all the training data
+for data,mask, duration, event in train_loader:
+    break
+
+views = len(data)
+
+
+print()
+print("Eigengene matrices")
+
+eg_mRNA = F_eigengene_matrices(train= data[0], mask= mask[0], view ='mRNA')
+eg_DNA = F_eigengene_matrices(train= data[1], mask= mask[1], view='DNA')
+eg_microRNA = F_eigengene_matrices(train=data[2],mask=mask[2], view='microRNA')
+eg_RPPA = F_eigengene_matrices(train=data[3],mask=mask[3], view='RPPA')
+
+eg_mRNA.preprocess()
+eg_DNA.preprocess()
+eg_microRNA.preprocess()
+eg_RPPA.preprocess()
+
+eg_mRNA.eigengene_multiplication() # As of now, R file calculated eigengene for all types, thus one call is enough
+
+mRNA_eigengene_matrix = (eg_mRNA.get_eigengene_matrix()).transpose()
+DNA_eigengene_matrix = (eg_DNA.get_eigengene_matrix()).transpose()
+microRNA_eigengene_matrix = (eg_microRNA.get_eigengene_matrix()).transpose()
+RPPA_eigengene_matrix = (eg_RPPA.get_eigengene_matrix()).transpose()
+
+mRNA_eigengene_tensor = []
+DNA_eigengene_tensor = []
+microRNA_eigengene_tensor = []
+RPPA_eigengene_tensor = []
+
+# Dataframe to tensor structure
+for x in range(len(mRNA_eigengene_matrix.index)):
+    temp = mRNA_eigengene_matrix.iloc[x, :].values.tolist()
+    mRNA_eigengene_tensor.append(temp)
+
+mRNA_eigengene_tensor = torch.tensor(mRNA_eigengene_tensor)
+
+for x in range(len(DNA_eigengene_matrix.index)):
+    temp = DNA_eigengene_matrix.iloc[x, :].values.tolist()
+    DNA_eigengene_tensor.append(temp)
+
+DNA_eigengene_tensor = torch.tensor(DNA_eigengene_tensor)
+
+for x in range(len(microRNA_eigengene_matrix.index)):
+    temp = microRNA_eigengene_matrix.iloc[x, :].values.tolist()
+    microRNA_eigengene_tensor.append(temp)
+
+microRNA_eigengene_tensor = torch.tensor(microRNA_eigengene_tensor)
+
+for x in range(len(RPPA_eigengene_matrix.index)):
+    temp = RPPA_eigengene_matrix.iloc[x, :].values.tolist()
+    RPPA_eigengene_tensor.append(temp)
+
+RPPA_eigengene_tensor = torch.tensor(RPPA_eigengene_tensor)
+
+print("mRNA eigengene matrix : {} of size {}. Originally, we had {} features, now we have {}.".format
+      (mRNA_eigengene_tensor, mRNA_eigengene_tensor.shape,len(DataInputNew.features[0]),
+       mRNA_eigengene_tensor.size(1)))
+print("DNA eigengene matrix : {} of size {}.Originally, we had {} features, now we have {}.".format
+      (DNA_eigengene_tensor, DNA_eigengene_tensor.shape,len(DataInputNew.features[1]),
+       DNA_eigengene_tensor.size(1)))
+print("microRNA eigengene matrix : {} of size {}.Originally, we had {} features, now we have {}.".format
+      (microRNA_eigengene_tensor, microRNA_eigengene_tensor.shape,len(DataInputNew.features[2]),
+       microRNA_eigengene_tensor.size(1)))
+print("RPPA eigengene matrix : {} of size {}.Originally, we had {} features, now we have {}.".format
+      (RPPA_eigengene_tensor, RPPA_eigengene_tensor.shape,len(DataInputNew.features[3]),
+       RPPA_eigengene_tensor.size(1)))
+
+# as list as each eigengene matrix is of a different size
+data_eigengene_matrices_selected_PRAD = [mRNA_eigengene_tensor, DNA_eigengene_tensor,
+                                         microRNA_eigengene_tensor, RPPA_eigengene_tensor]
 
 
 
-    views = len(data)
-
-    print()
-    print("Eigengene matrices")
-
-    eg_mRNA = F_eigengene_matrices(train= data[0], mask= mask[0], view ='mRNA')
-    eg_DNA = F_eigengene_matrices(train= data[1], mask= mask[1], view='DNA')
-    eg_microRNA = F_eigengene_matrices(train=data[2],mask=mask[2], view='microRNA')
-    eg_RPPA = F_eigengene_matrices(train=data[3],mask=mask[3], view='RPPA')
-
-    eg_mRNA.preprocess()
-    eg_DNA.preprocess()
-    eg_microRNA.preprocess()
-    eg_RPPA.preprocess()
-
-    eg_mRNA.eigengene_multiplication() # As of now, R file calculated eigengene for all types, thus one call is enough  # TODO : not working as of now
-
-    mRNA_eigengene_matrix = (eg_mRNA.get_eigengene_matrix()).transpose()
-    DNA_eigengene_matrix = (eg_DNA.get_eigengene_matrix()).transpose()
-    microRNA_eigengene_matrix = (eg_microRNA.get_eigengene_matrix()).transpose()
-    RPPA_eigengene_matrix = (eg_RPPA.get_eigengene_matrix()).transpose()
-
-    mRNA_eigengene_tensor = []
-    DNA_eigengene_tensor = []
-    microRNA_eigengene_tensor = []
-    RPPA_eigengene_tensor = []
-
-    # Dataframe to tensor structure
-    for x in range(len(mRNA_eigengene_matrix.index)):
-        temp = mRNA_eigengene_matrix.iloc[x, :].values.tolist()
-        mRNA_eigengene_tensor.append(temp)
-
-    mRNA_eigengene_tensor = torch.tensor(mRNA_eigengene_tensor)
-
-    for x in range(len(DNA_eigengene_matrix.index)):
-        temp = DNA_eigengene_matrix.iloc[x, :].values.tolist()
-        DNA_eigengene_tensor.append(temp)
-
-    DNA_eigengene_tensor = torch.tensor(DNA_eigengene_tensor)
-
-    for x in range(len(microRNA_eigengene_matrix.index)):
-        temp = microRNA_eigengene_matrix.iloc[x, :].values.tolist()
-        microRNA_eigengene_tensor.append(temp)
-
-    microRNA_eigengene_tensor = torch.tensor(microRNA_eigengene_tensor)
-
-    for x in range(len(RPPA_eigengene_matrix.index)):
-        temp = RPPA_eigengene_matrix.iloc[x, :].values.tolist()
-        RPPA_eigengene_tensor.append(temp)
-
-    RPPA_eigengene_tensor = torch.tensor(RPPA_eigengene_tensor)
-
-    print("mRNA eigengene matrix : {} of size {}. Originally, we had {} features, now we have {}.".format
-          (mRNA_eigengene_tensor, mRNA_eigengene_tensor.shape,len(DataInputNew.features[0]), mRNA_eigengene_tensor.size(1)))
-    print("DNA eigengene matrix : {} of size {}.Originally, we had {} features, now we have {}.".format
-          (DNA_eigengene_tensor, DNA_eigengene_tensor.shape,len(DataInputNew.features[1]), DNA_eigengene_tensor.size(1)))
-    print("microRNA eigengene matrix : {} of size {}.Originally, we had {} features, now we have {}.".format
-          (microRNA_eigengene_tensor, microRNA_eigengene_tensor.shape,len(DataInputNew.features[2]), microRNA_eigengene_tensor.size(1)))
-    print("RPPA eigengene matrix : {} of size {}.Originally, we had {} features, now we have {}.".format
-          (RPPA_eigengene_tensor, RPPA_eigengene_tensor.shape,len(DataInputNew.features[3]), RPPA_eigengene_tensor.size(1)))
 
 
 
 
+print("PCA based selection")
+mRNA_PCA = F_PCA(data[0], keep_variance= 0.9)
+principal_components_mRNA = mRNA_PCA.apply_pca()
+plot = mRNA_PCA.plot()
+rows, columns = principal_components_mRNA.shape
+principal_components_mRNA_df = pd.DataFrame(principal_components_mRNA,
+                                            columns= [["PC {}".format(x) for x in range(columns)]])
+
+                                                                                                                    # TODO : Feature selected Daten in csv laden oder direkt hier rüber
+# Tensors as basic data structure for all data
+principal_components_mRNA = torch.tensor(principal_components_mRNA)
+
+print("Reduction mRNA data with PCA :", 1 - (columns / len(DataInputNew.features[0])))
+print("mRNA PCA feature selection : {} of size {} (samples, PC components).".format(principal_components_mRNA,
+                                                           principal_components_mRNA.shape))
+
+
+DNA_PCA = F_PCA(data[1], keep_variance= 0.9)
+principal_components_DNA = DNA_PCA.apply_pca()
+rows, columns = principal_components_DNA.shape
+principal_components_DNA_df = pd.DataFrame(principal_components_DNA,
+                                           columns= [["PC {}".format(x) for x in range(columns)]])
+
+principal_components_DNA = torch.tensor(principal_components_DNA)
+
+print("Reduction DNA data with PCA :", 1 - (columns / len(DataInputNew.features[1])))
+print("DNA PCA feature selection : {} of size {} (samples, PC components).".format(principal_components_DNA,
+                                                          principal_components_DNA.shape))
 
 
 
+microRNA_PCA = F_PCA(data[2], keep_variance= 0.7)
 
-    print("PCA based selection")
-    mRNA_PCA = F_PCA(data[0], keep_variance= 0.9)
-    principal_components_mRNA = mRNA_PCA.apply_pca()
-    plot = mRNA_PCA.plot()
-    rows, columns = principal_components_mRNA.shape
-    principal_components_mRNA_df = pd.DataFrame(principal_components_mRNA,
-                                                columns= [["PC {}".format(x) for x in range(columns)]])
+principal_components_microRNA = microRNA_PCA.apply_pca()
+rows, columns = principal_components_microRNA.shape
 
-    print("Reduction mRNA data with PCA :", 1 - (columns / len(DataInputNew.features[0])))
-
-
-    DNA_PCA = F_PCA(data[1], keep_variance= 0.9)
-    principal_components_DNA = DNA_PCA.apply_pca()
-    rows, columns = principal_components_DNA.shape
-    principal_components_DNA_df = pd.DataFrame(principal_components_DNA,
+principal_components_microRNA_df = pd.DataFrame(principal_components_microRNA,
                                                columns= [["PC {}".format(x) for x in range(columns)]])
 
-    print("Reduction DNA data with PCA :", 1 - (columns / len(DataInputNew.features[1])))
+
+principal_components_microRNA = torch.tensor(principal_components_microRNA)
+print("Reduction microRNA data with PCA :", 1 - (columns / len(DataInputNew.features[2])))
+print("microRNA PCA feature selection : {} of size {} (samples, PC components).".format(principal_components_microRNA,
+                                                               principal_components_microRNA.shape))
 
 
-    microRNA_PCA = F_PCA(data[2], keep_variance= 0.7)
-
-    principal_components_microRNA = microRNA_PCA.apply_pca()
-    rows, columns = principal_components_microRNA.shape
-
-    principal_components_microRNA_df = pd.DataFrame(principal_components_microRNA,
-                                                   columns= [["PC {}".format(x) for x in range(columns)]])
-
-
-    print("Reduction microRNA data with PCA :", 1 - (columns / len(DataInputNew.features[2])))
-
-
-    RPPA_PCA = F_PCA(data[3], keep_variance= 0.7)
-    principal_components_RPPA = RPPA_PCA.apply_pca()
-    rows, columns = principal_components_RPPA.shape
+RPPA_PCA = F_PCA(data[3], keep_variance= 0.7)
+principal_components_RPPA = RPPA_PCA.apply_pca()
+rows, columns = principal_components_RPPA.shape
 
 
 
-    principal_components_RPPA_df = pd.DataFrame(principal_components_RPPA,
-                                                columns= [["PC {}".format(x) for x in range(columns)]])
+principal_components_RPPA_df = pd.DataFrame(principal_components_RPPA,
+                                            columns= [["PC {}".format(x) for x in range(columns)]])
 
 
-    print("Reduction RPPA data with PCA :", 1 - (columns / len(DataInputNew.features[3])))
+principal_components_RPPA = torch.tensor(principal_components_RPPA)
 
-    # ADD LABEL
-    #principal_components_RPPA_df['duration'] = duration
-                                                                                                                        # TODO : variance based features change for different training sets ;
-                                                                                                                        # TODO :  Rather do on all data and pick best there ?
-                                                                                                                        # TODO : in ConcatAE paper 1000 best features chosen, but for mRNA and DNA
-                                                                                                                        # TODO : we get about 1000-2000 even with a threshold of 1
-    mRNA_variance = F_VARIANCE(data[0], threshold= 1)
-    DNA_variance = F_VARIANCE(data[1], threshold= 1)
-    microRNA_variance = F_VARIANCE(data[2], threshold = 0.8)
-    RPPA_variance = F_VARIANCE(data[3], threshold = 0.6)
+print("Reduction RPPA data with PCA :", 1 - (columns / len(DataInputNew.features[3])))
+print("RPPA PCA feature selection : {} of size {} (samples, PC-components).".format(principal_components_RPPA, principal_components_RPPA.shape))
 
-    data_mRNA,mask_mRNA = mRNA_variance.apply_variance()
-    data_DNA,mask_DNA = DNA_variance.apply_variance()
-    data_microRNA,mask_microRNA = microRNA_variance.apply_variance()
-    data_RPPA,mask_RPPA = RPPA_variance.apply_variance()
+# ADD LABEL
+#principal_components_RPPA_df['duration'] = duration
 
-    mRNA_features_selected = [DataInputNew.features[0][index] for index in mask_mRNA]
-    DNA_features_selected = [DataInputNew.features[1][index] for index in mask_DNA]
-    microRNA_features_selected = [DataInputNew.features[2][index] for index in mask_microRNA]
-    RPPA_features_selected = [DataInputNew.features[3][index] for index in mask_RPPA]
-
-    print()
-    print("Variance based selection")
-    print("Reduction mRNA data with variance :", 1 - (len(mRNA_features_selected) / len(DataInputNew.features[0])))
-    print("Reduction DNA data with variance :", 1 - (len(DNA_features_selected) / len(DataInputNew.features[1])))
-    print("Reduction microRNA data with variance :", 1 - (len(microRNA_features_selected) / len(DataInputNew.features[2])))
-    print("Reduction RPPA data with variance :", 1 - (len(RPPA_features_selected) / len(DataInputNew.features[3])))
+                                                                                                                    # TODO : in ConcatAE paper 1000 best features chosen, but for mRNA and DNA
+                                                                                                                    # TODO : we get about 1000-2000 even with a threshold of 1
+# need to save as list of tensors, bc each view has different subset of features selected
+# TODO : oder PCA mit best. vielen PC components nehmen, damit man dann gleiche Struktur hat ?
+# TODO : Listen könnten zeitintensiv werden? aber nur 4 views, deswegen okay ?
+data_PCA_selected_PRAD = [principal_components_mRNA, principal_components_DNA,
+                                         principal_components_microRNA, principal_components_RPPA]
 
 
 
 
 
+mRNA_variance = F_VARIANCE(data[0], threshold= 1)
+DNA_variance = F_VARIANCE(data[1], threshold= 1)
+microRNA_variance = F_VARIANCE(data[2], threshold = 0.8)
+RPPA_variance = F_VARIANCE(data[3], threshold = 0.6)
 
-    print()
-    print("Autoencoder based selection")
-    views_names = ['mRNA','DNA','microRNA','RPPA']
-    AE_all_compressed_features = []
+data_mRNA_variance,mask_mRNA_variance = mRNA_variance.apply_variance()
+data_DNA_variance,mask_DNA_variance = DNA_variance.apply_variance()
+data_microRNA_variance,mask_microRNA_variance = microRNA_variance.apply_variance()
+data_RPPA_variance,mask_RPPA_variance = RPPA_variance.apply_variance()
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    for x in range(views):
-        model = F_AE(train= data[x]).to(device)
+mRNA_features_selected = [DataInputNew.features[0][index] for index in mask_mRNA_variance]
+DNA_features_selected = [DataInputNew.features[1][index] for index in mask_DNA_variance]
+microRNA_features_selected = [DataInputNew.features[2][index] for index in mask_microRNA_variance]
+RPPA_features_selected = [DataInputNew.features[3][index] for index in mask_RPPA_variance]
 
-        optimizer = Adam(model.parameters(), lr=1e-3)
+data_mRNA_variance = torch.tensor(data_mRNA_variance)
+data_DNA_variance = torch.tensor(data_DNA_variance)
+data_microRNA_variance = torch.tensor(data_microRNA_variance)
+data_RPPA_variance = torch.tensor(data_RPPA_variance)
 
-        criterion = nn.MSELoss() # reconstrution loss
+print()
+print("Variance based selection")
 
-        train_loader_2 = DataInputNew.multimodule.train_dataloader(batch_size = 80)         # TODO: training samples gibt es 389 viele, Primzahl : kein batch außer 1 um alle durchzugehen ; für 80 werden nur 320 samples durchgegangen und die letzten samples nicht beachtet !
-        epochs = 1
-        temp = []
-        temp2 = []
-        for epoch in range(epochs):
-            loss = 0
-            for batch_data, mask, duration, event in train_loader_2:
+print("Reduction mRNA data with variance :", 1 - (len(mRNA_features_selected) / len(DataInputNew.features[0])))
+print("mRNA variance feature selection : {} of size : {} (samples, latent features)".format(data_mRNA_variance,
+                                                                                            data_mRNA_variance.shape))
 
-                batch_data = batch_data[x].view(-1, batch_data[x].size(1)).to(device) #mRNA
+print("Reduction DNA data with variance :", 1 - (len(DNA_features_selected) / len(DataInputNew.features[1])))
+print("mRNA variance feature selection : {} of size : {} (samples, latent features)".format(data_DNA_variance,
+                                                                                            data_DNA_variance.shape))
 
-                optimizer.zero_grad()
+print("Reduction microRNA data with variance :", 1 - (len(microRNA_features_selected) / len(DataInputNew.features[2])))
+print("mRNA variance feature selection : {} of size : {} (samples,latent features)".format(data_microRNA_variance,
+                                                                                           data_microRNA_variance.shape))
 
-                # compressed features is what we are interested in
-                reconstructed, compressed_features = model(batch_data)
-                if epoch == epochs - 1: # save compressed_features of last epoch for each batch
-                    temp.append(compressed_features) # list of tensors of compressed for each batch
-
-                train_loss = criterion(reconstructed, batch_data)
-
-                train_loss.backward()
-
-                optimizer.step()
-
-                loss += train_loss.item()
-
-
-
-            loss = loss / len(train_loader_2)
-
-            print("epoch : {}/{}, loss = {:.6f} for {} data".format(epoch + 1, epochs, loss, views_names[x]))
-                                                                                                                             # TODO : Smaller loss (weniger layers? weniger input ? vllt feature selection
-
-        compressed_features_view = torch.cat(temp, 0)
-        AE_all_compressed_features.append(compressed_features_view)
-
-    for x in range(len(AE_all_compressed_features)):
-        AE_all_compressed_features[x] = torch.detach(AE_all_compressed_features[x]) #detach gradient as we only need
-                                                                              # selected features
+print("Reduction RPPA data with variance :", 1 - (len(RPPA_features_selected) / len(DataInputNew.features[3])))
+print("mRNA variance feature selection : {} of size : {} (samples,latent features)".format(data_RPPA_variance,
+                                                                                           data_RPPA_variance.shape))
 
 
-    print(AE_all_compressed_features) # TODO : lots of values pressed to 0 ! --> less layers, other activation ?
+# need to save as list of tensors, bc each view has different subset of features selected
+data_variance_selected_PRAD = [data_mRNA_variance, data_DNA_variance,
+                                         data_microRNA_variance, data_RPPA_variance]
 
 
 
 
-    print()
-    print("Protein-Protein-Network")
-    eg_mRNA = F_PPI_NETWORK(data[0])
-    adjacency_matrix, feature_matrices = eg_mRNA.setup()
-    print("Adjacency matrix : {}".format(adjacency_matrix))
-    print("Feature matrix mRNA sample 0 : {}".format(feature_matrices[0]))
+print()
+print("Autoencoder based selection")
+views_names = ['mRNA','DNA','microRNA','RPPA']
+AE_all_compressed_features = []
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+for x in range(views):
+    model = F_AE(train= data[x]).to(device)
+
+    optimizer = Adam(model.parameters(), lr=1e-3)
+
+    criterion = nn.MSELoss() # reconstrution loss
+    # TODO : oben ein trainloader, hier anderen --> andere samples werden getestet ; später für benchmark schlecht ?
+    train_loader_2 = DataInputNew.multimodule.train_dataloader(batch_size = 80)         # TODO: training samples gibt es 389 viele, Primzahl : kein batch außer 1 um alle durchzugehen ; für 80 werden nur 320 samples durchgegangen und die letzten samples nicht beachtet !
+    epochs = 1
+    temp = []
+    temp2 = []
+    for epoch in range(epochs):
+        loss = 0
+        for batch_data, mask, duration, event in train_loader_2:
+
+            batch_data = batch_data[x].view(-1, batch_data[x].size(1)).to(device) #mRNA
+
+            optimizer.zero_grad()
+
+            # compressed features is what we are interested in
+            reconstructed, compressed_features = model(batch_data)
+            if epoch == epochs - 1: # save compressed_features of last epoch for each batch
+                temp.append(compressed_features) # list of tensors of compressed for each batch
+
+            train_loss = criterion(reconstructed, batch_data)
+
+            train_loss.backward()
+
+            optimizer.step()
+
+            loss += train_loss.item()
+
+
+
+        loss = loss / len(train_loader_2)
+
+        print("epoch : {}/{}, loss = {:.6f} for {} data".format(epoch + 1, epochs, loss, views_names[x]))
+
+
+    compressed_features_view = torch.cat(temp, 0)
+    AE_all_compressed_features.append(compressed_features_view)
+
+for x in range(len(AE_all_compressed_features)):
+    AE_all_compressed_features[x] = torch.detach(AE_all_compressed_features[x]) #detach gradient as we only need
+                                                                          # selected features
+
+
+print("mRNA AE feature selection : {} of size {} (samples,features)".format(AE_all_compressed_features[0],
+                                                         AE_all_compressed_features[0].shape))
+print("DNA AE feature selection : {} of size {} (samples,features)".format(AE_all_compressed_features[1],
+                                                         AE_all_compressed_features[1].shape))
+print("microRNA AE feature selection : {} of size {} (samples,features)".format(AE_all_compressed_features[2],
+                                                         AE_all_compressed_features[2].shape))
+print("RPPA AE feature selection : {} of size {} (samples,features)".format(AE_all_compressed_features[3],
+                                                         AE_all_compressed_features[3].shape))
+
+#  print(AE_all_compressed_features) # TODO : lots of values pressed to 0 ! --> less layers, other activation ?
+
+def tensor_helper(tensor_list):
+    """Turns a list of size (x) of tensors with dimensions (y,z) into a tensor of dimension (x,y,z)"""
+    x = len(tensor_list)
+    z, y = tensor_list[0].shape
+
+    tensor_new = torch.zeros((x, z, y))
+    for i, tensor in enumerate(tensor_list):
+        tensor_new[i, :, :] = tensor
+
+    return tensor_new
+
+# Here we can create a tensor for all data, because we have the same feature size for each view
+# due to AE feature selection
+# (views, samples, features)
+data_AE_selected_PRAD = tensor_helper(AE_all_compressed_features)
+
+
+
+
+
+
+
+print()
+print("Protein-Protein-Network")
+ppn_mRNA = F_PPI_NETWORK(data[0])
+adjacency_matrix, feature_matrices = ppn_mRNA.setup()
+print("Adjacency matrix : {}".format(adjacency_matrix))
+print("Feature matrix mRNA : {} of size {} (samples, proteins, features). "                                         
+      "For each sample, we have {} proteins and {} possible features".format
+      (feature_matrices, feature_matrices.shape, feature_matrices.size(1), feature_matrices.size(2)))
 
 
 
@@ -667,5 +760,3 @@ if __name__ == '__main__':
 
 
 
-
-#%%

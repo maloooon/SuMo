@@ -26,35 +26,35 @@ class Pooling():
 
 
 
-    def MeanPooling(self,size = 1):
+    def MeanPooling(self,type, size = 1):
         """
 
-        :param size: pooling size (how many values to look at in one pooling iteration)                                 # TODO : hier nochmal sozusagen feature reduction via höhere size ?
+        :param size: pooling size (how many values to look at in one pooling iteration)
         :return: new data tensor with mean pooled values
+        :type: defines which input we get : "tensor", "list_tensor"
         """
-        # TODO : Schleife ersetzen, torch funktion (max/mean)
-        # ONLY implemented for size = 1
-        mean_pooled_data = []
-        mean_pool_for_curr_sample = []
-
-        sample_counter = 0
-        # Mean value over each latent feature of each view for each sample
-        # Results in tensor of basically one view of
-        while sample_counter < self.n_samples :
-            for feature in range(self.data[0].size(1)):
-                temp = [] # holds feature values of each view for current sample in iteration
-                for view in self.data:
-                    temp.append((view[sample_counter][feature]).item())
 
 
-                mean_pool_for_curr_sample.append(mean(temp))
-            mean_pooled_data.append(mean_pool_for_curr_sample)
-            mean_pool_for_curr_sample = []
-            sample_counter += 1
+        if type == 'tensor':
+            # Input of type tensor(x,y,z) with x : views, y:samples, z:features
+            # iterate through each sample
 
-        mean_pooled_data = torch.tensor(mean_pooled_data)
+            # we pool over the views
+            mean_values = torch.empty(self.data.size(1), self.data.size(2))
+            for sample_idx in range(self.data.size(1)):
 
-        return mean_pooled_data
+                for feature_idx in range(self.data.size(2)):
+                    # storing current sample feature values for each view
+                    temp = torch.empty(4)
+                    for view_idx in range(self.data.size(0)):
+                        temp[view_idx] = self.data[view_idx, sample_idx, feature_idx]
+                    mean_values[sample_idx, feature_idx] = torch.mean(temp)
+
+
+            return mean_values
+
+
+
 
 
 
@@ -72,33 +72,31 @@ class Pooling():
 # TODO : Mixture of experts
 
 
-    def MaxPooling(self, size =  1):
+    def MaxPooling(self,type, size =  1):
         """
         :param size: pooling size (how many values to look at in one pooling iteration)
         :return: new data tensor with max pooled values
+        :type: defines which input we get : "tensor", "list_tensor"
         """
-        # ONLY implemented for size = 1
-        max_pooled_data = []
-        max_pool_for_curr_sample = []
-
-        sample_counter = 0
-        # Mean value over each latent feature of each view for each sample
-        # Results in tensor of basically one view of
-        while sample_counter < self.n_samples :
-            for feature in range(self.data[0].size(1)):
-                temp = [] # holds feature values of each view for current sample in iteration
-                for view in self.data:
-                    temp.append((view[sample_counter][feature]).item())
 
 
-                max_pool_for_curr_sample.append(max(temp))
-            max_pooled_data.append(max_pool_for_curr_sample)
-            max_pool_for_curr_sample = []
-            sample_counter += 1
+        if type == 'tensor':
+        # Input of type tensor(x,y,z) with x : views, y:samples, z:features
+        # iterate through each sample
 
-        max_pooled_data = torch.tensor(max_pooled_data)
+                # we pool over the views
+            mean_values = torch.empty(self.data.size(1), self.data.size(2))
+            for sample_idx in range(self.data.size(1)):
 
-        return max_pooled_data
+                for feature_idx in range(self.data.size(2)):
+                    # storing current sample feature values for each view
+                    temp = torch.empty(4)
+                    for view_idx in range(self.data.size(0)):
+                        temp[view_idx] = self.data[view_idx, sample_idx, feature_idx]
+                    mean_values[sample_idx, feature_idx] = torch.max(temp)
+
+
+            return mean_values
 
 
 
@@ -112,11 +110,11 @@ class Pooling():
 
 
 if __name__ == '__main__':
-    a= Pooling(Fs.AE_all_compressed_features)
-    b= a.MeanPooling()
-    c = a.MaxPooling()
+    a= Pooling(Fs.data_AE_selected_PRAD)
+    b= a.MaxPooling('tensor')
+  #  c = a.MaxPooling()
     print(b)
-    print(c)
+  #  print(c)
 
 
 

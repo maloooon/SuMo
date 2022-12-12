@@ -75,6 +75,8 @@ if __name__ == '__main__':
     # drop unnecessary samples
     df_all.drop(df_all[df_all["duration"] <= 0].index, axis = 0, inplace= True)
 
+    df_all.reset_index()
+
 
 
     # Load into csv

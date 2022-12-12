@@ -17,6 +17,14 @@ from itertools import chain
 import CancerDataLoading
 from PPINetworkDataLoading import flatten
 
+class MultiOmicsSelectedDataset(Dataset):
+    """Class for Dataset after feature selection.
+       This class can be used with data selection from
+        PCA, variance and eigengene matrices since the
+        resulting data has the following structure
+        [x1,x2..], xi is a tensor of shape
+        (samples, latent features) and i is the view"""
+
 
 class MultiOmicsDataset(Dataset):
 

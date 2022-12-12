@@ -425,6 +425,7 @@ eset_RPPA <- new("ExpressionSet", expr = matrix_RPPA)
 data_new_RPPA = assayData(eset_RPPA)$exprs
 
 eigengene_RPPA = lmQCM(data_new_RPPA)
+eigengene_RPPA = t(eigengene_RPPA)
 
 data_DNA <- read.csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/DNA_for_r.csv")
 data_DNA = subset(data_DNA, select= -c(X)) # remove added X column
@@ -436,6 +437,7 @@ data_new_DNA = assayData(eset_DNA)$exprs
 
 eigengene_DNA = lmQCM(data_new_DNA)
 #print(eigengene_dna)
+eigengene_DNA = t(eigengene_DNA)
 
 data_mRNA <- read.csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/mRNA_for_r.csv")
 data_mRNA = subset(data_mRNA, select= -c(X)) # remove added X column
@@ -446,6 +448,7 @@ data_new_mRNA = assayData(eset_mRNA)$exprs
 
 eigengene_mRNA = lmQCM(data_new_mRNA)
 
+eigengene_mRNA = t(eigengene_mRNA)
 
 
 
@@ -457,7 +460,7 @@ eset_microRNA <- new("ExpressionSet", expr = matrix_microRNA)
 data_new_microRNA = assayData(eset_microRNA)$exprs
 
 eigengene_microRNA = lmQCM(data_new_microRNA)
-
+eigengene_microRNA = t(eigengene_microRNA)
 
 write.csv(eigengene_DNA, "/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/DNA_eigengene_matrix.csv", row.names = TRUE)
 write.csv(eigengene_mRNA, "/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/mRNA_eigengene_matrix.csv", row.names = TRUE)

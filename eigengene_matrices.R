@@ -427,6 +427,16 @@ data_new_RPPA = assayData(eset_RPPA)$exprs
 eigengene_RPPA = lmQCM(data_new_RPPA)
 eigengene_RPPA = t(eigengene_RPPA)
 
+data_test_RPPA <- read.csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/RPPA_test_for_r.csv")
+data_test_RPPA = subset(data_test_RPPA, select= -c(X)) # remove added X column
+matrix_test_RPPA <- t(as.matrix(data_test_RPPA))
+class(matrix_test_RPPA) <- "numeric"
+eset_test_RPPA <- new("ExpressionSet", expr = matrix_test_RPPA)
+data_test_new_RPPA = assayData(eset_test_RPPA)$exprs
+
+eigengene_test_RPPA = lmQCM(data_test_new_RPPA)
+eigengene_test_RPPA = t(eigengene_test_RPPA)
+
 data_DNA <- read.csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/DNA_for_r.csv")
 data_DNA = subset(data_DNA, select= -c(X)) # remove added X column
 matrix_DNA <- t(as.matrix(data_DNA))
@@ -434,10 +444,21 @@ class(matrix_DNA) <- "numeric"
 eset_DNA <- new("ExpressionSet", expr = matrix_DNA)
 data_new_DNA = assayData(eset_DNA)$exprs
 
-
 eigengene_DNA = lmQCM(data_new_DNA)
 #print(eigengene_dna)
 eigengene_DNA = t(eigengene_DNA)
+
+
+data_test_DNA <- read.csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/DNA_test_for_r.csv")
+data_test_DNA = subset(data_test_DNA, select= -c(X)) # remove added X column
+matrix_test_DNA <- t(as.matrix(data_test_DNA))
+class(matrix_test_DNA) <- "numeric"
+eset_test_DNA <- new("ExpressionSet", expr = matrix_test_DNA)
+data_test_new_DNA = assayData(eset_test_DNA)$exprs
+
+eigengene_test_DNA = lmQCM(data_test_new_DNA)
+#print(eigengene_dna)
+eigengene_test_DNA = t(eigengene_test_DNA)
 
 data_mRNA <- read.csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/mRNA_for_r.csv")
 data_mRNA = subset(data_mRNA, select= -c(X)) # remove added X column
@@ -451,6 +472,18 @@ eigengene_mRNA = lmQCM(data_new_mRNA)
 eigengene_mRNA = t(eigengene_mRNA)
 
 
+data_test_mRNA <- read.csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/mRNA_test_for_r.csv")
+data_test_mRNA = subset(data_test_mRNA, select= -c(X)) # remove added X column
+matrix_test_mRNA <- t(as.matrix(data_test_mRNA))
+class(matrix_test_mRNA) <- "numeric"
+eset_test_mRNA <- new("ExpressionSet", expr = matrix_test_mRNA)
+data_test_new_mRNA = assayData(eset_test_mRNA)$exprs
+
+eigengene_test_mRNA = lmQCM(data_test_new_mRNA)
+
+eigengene_test_mRNA = t(eigengene_test_mRNA)
+
+
 
 data_microRNA <- read.csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/microRNA_for_r.csv")
 data_microRNA = subset(data_microRNA, select= -c(X)) # remove added X column
@@ -462,8 +495,23 @@ data_new_microRNA = assayData(eset_microRNA)$exprs
 eigengene_microRNA = lmQCM(data_new_microRNA)
 eigengene_microRNA = t(eigengene_microRNA)
 
+data_test_microRNA <- read.csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/microRNA_test_for_r.csv")
+data_test_microRNA = subset(data_test_microRNA, select= -c(X)) # remove added X column
+matrix_test_microRNA <- t(as.matrix(data_test_microRNA))
+class(matrix_test_microRNA) <- "numeric"
+eset_test_microRNA <- new("ExpressionSet", expr = matrix_test_microRNA)
+data_test_new_microRNA = assayData(eset_test_microRNA)$exprs
+
+eigengene_test_microRNA = lmQCM(data_test_new_microRNA)
+eigengene_test_microRNA = t(eigengene_test_microRNA)
+
+
 write.csv(eigengene_DNA, "/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/DNA_eigengene_matrix.csv", row.names = TRUE)
 write.csv(eigengene_mRNA, "/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/mRNA_eigengene_matrix.csv", row.names = TRUE)
 write.csv(eigengene_microRNA, "/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/microRNA_eigengene_matrix.csv", row.names = TRUE)
 write.csv(eigengene_RPPA, "/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/RPPA_eigengene_matrix.csv", row.names = TRUE)
 
+write.csv(eigengene_test_DNA, "/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/DNA_test_eigengene_matrix.csv", row.names = TRUE)
+write.csv(eigengene_test_mRNA, "/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/mRNA_test_eigengene_matrix.csv", row.names = TRUE)
+write.csv(eigengene_test_microRNA, "/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/microRNA_test_eigengene_matrix.csv", row.names = TRUE)
+write.csv(eigengene_test_RPPA, "/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/RPPA_test_eigengene_matrix.csv", row.names = TRUE)

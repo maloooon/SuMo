@@ -135,6 +135,9 @@ class F_eigengene_matrices():
 
         train_df = train_df.drop(train_df.columns[to_drop_columns], axis = 1)
 
+
+
+
         to_drop_index = []
 
         for x in range(len(train_df.index)):
@@ -149,10 +152,10 @@ class F_eigengene_matrices():
         duration_df = duration_df.drop(to_drop_index, axis = 0)
         event_df = event_df.drop(to_drop_index, axis = 0)
 
-        train_df.reset_index()
-        duration_df.reset_index()
-        event_df.reset_index()
-
+       # train_df.reset_index()
+       # duration_df.reset_index()
+       # event_df.reset_index()
+        print("Index dropped : ", to_drop_index)
 
         if self.stage == 'train':
             train_df.to_csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/{}_for_r.csv".format(self.view_name))
@@ -160,8 +163,8 @@ class F_eigengene_matrices():
             train_df.to_csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/{}_test_for_r.csv".format(self.view_name))
 
 
-        # return these so we can add them to according samples
-        return torch.tensor(duration_df.iloc[:, 0].values), torch.tensor(event_df.iloc[:, 0].values)
+        # return these so we can add them to according samples ; save dropped columns
+      #  return torch.tensor(duration_df.iloc[:, 0].values), torch.tensor(event_df.iloc[:, 0].values)
 
 
     def eigengene_multiplication(self):
@@ -191,6 +194,9 @@ class F_eigengene_matrices():
             eigengene_test_matrix = pd.read_csv(os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
                                                              "{}_test_eigengene_matrix.csv".format(view)), index_col=0)
 
+            # reset index bc R saves starting at index 1
+            eigengene_matrix.reset_index()
+            eigengene_test_matrix.reset_index()
 
             eigengene_matrices.append(eigengene_matrix)
             eigengene_test_matrices.append(eigengene_test_matrix)

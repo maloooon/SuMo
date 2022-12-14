@@ -52,7 +52,7 @@ class MultiOmicsDataset(Dataset):
 
         elif self.type == 'processed':
             self.X = X
-            self.n_samples = X[0].size(0) # TODO : diff sample sizes eigengene ??
+            self.n_samples = X[0].size(0)
             # no mask anymore --> we have selected features now, so old mask doesn't make sense (?)
             # make new mask based on new data ?
 
@@ -71,7 +71,6 @@ class MultiOmicsDataset(Dataset):
 
     def __getitem__(self, index):
         """return the whole sample (all views)"""
-        #index, : slicing for multidimensional array (multidim tensor)
         if self.type == 'new':
             return [self.X[m][index, :] for m in range(self.n_views)], \
                    [self.mask[m][index, :] for m in range(self.n_views)], \
@@ -174,6 +173,8 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         )
         self.event_train, self.event_test = df_train[col_event].values, df_test[col_event].values
 
+
+
         cols_survival = [col_duration, col_event]
         cols_drop = cols_survival
 
@@ -212,11 +213,12 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
         if method.lower() == 'eigengenes':
             # for train sets
-            eigengene_duration_tensor = []
-            eigengene_event_tensor = []
+         #   eigengene_duration_tensor = []
+         #   eigengene_event_tensor = []
             # for test sets
-            eigengene_duration_tensor_test = []
-            eigengene_event_tensor_test = []
+         #   eigengene_duration_tensor_test = []
+         #   eigengene_event_tensor_test = []
+
             for view in range(self.n_views):
 
                 eg_view = FeatureSelection.F_eigengene_matrices(train=self.x_train[view],
@@ -233,19 +235,20 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                                                                      event=self.event_test,
                                                                      stage='test')
 
-                duration_tensor, event_tensor = eg_view.preprocess()
-                duration_tensor_test, event_tensor_test =eg_view_test.preprocess()
+                eg_view.preprocess()
+                eg_view_test.preprocess()
 
-                eigengene_duration_tensor.append(duration_tensor)
-                eigengene_event_tensor.append(event_tensor)
-                eigengene_duration_tensor_test.append(duration_tensor_test)
-                eigengene_event_tensor_test.append(event_tensor_test)
+
+            #    eigengene_duration_tensor.append(duration_tensor)
+            #    eigengene_event_tensor.append(event_tensor)
+            #    eigengene_duration_tensor_test.append(duration_tensor_test)
+            #    eigengene_event_tensor_test.append(event_tensor_test)
 
 
             eg_view.eigengene_multiplication()
             eigengene_matrices,eigengene_matrices_test = eg_view.get_eigengene_matrices(self.view_names)
 
-                    # as list as each eigengene matrix is of a different size
+            # as list as each eigengene matrix is of a different size
             eigengene_matrices_tensors = []
             eigengene_matrices_tensors_test = []
             for x in range(self.n_views):
@@ -267,52 +270,6 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                 eigengene_matrices_tensors_test[c] = torch.tensor(eigengene_matrices_tensors_test[c])
 
 
-            #eg_mRNA = F_eigengene_matrices(train= data[0], mask= mask[0], view ='mRNA')
-            #eg_DNA = F_eigengene_matrices(train= data[1], mask= mask[1], view='DNA')
-            #eg_microRNA = F_eigengene_matrices(train=data[2],mask=mask[2], view='microRNA')
-            #eg_RPPA = F_eigengene_matrices(train=data[3],mask=mask[3], view='RPPA')
-
-            #eg_mRNA.preprocess()
-            #eg_DNA.preprocess()
-            #eg_microRNA.preprocess()
-            #eg_RPPA.preprocess()
-
-            #eg_mRNA.eigengene_multiplication() # As of now, R file calculated eigengene for all types, thus one call is enough
-
-            #mRNA_eigengene_matrix = (eg_mRNA.get_eigengene_matrix()).transpose()
-            #DNA_eigengene_matrix = (eg_DNA.get_eigengene_matrix()).transpose()
-            #microRNA_eigengene_matrix = (eg_microRNA.get_eigengene_matrix()).transpose()
-            #RPPA_eigengene_matrix = (eg_RPPA.get_eigengene_matrix()).transpose()
-
-            #mRNA_eigengene_tensor = []
-            #DNA_eigengene_tensor = []
-            #microRNA_eigengene_tensor = []
-            # RPPA_eigengene_tensor = []
-
-            # Dataframe to tensor structure
-            #for x in range(len(mRNA_eigengene_matrix.index)):
-            #    temp = mRNA_eigengene_matrix.iloc[x, :].values.tolist()
-            #    mRNA_eigengene_tensor.append(temp)
-
-            #mRNA_eigengene_tensor = torch.tensor(mRNA_eigengene_tensor)
-
-            #for x in range(len(DNA_eigengene_matrix.index)):
-            #    temp = DNA_eigengene_matrix.iloc[x, :].values.tolist()
-            #    DNA_eigengene_tensor.append(temp)
-
-            #DNA_eigengene_tensor = torch.tensor(DNA_eigengene_tensor)
-
-            #for x in range(len(microRNA_eigengene_matrix.index)):
-            #    temp = microRNA_eigengene_matrix.iloc[x, :].values.tolist()
-            #    microRNA_eigengene_tensor.append(temp)
-
-            #microRNA_eigengene_tensor = torch.tensor(microRNA_eigengene_tensor)
-
-            #for x in range(len(RPPA_eigengene_matrix.index)):
-            #    temp = RPPA_eigengene_matrix.iloc[x, :].values.tolist()
-            #    RPPA_eigengene_tensor.append(temp)
-
-            #RPPA_eigengene_tensor = torch.tensor(RPPA_eigengene_tensor)
 
             # only for train sets
             for c,view in enumerate(self.view_names):
@@ -323,13 +280,13 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
             self.train_set = MultiOmicsDataset(eigengene_matrices_tensors,
-                                               eigengene_duration_tensor,
-                                               eigengene_event_tensor,
+                                               self.duration_train,
+                                               self.event_train,
                                                type = 'processed')
 
             self.test_set = MultiOmicsDataset(eigengene_matrices_tensors_test,
-                                              eigengene_duration_tensor_test,
-                                              eigengene_event_tensor_test,
+                                              self.duration_test,
+                                              self.event_test,
                                               type = 'processed')
 
 
@@ -539,8 +496,8 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                   "For each sample, we have {} proteins and {} possible features".format
                   (feature_matrices_train, feature_matrices_train.shape, feature_matrices_train.size(1), feature_matrices_train.size(2)))
 
-
-            return adjacency_matrix_train, feature_matrices_train,
+            # TODO : build own dataloader for this class as differs from other data structures
+            return adjacency_matrix_train, feature_matrices_train, adjacency_matrix_test, feature_matrices_test
 
 
 
@@ -611,40 +568,40 @@ def flatten(l):
     """
     return [item for sublist in l for item in sublist]
 
-if __name__ == '__main__':
-    # Read PRAD data
-    data_PRAD = pd.read_csv(
-        os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
-                     "PRADData.csv"), index_col=0)
 
-    # Read feature offsets of PRAD data
-    feat_offsets_PRAD = pd.read_csv(
-        os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
-                     "PRADDataFeatOffsets.csv"), index_col=0)
+# Read PRAD data
+data_PRAD = pd.read_csv(
+    os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+                 "PRADData.csv"), index_col=0)
 
-    # convert to list and flatten list (since it has each element in a list itself)
-    feat_offsets_PRAD = flatten(feat_offsets_PRAD.values.tolist())
+# Read feature offsets of PRAD data
+feat_offsets_PRAD = pd.read_csv(
+    os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+                 "PRADDataFeatOffsets.csv"), index_col=0)
 
-
-    view_names_PRAD = ['mRNA','DNA','microRNA','RPPA']
-    #Get names of features
-    features = []
-    for a in range(len(feat_offsets_PRAD) - 1):
-        features.append(list(data_PRAD.columns.values[feat_offsets_PRAD[a]:
-                                                      feat_offsets_PRAD[a+1]]))
+# convert to list and flatten list (since it has each element in a list itself)
+feat_offsets_PRAD = flatten(feat_offsets_PRAD.values.tolist())
 
 
-    multimodule = SurvMultiOmicsDataModule(data_PRAD, feat_offsets_PRAD, view_names_PRAD)
-    n_train_samples, n_test_samples = multimodule.setup()
+view_names_PRAD = ['mRNA','DNA','microRNA','RPPA']
+#Get names of features
+features = []
+for a in range(len(feat_offsets_PRAD) - 1):
+    features.append(list(data_PRAD.columns.values[feat_offsets_PRAD[a]:
+                                                  feat_offsets_PRAD[a+1]]))
 
 
-    multimodule.feature_selection(method='ae')
+multimodule = SurvMultiOmicsDataModule(data_PRAD, feat_offsets_PRAD, view_names_PRAD)
+  #  n_train_samples, n_test_samples = multimodule.setup()
 
-    loader = multimodule.train_dataloader(batch_size= 20)
 
-    for data,duration,event in loader:
+   # multimodule.feature_selection(method='ae')
 
-        break
+  #  loader = multimodule.train_dataloader(batch_size= 20)
+
+  #  for data,duration,event in loader:
+
+   #     break
 
 
 

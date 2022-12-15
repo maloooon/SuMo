@@ -5,13 +5,17 @@ import DataInputNew
 from torch import nn
 from tqdm import tqdm
 import numpy as np
+import pytorch_lightning as pl
+from pytorch_lightning import Trainer
+from pytorch_lightning.core.lightning import LightningModule
+import torch.nn.functional as F
 
 
 
-class NN(nn.Module):
+class NN(LightningModule):
     """Inspired by SALMON
        https://github.com/huangzhii/SALMON"""
-    def __init__(self,idx_hidden,input_dim_per_view,dropout_rate = .3, output_dim = 1):
+    def __init__(self,idx_hidden,input_dim_per_view,dropout_rate = .3, output_dim = 1): # TODO : cox model pycox ; output_dim größer
         super().__init__()
         self.idx_hidden = idx_hidden # choose which data to send through hidden layer (of type list), e.g. [0,2] for view 0 and 2
         self.dropout_rate = dropout_rate
@@ -24,11 +28,11 @@ class NN(nn.Module):
             hidden = round(self.input_dim_per_view[idx] / 3)   # TODO : Hyperparameter tuning
             self.hidden_layer_sizes.append((idx,hidden))
 
-        print("hidden layer sizes : {}".format(self.hidden_layer_sizes))
+     #   print("hidden layer sizes : {}".format(self.hidden_layer_sizes))
 
 
         for size in self.hidden_layer_sizes:
-            self.encoder = nn.Sequential(nn.Linear(self.input_dim_per_view[size[0]],size[1]), nn.Sigmoid())
+            self.encoder = nn.Sequential(nn.Linear(self.input_dim_per_view[size[0]],size[1]), nn.Sigmoid()) # TODO : ReLU?
             self.encoders.append(self.encoder)
 
 
@@ -57,7 +61,7 @@ class NN(nn.Module):
             encoded.append(encoder(x[self.idx_hidden[c]]))
 
 
-        print("layer 1 for views at indices {} : {}".format(self.idx_hidden,encoded))
+    #    print("layer 1 for views at indices {} : {}".format(self.idx_hidden,encoded))
 
         non_encoded = []
 
@@ -70,12 +74,11 @@ class NN(nn.Module):
 
 
         final_in = tuple(encoded + non_encoded)
-        print(final_in[0].shape)
-        print(final_in[1].shape)
-        print(final_in[2].shape)
-        print(final_in[3].shape)
+     #   print(final_in[0].shape)
+     #   print(final_in[1].shape)
+     #   print(final_in[2].shape)
+     #   print(final_in[3].shape)
 
-        print(final_in)
 
         label_prediction = self.classifier(torch.cat(final_in, dim= -1)) # TODO dim -1 ? Macht das richtige, aber finde nicht viel im Internet dazu, warum
 
@@ -84,8 +87,30 @@ class NN(nn.Module):
 
 
 
+    def training_step(self,batch, batch_idx):
+        data, duration, event = batch
+        logits = (self.forward(data))
+        logits = logits.reshape(logits.size(0))
 
-def train(module, batch_size=20, cuda=False, learning_rate=0.01, n_epochs=50):
+
+
+        loss = F.mse_loss(logits, event) # no loss directly --> we feed into cox model and calculate loss from there
+        return {'loss': loss}
+
+    def validation_step(self, val_batch, val_batch_idx):
+        pass
+
+
+    def configure_optimizers(self):
+        # weight decay : factor for regularization value in loss function ? aber ADAM ist doch gradient descent method ?
+        # usage : reduce complexity and avoid overfitting of model but keep lots of parameters
+        return torch.optim.Adam(self.parameters(), lr= 1e-3, weight_decay=0)
+
+
+
+
+
+def train(module, batch_size=50):
     """
 
     :param module: basically the dataset to be used
@@ -108,77 +133,8 @@ def train(module, batch_size=20, cuda=False, learning_rate=0.01, n_epochs=50):
 
     idx_hidden = [0,1] # mRNA, DNA
     model = NN(idx_hidden=idx_hidden, input_dim_per_view=input_dim_per_view)
-
-    if cuda:
-        model.cuda()
-    # weight decay : factor for regularization value in loss function ? aber ADAM ist doch gradient descent method ?
-    # usage : reduce complexity and avoid overfitting of model but keep lots of parameters
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0)
-
-
-
-        # TODO : replace label with event
-    for epoch in tqdm(range(n_epochs)):
-
-        for c, data,duration,event in enumerate(trainloader):
-
-            for tensor in range(len(data)):
-
-                data[tensor] = data[tensor].to(torch.float32) # convert to float32 bc of precision problem with float64 in linear layer
-
-            optimizer.zero_grad() # zero gradient buffer
-
-            label_prediction = model(data)
-
-            if c == 0:
-                event_prediction_all = label_prediction
-                event_all = event
-                duration_all = duration
-            else:
-                event_prediction_all = torch.cat((event_prediction_all, label_prediction), dim=-1)
-                event_all = torch.cat((event_all, event), dim=-1)
-                duration_all = torch.cat((duration_all, duration), dim=-1)
-                # This calculation credit to Travers Ching https://github.com/traversc/cox-nnet
-                # Cox-nnet: An artificial neural network method for prognosis prediction of high-throughput omics data
-
-                # Needed for Cox PH loss
-                current_batch_len = len(duration)
-                R_matrix_train = np.zeros([current_batch_len, current_batch_len], dtype=int)
-                for i in range(current_batch_len):
-                    for j in range(current_batch_len):
-                        R_matrix_train[i,j] = duration[j] >= duration[i]
-
-                train_R = torch.FloatTensor(R_matrix_train)
-                if cuda:
-                    train_R = train_R.cuda()
-
-
-            # reshape from
-            #tensor([[..],
-            #        [..]]
-            #to tensor([.., ..])
-            theta = label_prediction.reshape(-1)
-
-            # Cox Loss
-            loss_nn = -torch.mean( (theta - torch.log(torch.sum( torch.exp(theta)*train_R ,dim=1))) * event.float() )
-
-# Regularization in SALMON
-#            l1_reg = None
-#            for W in model.parameters():
-#                if l1_reg is None:
-#                    l1_reg = torch.abs(W).sum()
-#                else:
-#                    l1_reg = l1_reg + torch.abs(W).sum() # torch.abs(W).sum() is equivalent to W.norm(1)
-
-
-
-
-
-
-
-
-
-
+    trainer = Trainer(max_epochs=20, gpus=1, accelerator='cpu')
+    trainer.fit(model, trainloader)
 
 
 

@@ -3,6 +3,7 @@ import os
 import torch
 import DataInputNew
 
+# TODO: python webcrawler selenium/beautifulsoup
 
 def flatten(l):
     """

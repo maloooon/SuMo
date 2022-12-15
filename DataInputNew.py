@@ -19,15 +19,6 @@ import FeatureSelection
 from torch.optim import Adam
 from torch import nn
 
-class MultiOmicsSelectedDataset(Dataset):
-    """Class for Dataset after feature selection.
-       This class can be used with data selection from
-        PCA, variance and eigengene matrices since the
-        resulting data has the following structure
-        [x1,x2..], xi is a tensor of shape
-        (samples, latent features) and i is the view"""
-
-
 
 
 class MultiOmicsDataset(Dataset):
@@ -38,6 +29,7 @@ class MultiOmicsDataset(Dataset):
     def __init__(self, X, duration, event, type= 'new'):
         self.type = type # type of data : new data is unprocessed, 'processed' means already feature selected
         self.n_views = len(X) # number views (mRNA, DNA, microRNA, RPPA)
+
 
         if self.type == 'new':
             self.X = [torch.nan_to_num(x_view) for x_view in X]
@@ -50,17 +42,32 @@ class MultiOmicsDataset(Dataset):
                 view.size(0) == self.n_samples for view in X
         ), "Size mismatch between tensors"
 
+
+        # TODO : center data,  , mit dne null values arbeiten // mean mutation
         elif self.type == 'processed':
             self.X = X
+            self.duration = duration
+            self.event = event
+
+            # Change dtypes of tensors for usage of NN later on
+            for view in range(len(self.X)):
+                self.X[view] = self.X[view].to(torch.float32)
+            self.duration = torch.from_numpy(self.duration).to(torch.float32)
+            self.event = torch.from_numpy(self.event).to(torch.float32)
+
+
             self.n_samples = X[0].size(0)
+
+#y = torch.from_numpy(boston.target.reshape(-1, 1)).float()
+
             # no mask anymore --> we have selected features now, so old mask doesn't make sense (?)
             # make new mask based on new data ?
 
             # no size check as e.g. in eigengenematrix diff. amount of samples due to preprocessing
 
 
-        self.duration = duration
-        self.event = event
+      #  self.duration = duration
+      #  self.event = event
         self.type = type
 
 
@@ -299,6 +306,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             PCA_test_tensors = []
             variance = [0.8,0.8,0.8,0.8] # TODO : Grid search
 
+
             for view in range(self.n_views):
                 view_train_PCA = FeatureSelection.F_PCA(self.x_train[view], keep_variance=variance[view])
                 view_test_PCA = FeatureSelection.F_PCA(self.x_test[view], keep_variance=variance[view])
@@ -307,10 +315,14 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                 PCA_train_tensors.append(torch.tensor(pc_train_view))
                 PCA_test_tensors.append(torch.tensor(pc_test_view))
 
+
+
             for c,view in enumerate(self.view_names):
                 print("{} PCA feature selection : {} of size {} (samples, PC components).".format(view,
                                                                                                   PCA_train_tensors[c],
                                                                                                   PCA_train_tensors[c].shape))
+
+
 
             self.train_set = MultiOmicsDataset(PCA_train_tensors,
                                                    self.duration_train,
@@ -532,7 +544,8 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             dataset=self.train_set,
             batch_size=batch_size,
             shuffle=True,
-            drop_last=True)
+            drop_last=True,
+            num_workers=10)
         return train_loader
 
     def test_dataloader(self,batch_size):
@@ -544,7 +557,8 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             dataset=self.test_set,
             batch_size=batch_size,
             shuffle=True,
-            drop_last=True)
+            drop_last=True,
+            num_workers=10)
         return test_loader
 
 

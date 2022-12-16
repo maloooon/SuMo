@@ -18,6 +18,7 @@ import CancerDataLoading
 import FeatureSelection
 from torch.optim import Adam
 from torch import nn
+from pycox import models
 
 
 
@@ -159,12 +160,11 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         self.view_names = view_names
         self.n_views = len(view_names)
 
-
     def setup(
             self,
             test_size=0.2,
             cols_std=None,   #numeric feature names
-            cols_leave=None, #binary feature names
+           # cols_leave=None, #binary feature names
             col_duration="duration",
             col_event="event",
             stage=None, #current stage of program (fit,test)
@@ -180,9 +180,15 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         )
         self.event_train, self.event_test = df_train[col_event].values, df_test[col_event].values
 
+        cols_leave = [col for col in self.df
+                     if np.isin(self.df[col].dropna().unique(), [0, 1]).all()]
+        # remove event from binary column values (we are only interested in feature values from views)
+        if 'event' in cols_leave:
+            cols_leave.remove('event')
 
 
-        cols_survival = [col_duration, col_event]
+
+        cols_survival = [col_duration, col_event] # columns we don't want to standardize
         cols_drop = cols_survival
 
 
@@ -214,6 +220,24 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         self.x_test_mask = [torch.isnan(x_view) for x_view in self.x_test]
 
         return n_train_samples, n_test_samples
+
+
+    def label_transform(self, num_durations):
+        """label transform as needed for pycox :
+        https://github.com/havakv/pycox/blob/master/pycox/preprocessing/label_transforms.py
+        num_durations : size of equidistant discretization grid (if used, network will have num_durations output nodes)
+        """
+        labtrans_LH = models.LogisticHazard.label_transform(num_durations)
+       # labtrans_PMF = models.PMF.label_transform(num_durations)
+       # labtrans_DeepHit = models.DeepHit.label_transform(num_durations)
+
+        y_train = labtrans_LH.fit_transform(self.duration_train, self.event_train)
+        # TODO : implement for validation, see https://github.com/havakv/pycox/blob/master/examples/01_introduction.ipynb
+        print(labtrans_LH.cuts)
+        print(y_train) # TODO : was ist genau y_train ??? tuple with the indices of the discretized times, in addition to event indicators ?
+        print(y_train[0].size) # y_train[0] : Jeder duration jedes test samples eine der 10 Schnitte durch num_duration zugeordnet
+        print(labtrans_LH.cuts[y_train[0]]) # an Indexen abfragen
+
 
 
     def feature_selection(self, method = None):
@@ -517,24 +541,6 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
 
-
-
-
-
-
-
-
-    #    self.train_set = MultiOmicsDataset(
-     #       self.x_train, self.duration_train, self.event_train, type = 'new')
-
-      #  self.test_set = MultiOmicsDataset(
-      #      self.x_test, self.duration_test, self.event_test, type = 'new')
-
-
-
-
-
-
     def train_dataloader(self, batch_size):
         """
         Build training dataloader
@@ -582,40 +588,46 @@ def flatten(l):
     """
     return [item for sublist in l for item in sublist]
 
+if __name__ == '__main__':
+    # Read PRAD data
+    data_PRAD = pd.read_csv(
+        os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+                     "PRADData.csv"), index_col=0)
 
-# Read PRAD data
-data_PRAD = pd.read_csv(
-    os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
-                 "PRADData.csv"), index_col=0)
+    # Read feature offsets of PRAD data
+    feat_offsets_PRAD = pd.read_csv(
+        os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+                     "PRADDataFeatOffsets.csv"), index_col=0)
 
-# Read feature offsets of PRAD data
-feat_offsets_PRAD = pd.read_csv(
-    os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
-                 "PRADDataFeatOffsets.csv"), index_col=0)
-
-# convert to list and flatten list (since it has each element in a list itself)
-feat_offsets_PRAD = flatten(feat_offsets_PRAD.values.tolist())
-
-
-view_names_PRAD = ['mRNA','DNA','microRNA','RPPA']
-#Get names of features
-features = []
-for a in range(len(feat_offsets_PRAD) - 1):
-    features.append(list(data_PRAD.columns.values[feat_offsets_PRAD[a]:
-                                                  feat_offsets_PRAD[a+1]]))
+    # convert to list and flatten list (since it has each element in a list itself)
+    feat_offsets_PRAD = flatten(feat_offsets_PRAD.values.tolist())
 
 
-multimodule = SurvMultiOmicsDataModule(data_PRAD, feat_offsets_PRAD, view_names_PRAD)
-  #  n_train_samples, n_test_samples = multimodule.setup()
+    view_names_PRAD = ['mRNA','DNA','microRNA','RPPA']
+    #Get names of features
+    features = []
+    for a in range(len(feat_offsets_PRAD) - 1):
+        features.append(list(data_PRAD.columns.values[feat_offsets_PRAD[a]:
+                                                      feat_offsets_PRAD[a+1]]))
 
 
-   # multimodule.feature_selection(method='ae')
+    multimodule = SurvMultiOmicsDataModule(data_PRAD, feat_offsets_PRAD, view_names_PRAD)
 
-  #  loader = multimodule.train_dataloader(batch_size= 20)
+    multimodule.setup()
+    multimodule.label_transform(10)
 
-  #  for data,duration,event in loader:
 
-   #     break
+
+      #  n_train_samples, n_test_samples = multimodule.setup()
+
+
+       # multimodule.feature_selection(method='ae')
+
+      #  loader = multimodule.train_dataloader(batch_size= 20)
+
+      #  for data,duration,event in loader:
+
+       #     break
 
 
 

@@ -233,10 +233,12 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
         y_train = labtrans_LH.fit_transform(self.duration_train, self.event_train)
         # TODO : implement for validation, see https://github.com/havakv/pycox/blob/master/examples/01_introduction.ipynb
-        print(labtrans_LH.cuts)
-        print(y_train) # TODO : was ist genau y_train ??? tuple with the indices of the discretized times, in addition to event indicators ?
-        print(y_train[0].size) # y_train[0] : Jeder duration jedes test samples eine der 10 Schnitte durch num_duration zugeordnet
-        print(labtrans_LH.cuts[y_train[0]]) # an Indexen abfragen
+      #  print(labtrans_LH.cuts)
+      #  print(y_train) # TODO : was ist genau y_train ??? tuple with the indices of the discretized times, in addition to event indicators ?
+      #  print(y_train[0].size) # y_train[0] : Jeder duration jedes test samples eine der 10 Schnitte durch num_duration zugeordnet
+      #  print(labtrans_LH.cuts[y_train[0]]) # an Indexen abfragen
+
+        return labtrans_LH
 
 
 
@@ -383,6 +385,9 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
           #      print("Reduction {} data with variance :".format(view), 1 - (len(variance_selected_features[c]) / len(DataInputNew.features[c])))
                 print("{} variance feature selection : {} of size : {} (samples, latent features)".format(view, variance_train_tensors[c],
                                                                                                           variance_train_tensors[c].shape))
+
+
+
 
 
             self.train_set = MultiOmicsDataset(variance_train_tensors,
@@ -588,46 +593,46 @@ def flatten(l):
     """
     return [item for sublist in l for item in sublist]
 
-if __name__ == '__main__':
-    # Read PRAD data
-    data_PRAD = pd.read_csv(
-        os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
-                     "PRADData.csv"), index_col=0)
+#if __name__ == '__main__':
+# Read PRAD data
+data_PRAD = pd.read_csv(
+    os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+                 "PRADData.csv"), index_col=0)
 
-    # Read feature offsets of PRAD data
-    feat_offsets_PRAD = pd.read_csv(
-        os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
-                     "PRADDataFeatOffsets.csv"), index_col=0)
+# Read feature offsets of PRAD data
+feat_offsets_PRAD = pd.read_csv(
+    os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+                 "PRADDataFeatOffsets.csv"), index_col=0)
 
-    # convert to list and flatten list (since it has each element in a list itself)
-    feat_offsets_PRAD = flatten(feat_offsets_PRAD.values.tolist())
-
-
-    view_names_PRAD = ['mRNA','DNA','microRNA','RPPA']
-    #Get names of features
-    features = []
-    for a in range(len(feat_offsets_PRAD) - 1):
-        features.append(list(data_PRAD.columns.values[feat_offsets_PRAD[a]:
-                                                      feat_offsets_PRAD[a+1]]))
+# convert to list and flatten list (since it has each element in a list itself)
+feat_offsets_PRAD = flatten(feat_offsets_PRAD.values.tolist())
 
 
-    multimodule = SurvMultiOmicsDataModule(data_PRAD, feat_offsets_PRAD, view_names_PRAD)
-
-    multimodule.setup()
-    multimodule.label_transform(10)
-
-
-
-      #  n_train_samples, n_test_samples = multimodule.setup()
+view_names_PRAD = ['mRNA','DNA','microRNA','RPPA']
+#Get names of features
+features = []
+for a in range(len(feat_offsets_PRAD) - 1):
+    features.append(list(data_PRAD.columns.values[feat_offsets_PRAD[a]:
+                                                  feat_offsets_PRAD[a+1]]))
 
 
-       # multimodule.feature_selection(method='ae')
+multimodule = SurvMultiOmicsDataModule(data_PRAD, feat_offsets_PRAD, view_names_PRAD)
 
-      #  loader = multimodule.train_dataloader(batch_size= 20)
+multimodule.setup()
+multimodule.label_transform(10)
 
-      #  for data,duration,event in loader:
 
-       #     break
+
+  #  n_train_samples, n_test_samples = multimodule.setup()
+
+
+   # multimodule.feature_selection(method='ae')
+
+  #  loader = multimodule.train_dataloader(batch_size= 20)
+
+  #  for data,duration,event in loader:
+
+   #     break
 
 
 

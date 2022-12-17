@@ -10,13 +10,15 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.core.lightning import LightningModule
 import torch.nn.functional as F
 from pycox import models
+import DataInputNew
+import torchtuples as tt
 
 
 
-class NN(LightningModule):
+class NN(nn.Module):
     """Inspired by SALMON
        https://github.com/huangzhii/SALMON"""
-    def __init__(self,idx_hidden,input_dim_per_view,dropout_rate = .3, output_dim = 1): # TODO : cox model pycox ; output_dim größer
+    def __init__(self,idx_hidden,input_dim_per_view,dropout_rate = .3, output_dim = 1):
         super().__init__()
         self.idx_hidden = idx_hidden # choose which data to send through hidden layer (of type list), e.g. [0,2] for view 0 and 2
         self.dropout_rate = dropout_rate
@@ -88,30 +90,7 @@ class NN(LightningModule):
 
 
 
-    def training_step(self,batch, batch_idx):
-        data, duration, event = batch
-        logits = (self.forward(data))
-        logits = logits.reshape(logits.size(0))
-
-
-
-        loss = F.mse_loss(logits, event) # no loss directly --> we feed into cox model and calculate loss from there
-        return {'loss': loss}
-
-    def validation_step(self, val_batch, val_batch_idx):
-        pass
-
-
-    def configure_optimizers(self):
-        # weight decay : factor for regularization value in loss function ? aber ADAM ist doch gradient descent method ?
-        # usage : reduce complexity and avoid overfitting of model but keep lots of parameters
-        return torch.optim.Adam(self.parameters(), lr= 1e-3, weight_decay=0)
-
-
-
-
-
-def train(module, batch_size=50):
+def train(module, batch_size =5, learning_rate = 0.001, n_epochs = 5, output_dim=1):
     """
 
     :param module: basically the dataset to be used
@@ -119,13 +98,19 @@ def train(module, batch_size=50):
     :return:
     """
 
+
+
     n_train_samples, n_test_samples = module.setup()
     module.feature_selection(method='pca')
-    trainloader = module.train_dataloader(batch_size=batch_size)
+    trainloader = module.train_dataloader(batch_size=398) # all training examples
 
     # load just for size measures
     for data, duration, event in trainloader:
-        break
+        train_data = data
+        survival = (duration,event)
+
+
+
 
     input_dim_per_view = []
 
@@ -133,17 +118,55 @@ def train(module, batch_size=50):
         input_dim_per_view.append(view.size(1))
 
     idx_hidden = [0,1] # mRNA, DNA
-    model = NN(idx_hidden=idx_hidden, input_dim_per_view=input_dim_per_view)
-    trainer = Trainer(max_epochs=20, gpus=1, accelerator='cpu')
-    trainer.fit(model, trainloader)
+    net = NN(idx_hidden=idx_hidden, input_dim_per_view=input_dim_per_view,output_dim=output_dim)
+
+    # Loss & optimizer + settings for Cox PH model
+    criterion = nn.MSELoss()
+    optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
+    callbacks = [tt.callbacks.EarlyStopping()]
+    print_results = True
+
+    #basically DeepSurv
+    model = models.CoxPH(net, optimizer= optimizer)
+    log = model.fit(train_data,survival,batch_size,n_epochs,callbacks)
+
+    # Training Network
+#    for epoch in range(n_epochs):
+#        for data, duration, event in trainloader:
+
+            # Set devices to cuda for pytorch
+ #           for view in range(len(data)):
+ #               data[view] = data[view].to(device=device)
+
+ #           duration = duration.to(device=device)
+ #           event = event.to(device=device)
+
+
+            # Cox PH model from pycox needs (duration,event) tuple
+            #https://github.com/havakv/pycox/blob/master/pycox/models/cox.py
+ #           survival = (duration,event)
+
+
+
+            # fit model
+
+
+
+
+
+
+
+
+#    trainer = Trainer(max_epochs=20, gpus=1, accelerator='cpu')
+#    trainer.fit(net, trainloader)
 
 
 
 
 if __name__ == '__main__':
     module = DataInputNew.multimodule
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     train(module= module)
-
 
 
 

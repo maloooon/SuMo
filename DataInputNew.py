@@ -54,7 +54,7 @@ class MultiOmicsDataset(Dataset):
             for view in range(len(self.X)):
                 self.X[view] = self.X[view].to(torch.float32)
             self.duration = torch.from_numpy(self.duration).to(torch.float32)
-            self.event = torch.from_numpy(self.event).to(torch.float32)
+            self.event = torch.from_numpy(self.event).to(torch.int32)
 
 
             self.n_samples = X[0].size(0)

@@ -26,12 +26,12 @@ class F_PCA():
     input : List[torch.Tensor]
     components : int
 
-    def __init__(self, train, test = None, components = None, keep_variance = 0.5):
+    def __init__(self, train, test = None, components = 20, keep_variance = 0.5):
         """
 
         :param train:
         :param test:
-        :param components:
+        :param components: choose number of components one wants to use
         :param keep_variance: choose minimal number of PC components such that x % variance is retained
         """
         self.components = components
@@ -41,7 +41,7 @@ class F_PCA():
 
 
     def apply_pca(self):
-        self.pca = PCA(self.keep_variance)
+        self.pca = PCA(n_components= self.components)
 
         #As we already standardized & transformed the data with StandardScaler(), we can apply PCA directly
         self.pca.fit(self.train)
@@ -52,7 +52,7 @@ class F_PCA():
 
 
 
-
+# TODO : Variance probelmatic : can't choose best 100 features for each view! only via threshold
 class F_VARIANCE():
     """Removing features with low variance
        https://scikit-learn.org/stable/modules/feature_selection.html
@@ -60,7 +60,7 @@ class F_VARIANCE():
        Unsupervised variance-based feature selection
     """
 
-    def __init__(self, train, features = None, test = None, threshold = 0.5):                                           # TODO : Threshold for each diff data type, grid search ?
+    def __init__(self, train, features = None, test = None, threshold = 0.5):
         self.train = train
         self.features = features
         self.test = test

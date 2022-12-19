@@ -99,6 +99,7 @@ class MultiOmicsDataset(Dataset):
 def preprocess_features(
         df_train: pd.DataFrame, # train dataset
         df_test: pd.DataFrame, # test dataset
+        df_val: pd.DataFrame, # validation dataset
         cols_std: List[str], # feature names, numeric variables
         cols_leave: List[str], # feature names, binary variables
         feature_offset : List[int]
@@ -117,18 +118,23 @@ def preprocess_features(
         mapper = DataFrameMapper(standardize + leave)
         x_train = mapper.fit_transform(df_train).astype(np.float32)
         x_test = mapper.transform(df_test).astype(np.float32)
+        x_val = mapper.transform(df_val).astype(np.float32)
         x_train_df = pd.DataFrame(x_train)
         x_test_df = pd.DataFrame(x_test)
+        x_val_df = pd.DataFrame(x_val)
 
         # Order by view so it works with Dataset class
         x_train_ordered_by_view = []
         x_test_ordered_by_view = []
+        x_val_ordered_by_view = []
 
         for x in range(len(feature_offset) - 3): # -3 bc we don't have duration/event in training tensor
             x_train_ordered_by_view.append(torch.tensor((x_train_df.iloc[:, feat_offsets_PRAD[x]:
                                                                             feat_offsets_PRAD[x + 1]]).values))
             x_test_ordered_by_view.append(torch.tensor((x_test_df.iloc[:, feat_offsets_PRAD[x]:
                                                                            feat_offsets_PRAD[x + 1]]).values))
+            x_val_ordered_by_view.append(torch.tensor((x_val_df.iloc[:, feat_offsets_PRAD[x]:
+                                                                         feat_offsets_PRAD[x + 1]]).values))
 
 
 
@@ -137,15 +143,19 @@ def preprocess_features(
         # Order by view so it works with Dataset class
         x_train_ordered_by_view = []
         x_test_ordered_by_view = []
+        x_val_ordered_by_view = []
         for x in range(len(feature_offset) - 3): # -3 bc we don't have duration/event in training tensor
             x_train_ordered_by_view.append(torch.tensor((df_train.iloc[:, feat_offsets_PRAD[x]:
                                                                           feat_offsets_PRAD[x + 1]]).values))
             x_test_ordered_by_view.append(torch.tensor((df_test.iloc[:, feat_offsets_PRAD[x]:
                                                                          feat_offsets_PRAD[x + 1]]).values))
+            x_val_ordered_by_view.append(torch.tensor((df_val.iloc[:, feat_offsets_PRAD[x]:
+                                                                        feat_offsets_PRAD[x + 1]]).values))
 
 
 
-    return x_train_ordered_by_view, x_test_ordered_by_view
+
+    return x_train_ordered_by_view, x_test_ordered_by_view, x_val_ordered_by_view
 
 
 class SurvMultiOmicsDataModule(pl.LightningDataModule):
@@ -170,15 +180,21 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             stage=None, #current stage of program (fit,test)
     ):
 
-        """Split data into test and training set, preprocess this data with preprocess_features"""
-        df_train, df_test = train_test_split(self.df, test_size=test_size)
+        """Split data into test and training set and training into training and validation set
+           , preprocess this data with preprocess_features."""
+        df_train_temp, df_test = train_test_split(self.df, test_size=test_size) # all --> train  , test
+        df_train, df_val = train_test_split(df_train_temp, test_size=test_size) # train --> train ,validation
+
         n_train_samples = df_train.shape[0]
         n_test_samples = df_test.shape[0]
-        self.duration_train, self.duration_test = (
-            df_train[col_duration].values,
-            df_test[col_duration].values,
-        )
-        self.event_train, self.event_test = df_train[col_event].values, df_test[col_event].values
+        n_val_samples = df_val.shape[0]
+        self.duration_train, self.duration_test, self.duration_val = (df_train[col_duration].values,
+                                                                      df_test[col_duration].values,
+                                                                      df_val[col_duration].values)
+        self.event_train, self.event_test, self.event_val = df_train[col_event].values, \
+                                            df_test[col_event].values,\
+                                            df_val[col_event].values
+
 
         cols_leave = [col for col in self.df
                      if np.isin(self.df[col].dropna().unique(), [0, 1]).all()]
@@ -205,9 +221,10 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
         # Preprocess train and test data with programmed function
-        self.x_train, self.x_test = preprocess_features(
+        self.x_train, self.x_test, self.x_val = preprocess_features(
             df_train=df_train.drop(cols_drop, axis = 1), # drop duration/event from df, as we don't want these
             df_test=df_test.drop(cols_drop, axis = 1),   # for training and testing sets
+            df_val=df_val.drop(cols_drop, axis = 1),
             cols_std=cols_std,
             cols_leave=cols_leave,
             feature_offset= self.feature_offsets
@@ -219,7 +236,10 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         self.x_test = [torch.nan_to_num(x_view) for x_view in self.x_test]
         self.x_test_mask = [torch.isnan(x_view) for x_view in self.x_test]
 
-        return n_train_samples, n_test_samples
+        self.x_val = [torch.nan_to_num(x_view) for x_view in self.x_val]
+        self.x_val_mask = [torch.isnan(x_view) for x_view in self.x_val]
+
+        return n_train_samples, n_test_samples, n_val_samples
 
 
     def label_transform(self, num_durations):
@@ -245,12 +265,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
     def feature_selection(self, method = None):
 
         if method.lower() == 'eigengenes':
-            # for train sets
-         #   eigengene_duration_tensor = []
-         #   eigengene_event_tensor = []
-            # for test sets
-         #   eigengene_duration_tensor_test = []
-         #   eigengene_event_tensor_test = []
+
 
             for view in range(self.n_views):
 
@@ -271,11 +286,6 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                 eg_view.preprocess()
                 eg_view_test.preprocess()
 
-
-            #    eigengene_duration_tensor.append(duration_tensor)
-            #    eigengene_event_tensor.append(event_tensor)
-            #    eigengene_duration_tensor_test.append(duration_tensor_test)
-            #    eigengene_event_tensor_test.append(event_tensor_test)
 
 
             eg_view.eigengene_multiplication()
@@ -330,23 +340,31 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         if method.lower() == 'pca':
             PCA_train_tensors = []
             PCA_test_tensors = []
-            variance = [0.8,0.8,0.8,0.8] # TODO : Grid search
+            PCA_validation_tensors = []
+          #  variance = [0.8,0.8,0.8,0.8] # TODO : Grid search
+            # We need to choose a steady number of components for the NN later on, because otherwise we have
+            # different numbers for train/val/test, which won't work with PyCox implementation
+            components = 50
+
 
 
             for view in range(self.n_views):
-                view_train_PCA = FeatureSelection.F_PCA(self.x_train[view], keep_variance=variance[view])
-                view_test_PCA = FeatureSelection.F_PCA(self.x_test[view], keep_variance=variance[view])
+                view_train_PCA = FeatureSelection.F_PCA(self.x_train[view], components=components)
+                view_test_PCA = FeatureSelection.F_PCA(self.x_test[view], components=components)
+                view_val_PCA = FeatureSelection.F_PCA(self.x_val[view], components=components)
                 pc_train_view = view_train_PCA.apply_pca()
                 pc_test_view = view_test_PCA.apply_pca()
+                pc_val_view = view_val_PCA.apply_pca()
                 PCA_train_tensors.append(torch.tensor(pc_train_view))
                 PCA_test_tensors.append(torch.tensor(pc_test_view))
+                PCA_validation_tensors.append(torch.tensor(pc_val_view))
 
 
 
-            for c,view in enumerate(self.view_names):
-                print("{} PCA feature selection : {} of size {} (samples, PC components).".format(view,
-                                                                                                  PCA_train_tensors[c],
-                                                                                                  PCA_train_tensors[c].shape))
+   #         for c,view in enumerate(self.view_names):
+   #             print("{} PCA feature selection : {} of size {} (samples, PC components).".format(view,
+   #                                                                                               PCA_train_tensors[c],
+   #                                                                                               PCA_train_tensors[c].shape))
 
 
 
@@ -360,6 +378,11 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                                               self.event_test,
                                               type = 'processed')
 
+
+            self.val_set = MultiOmicsDataset(PCA_validation_tensors,
+                                             self.duration_val,
+                                             self.event_val,
+                                             type = 'processed')
 
 
 
@@ -572,6 +595,15 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             num_workers=10)
         return test_loader
 
+
+    def validation_dataloader(self,batch_size):
+        val_loader = DataLoader(dataset=self.val_set,
+                                batch_size=batch_size,
+                                shuffle=True,
+                                drop_last=True,
+                                num_workers=10)
+
+        return val_loader
 
 
 

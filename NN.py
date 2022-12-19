@@ -79,25 +79,25 @@ class NN_simple(nn.Module):
 class NN(nn.Module):
     """Inspired by SALMON
        https://github.com/huangzhii/SALMON"""
-    def __init__(self,idx_hidden,input_dim_per_view,feature_offset,dropout_rate = .3, output_dim = 1):
+    def __init__(self, idx_hidden, in_features, feature_offset, dropout_rate = .3, output_dim = 1):
         super().__init__()
         self.idx_hidden = idx_hidden # choose which data to send through hidden layer (of type list), e.g. [0,2] for view 0 and 2
         self.dropout_rate = dropout_rate
-        self.input_dim_per_view = input_dim_per_view # list of ints containing input feature sizes for each view
+        self.in_features = in_features # list of ints containing input feature sizes for each view
         self.output_dim = output_dim # size of the output dimension
         self.hidden_layer_sizes = []
         self.encoders = []
         self.feature_offset = feature_offset
 
         for idx in idx_hidden:
-            hidden = round(self.input_dim_per_view[idx] / 3)   # TODO : Hyperparameter tuning
+            hidden = round(self.in_features[idx] / 3)   # TODO : Hyperparameter tuning
             self.hidden_layer_sizes.append((idx,hidden))
 
       #  print("hidden layer sizes : {}".format(self.hidden_layer_sizes))
 
 
         for size in self.hidden_layer_sizes:
-            self.encoder = nn.Sequential(nn.Linear(self.input_dim_per_view[size[0]],size[1]), nn.ReLU()) # TODO : ReLU?
+            self.encoder = nn.Sequential(nn.Linear(self.in_features[size[0]], size[1]), nn.ReLU()) # TODO : ReLU?
             self.encoders.append(self.encoder)
 
 
@@ -105,7 +105,7 @@ class NN(nn.Module):
 
         # sum over all features which are not going through a hidden layer
         self.s_direct_feat = []
-        for c,dim in enumerate(input_dim_per_view):
+        for c,dim in enumerate(in_features):
             if c not in idx_hidden:
                 self.s_direct_feat.append((c,dim))
 
@@ -188,125 +188,192 @@ def train(module, batch_size =50, n_epochs = 512, output_dim=1):
     :return:
     """
 
+    # Setup all the data
+    n_train_samples, n_test_samples, n_val_samples = module.setup()
 
-
-    n_train_samples, n_test_samples = module.setup()
+    #Select method for feature selection
     module.feature_selection(method='pca')
-    trainloader = module.train_dataloader(batch_size=398) # all training examples
-    testloader =module.test_dataloader(batch_size=100)
 
-    # load just for size measures
-    for data, duration, event in trainloader:
-        train_data = data
-        print("train" , train_data[0].shape, train_data[1].shape, train_data[2].shape, train_data[3].shape)
+    # Load Dataloaders
+    trainloader = module.train_dataloader(batch_size=n_train_samples) # all training examples
+    testloader =module.test_dataloader(batch_size=n_test_samples)
+    valloader = module.validation_dataloader(batch_size=n_val_samples)
+
+    # Load data and set device to cuda if possible
+
+    #Train
+    for train_data, train_duration, train_event in trainloader:
         for view in range(len(train_data)):
-            data[view] = data[view].to(device=device)
+            train_data[view] = train_data[view].to(device=device)
 
-        duration = duration.to(device=device)
-        event = event.to(device=device)
+        train_duration.to(device=device)
+        train_event.to(device=device)
 
-   # for data,duration,event in testloader:
-   #     print("test" , data[0].shape, data[1].shape, data[2].shape, data[3].shape) # TODO: wrong sizes ! --> might need to do feature selection on all data and then split afterwards !!
-        # TODO : because pca finds other feature sizes for views based on its own data --> gets problematic with feature offsets data input, also in NN
+    print("Train data shape after feature selection {},{},{},{}".format(train_data[0].shape,
+                                                                        train_data[1].shape,
+                                                                        train_data[2].shape,
+                                                                        train_data[3].shape))
+
+    #Validation
+    for val_data, val_duration, val_event in valloader:
+        for view in range(len(val_data)):
+            val_data[view] = val_data[view].to(device=device)
+
+        val_duration.to(device=device)
+        val_event.to(device=device)
+
+    print("Validation data shape after feature selection {},{},{},{}".format(val_data[0].shape,
+                                                                             val_data[1].shape,
+                                                                             val_data[2].shape,
+                                                                             val_data[3].shape))
+
+    #Test
+    for test_data, test_duration, test_event in testloader:
+        for view in range(len(test_data)):
+            test_data[view] = test_data[view].to(device=device)
+
+        test_duration.to(device=device)
+        test_event.to(device=device)
+
+    print("Test data shape after feature selection {},{},{},{}".format(test_data[0].shape,
+                                                                        test_data[1].shape,
+                                                                        test_data[2].shape,
+                                                                        test_data[3].shape))
 
 
-        # We'll use a fake event placeholder, bc current data has too many censored patients
-        event_temporary_placeholder = (torch.ones(398).to(torch.int32)).to(device=device)
-        duration_structure_train_split = torch.unsqueeze(duration, dim=1)
-        event_temporary_placeholder_structure_train_split = torch.unsqueeze(event_temporary_placeholder, dim=1)
-        survival_structure_train_split = torch.cat((duration_structure_train_split, event_temporary_placeholder_structure_train_split), dim=1)
-        survival = (duration,event_temporary_placeholder)
 
+    # Input dimensions (features for each view) for NN based on different data (train/validation/test)
+    # Need to be the same for NN to work
+    dimensions_train = [x.size(1) for x in train_data]
+    dimensions_val = [x.size(1) for x in val_data]
+    dimensions_test = [x.size(1) for x in test_data]
 
+    assert (dimensions_train == dimensions_val == dimensions_test), 'Feature mismatch between train/val/test'
 
+    dimensions = dimensions_train
 
-    input_dim_per_view = [x.size(1) for x in train_data]
+    # We'll use a fake event placeholder, bc current data has too many censored patients
+    # which doesn't work with PyCox implementation
+    # all events = 1 (no patient censored)
+    event_temporary_placeholder_train = (torch.ones(n_train_samples).to(torch.int32)).to(device=device)
+    event_temporary_placeholder_val = (torch.ones(n_val_samples).to(torch.int32)).to(device=device)
+    event_temporary_placeholder_test = (torch.ones(n_test_samples).to(torch.int32)).to(device=device)
+
 
     # transforming data input for pycox : all views as one tensor, views accessible via feature offset
-    feature_offsets = [0] + np.cumsum(input_dim_per_view).tolist()
-    # train_data[0].size(0) --> number training samples
-    train_data_all = torch.empty(train_data[0].size(0), feature_offsets[-1]).to(torch.float32) # -1 largest index --> gives number of all features together
+
+    # Get feature offsets for train/validation/test
+    # Need to be the same for NN to work
+    feature_offsets_train = [0] + np.cumsum(dimensions_train).tolist()
+    feature_offsets_val = [0] + np.cumsum(dimensions_val).tolist()
+    feature_offsets_test = [0] + np.cumsum(dimensions_test).tolist()
+
+    feature_offsets = feature_offsets_train
+
+    # Number of all features (summed up) for train/validation/test
+    # These need to be the same, otherwise NN won't work
+    feature_sum_train = feature_offsets_train[-1]
+    feature_sum_val = feature_offsets_val[-1]
+    feature_sum_test = feature_offsets_test[-1]
 
 
-    # TODO : chck if correct
+
+    feature_sum = feature_sum_train
+
+    # Initialize empty tensors to store the data for train/validation/test
+    train_data_pycox = torch.empty(n_train_samples, feature_sum_train).to(torch.float32)
+    val_data_pycox = torch.empty(n_val_samples, feature_sum_val).to(torch.float32)
+    test_data_pycox = torch.empty(n_test_samples, feature_sum_test).to(torch.float32)
+
+    # Fill up tensors with data
+
+    # Train
     for idx_view,view in enumerate(train_data):
         for idx_sample, sample in enumerate(view):
-            train_data_all[idx_sample][feature_offsets[idx_view]:feature_offsets[idx_view+1]] = sample
+            train_data_pycox[idx_sample][feature_offsets_train[idx_view]:
+                                         feature_offsets_train[idx_view+1]] = sample
+
+    # Validation
+    for idx_view,view in enumerate(val_data):
+        for idx_sample, sample in enumerate(view):
+            val_data_pycox[idx_sample][feature_offsets_val[idx_view]:
+                                         feature_offsets_val[idx_view+1]] = sample
+
+    # Test
+    for idx_view,view in enumerate(test_data):
+        for idx_sample, sample in enumerate(view):
+            test_data_pycox[idx_sample][feature_offsets_test[idx_view]:
+                                         feature_offsets_test[idx_view+1]] = sample
 
 
+    # Turn validation (duration,event) in correct structure for pycox .fit() call
+    # dde : data duration event ; de: duration event ; d : data
+    train_de_pycox = (train_duration, event_temporary_placeholder_train)
+    val_dde_pycox = val_data_pycox, (val_duration, event_temporary_placeholder_val)
+    test_d_pycox = test_data_pycox
+    #test_dde_pycox = torch.cat((test_data_pycox,
+    #                            test_duration.unsqueeze(dim=1),
+    #                            event_temporary_placeholder_test.unsqueeze(dim=1)), dim=1)
 
-    # split train set and duration/event values into train and validation
-    x_train, x_val, y_train, y_val = train_test_split(train_data_all, survival_structure_train_split, test_size=0.25, random_state=1)
-
-
-    # turn y into tuple(duration,event), each of type tensor (switch dimensions)
-    y_train = y_train.transpose(1,0)
-    y_train_f = (y_train[0], y_train[1]) # duration,event
-    y_val = y_val.transpose(1,0)
-    y_val_f = (y_val[0], y_val[1]) # duration, event
-    val = x_val, y_val_f
-
-
-    idx_hidden = [0,1] # mRNA, DNA
-    net = NN(idx_hidden=idx_hidden, input_dim_per_view=input_dim_per_view,output_dim=output_dim,feature_offset=feature_offsets)
+    test_d_pycox_df = pd.DataFrame(test_d_pycox.numpy())
 
 
-    net_test = NN_simple(input_dim_per_view, feature_offsets)
+    # Set indexes for views for SALMON-NN implementation, which are to be passed through their own hidden layer
+    idx_hidden = [0,1] # 0 : mRNA, 1:DNA, 2:microRNA, 3:RPPA
+
+    # NN call
+ #   net = NN(idx_hidden=idx_hidden,
+ #            in_features=dimensions_train,
+ #            output_dim=output_dim,
+ #            feature_offset=feature_offsets_train)
+
+    net_test = NN_simple(dimensions, feature_offsets)
 
 
+    # Set parameters for NN
 
     optimizer = torch.optim.Adam(net_test.parameters())
     callbacks = [tt.callbacks.EarlyStopping()]
 
-    #basically DeepSurv
-   # model = models.CoxPH(net, optimizer=optimizer)
+
+    # Call model
     model = models.CoxPH(net_test,optimizer)
+
+    # Set learning rate
     model.optimizer.set_lr(0.01)
-    print(val)
 
-    # TODO : val loss doesn't change at all for SALMON NN
-    # TODO : train loss for SALMON not significant or gets even higher
-    # TODO : NN_simple better already !
-    log = model.fit(x_train,y_train_f,batch_size,n_epochs,callbacks, verbose=True,val_data=val, val_batch_size=30) # .fit has problems with multi-omics : cant pass a list of tensors of all views !
+    # Fit model
+    log = model.fit(train_data_pycox,train_de_pycox,batch_size,n_epochs,callbacks,
+                    verbose=True,val_data=val_dde_pycox, val_batch_size=30)
 
- #   _ = model.compute_baseline_hazards() # Cox semi parametric -->  baseline hazard introduced time variable
- #   testloader = module.test_dataloader(batch_size=100)
- #   for data,duration,event in testloader:
- #       test_data = data
- #       test_duration = duration
- #       test_event = event
+    # Plot it
+    _ = log.plot()
 
+    # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
+    _ = model.compute_baseline_hazards()
 
- #   print(test_data[0].shape)
- #   print(test_duration.shape)
- #   print(test_event)
- #   test_data_all = torch.empty(test_data[0].size(0), feature_offsets[-1]).to(torch.float32) # -1 largest index --> gives number of all features together
+    # Predict based on test data
+    surv = model.predict_surv_df(test_d_pycox)
 
-
-    # TODO : chck if correct
- #   for idx_view,view in enumerate(test_data):
- #       for idx_sample, sample in enumerate(view):
- #           test_data_all[idx_sample][feature_offsets[idx_view]:feature_offsets[idx_view+1]] = sample
+    # Plot it
+    surv.iloc[:, :5].plot()
+    plt.ylabel('S(t | x)')
+    _ = plt.xlabel('Time')
 
 
 
 
- #   x_test = torch.cat((test_data_all,test_duration,test_event), dim=1)
-
- #   x_test_df = pd.DataFrame(x_test.numpy())
-
- #   surv = model.predict_surv_df(x_test_df)
- #   surv.iloc[:, :5].plot()
- #   plt.ylabel('S(t | x)')
- #   _ = plt.xlabel('Time')
+if __name__ == '__main__':
+    module = DataInputNew.multimodule
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    train(module= module)
 
 
-"""
 
-    criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(net_test.parameters())
 
-    trainloader_x = module.train_dataloader(batch_size=5)
+
+""" 
+
 
 
     for epoch in range(n_epochs):
@@ -336,13 +403,3 @@ def train(module, batch_size =50, n_epochs = 512, output_dim=1):
 
 
 """
-
-if __name__ == '__main__':
-    module = DataInputNew.multimodule
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    train(module= module)
-
-
-
-
-

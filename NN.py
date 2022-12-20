@@ -14,6 +14,150 @@ import DataInputNew
 import torchtuples as tt
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
+from pycox.evaluation import EvalSurv
+
+class NN_changeable(nn.Module):
+    def __init__(self,views,in_features,feature_offsets, n_hidden_layers_dims, activ_funcs):
+        """
+        :param views: list of views (strings)
+        :param in_features: list of input features
+        :param feature_offsets: List of feature offsets over all views
+        :param n_hidden_layers_dims: List of lists containing output_dim of each hidden layer for each view,
+                                     where the length of each list is the amount of hidden layers for this view
+        :param activ_funcs: List of lists containing activation functions for each hidden layer. This list has
+                            one more list than n_hidden_layers_dim to determine the activation function for the final
+                            layer. If the sublist only contains one activation function , this is to be used
+                            for each hidden layer for this view. If the list only contains one value (no sublists), this
+                            activation function is to be used for each hidden layer and the output layer. Activation func
+                            are to be put in as strings. 'relu', 'sigmoid' , 'softmax' , ..
+        """
+        super().__init__()
+        self.views =views
+        self.in_features = in_features
+        self.feature_offsets = feature_offsets
+        self.n_hidden_layers_dims = n_hidden_layers_dims
+        self.activ_funcs = activ_funcs
+
+        # Create list of lists which will store each hidden layer call for each view
+        self.hidden_layers = [[] for x in range(len(in_features))]
+
+        # Produce activation functions list of lists
+
+
+        if len(activ_funcs) == 1:
+
+            func = activ_funcs[0]
+            activ_funcs = [[func] for x in range(len(views) + 1)]
+
+
+        if len(activ_funcs) == len(views) + 1:
+
+            for c,view in enumerate(activ_funcs):
+                # if only one activ function given in sublist, use this for each layer
+                # if we look at the output layer activ function, we only have the last layer (otherwise index error)
+                if len(activ_funcs[c]) == 1 and c != len(views):
+                    # -1 because we already have one activ func in our activ funcs list
+                    for x in range(len(n_hidden_layers_dims[c]) -1):
+                        activ_funcs[c].append(activ_funcs[c][0])
+
+                for c2,activfunc in enumerate(view):
+                    if activfunc.lower() == 'relu':
+                        activ_funcs[c][c2] = nn.ReLU()
+                    elif activfunc.lower() == 'sigmoid':
+                        activ_funcs[c][c2] = nn.Sigmoid()
+                    elif activfunc.lower() == 'softmax':
+                        activ_funcs[c][c2] = nn.Softmax()
+
+        else:
+            raise ValueError("Your activation function input seems to be wrong. Check if it is a list of lists with a"
+                             " sublist for each view and one list for the output layer or just a single activation function"
+                             " value in a list")
+
+        # Produce hidden layer list of lists
+        for c,view in enumerate(n_hidden_layers_dims):
+            for c2 in range(len(view)):
+                if c2 == 0: # first layer
+                    self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
+                                                                         n_hidden_layers_dims[c][c2]),
+                                                                         activ_funcs[c][c2]))
+                else: # other layers
+                    self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][c2-1],
+                                                                         n_hidden_layers_dims[c][c2]),
+                                                                         activ_funcs[c][c2]))
+
+
+
+
+        # The final layer takes each output from each hidden layer sequence of each view, concatenates them together
+        # and reduces them to output dim of 1
+        sum_dim_last_layers = sum([dim[-1] for dim in n_hidden_layers_dims])
+
+        print(sum_dim_last_layers)
+        self.final_out = nn.Sequential(nn.Linear(sum_dim_last_layers,1), activ_funcs[-1][0])
+
+
+
+    def forward(self,x):
+        """
+
+        :param x: data input
+        :return: hazard
+        """
+
+        # list of lists to store encoded features for each view
+        encoded_features = [[] for x in range(len(self.views))]
+
+        #order data by views for diff. hidden layers
+        data_ordered = []
+
+
+        #Get batch size
+        batch_size = x.size(0)
+
+        for view in range(len(self.views)):
+
+            # Calculate the amount of features for current view via offset
+            feature_size = self.feature_offsets[view+1] - self.feature_offsets[view]
+
+            # Intialize an empty tensor to store data for current view
+            temp = torch.empty(batch_size,feature_size)
+
+            # fill empty tensor with according features for view for each sample in batch
+            for i in range(batch_size):
+                temp[i, :] = x[i][self.feature_offsets[view] : self.feature_offsets[view+1]]
+
+            data_ordered.append(temp)
+
+        for c,view in enumerate(self.hidden_layers):
+            for c2,encoder in enumerate(view):
+                if c2 == 0: #first layer
+                    encoded_features[c].append(self.hidden_layers[c][c2](data_ordered[c]))
+                else : # other layers
+                    encoded_features[c].append(self.hidden_layers[c][c2](encoded_features[c][c2-1]))
+
+
+
+
+        final_in = torch.cat(tuple([dim[-1] for dim in encoded_features]), dim=-1)
+
+
+
+        predict = self.final_out(final_in)
+
+
+
+        return predict
+
+
+
+
+
+
+
+
+
+
+
 
 
 class NN_simple(nn.Module):
@@ -76,117 +220,18 @@ class NN_simple(nn.Module):
 
 
 
-class NN(nn.Module):
-    """Inspired by SALMON
-       https://github.com/huangzhii/SALMON"""
-    def __init__(self, idx_hidden, in_features, feature_offset, dropout_rate = .3, output_dim = 1):
-        super().__init__()
-        self.idx_hidden = idx_hidden # choose which data to send through hidden layer (of type list), e.g. [0,2] for view 0 and 2
-        self.dropout_rate = dropout_rate
-        self.in_features = in_features # list of ints containing input feature sizes for each view
-        self.output_dim = output_dim # size of the output dimension
-        self.hidden_layer_sizes = []
-        self.encoders = []
-        self.feature_offset = feature_offset
-
-        for idx in idx_hidden:
-            hidden = round(self.in_features[idx] / 3)   # TODO : Hyperparameter tuning
-            self.hidden_layer_sizes.append((idx,hidden))
-
-      #  print("hidden layer sizes : {}".format(self.hidden_layer_sizes))
-
-
-        for size in self.hidden_layer_sizes:
-            self.encoder = nn.Sequential(nn.Linear(self.in_features[size[0]], size[1]), nn.ReLU()) # TODO : ReLU?
-            self.encoders.append(self.encoder)
-
-
-        s_hidden_sum = sum([s_hidden[1] for s_hidden in self.hidden_layer_sizes])
-
-        # sum over all features which are not going through a hidden layer
-        self.s_direct_feat = []
-        for c,dim in enumerate(in_features):
-            if c not in idx_hidden:
-                self.s_direct_feat.append((c,dim))
-
-        s_direct_feat_sum = sum([s_direct[1] for s_direct in self.s_direct_feat])
 
 
 
-        self.classifier = nn.Sequential(nn.Linear(s_hidden_sum + s_direct_feat_sum,
-                                                  self.output_dim),nn.Sigmoid())
-
-
-
-
-    def forward(self, x):
-        # x is tensor of size [batch_size, features]
-
-        encoded = []
-        # apply hidden layers to all views which have a hidden layer
-        # we need to apply hidden layers to only specific parts of the tensor (specific views)
-        # create a new tensor (temp) to store only this views feature data which will be send through hidden layer
-
-
-        for c, encoder in enumerate(self.encoders):
-            idx = self.idx_hidden[c]
-            # temp tensor of size [batch size, feature size for this view]
-            batch_size = x.size(0)
-            feature_size = self.feature_offset[idx+1] - self.feature_offset[idx]
-            temp = torch.empty(batch_size,feature_size)
-
-            # fill with values
-            for i in range(x.size(0)):
-                temp[i, :] = x[i][self.feature_offset[idx] : self.feature_offset[idx+1]]
-
-
-
-            encoded.append(encoder(temp))
-
-
-
-         #   for sample in range(x.size(0)):
-         #       encoded.append(encoder(x[sample][self.feature_offset[idx] : self.feature_offset[idx+1]]))
-
-
-
-        #    print("layer 1 for views at indices {} : {}".format(self.idx_hidden,encoded))
-
-        non_encoded = []
-        # non encoded features that we directly pass to the final layer
-        for features in self.s_direct_feat:
-            idx = features[0]
-            feature_size = self.feature_offset[idx+1] - self.feature_offset[idx]
-            temp = torch.empty(batch_size, feature_size)
-            # fill with values
-            for i in range(x.size(0)):
-                temp[i, :] = x[i][self.feature_offset[idx] : self.feature_offset[idx+1]]
-            non_encoded.append(temp)
-
-
-
-
-        final_in = tuple(encoded + non_encoded)
-        #   print(final_in[0].shape)
-        #   print(final_in[1].shape)
-        #   print(final_in[2].shape)
-        #   print(final_in[3].shape)
-      #  print(final_in) # NaN values for second view every time ??
-
-        label_prediction = self.classifier(torch.cat(final_in, dim= -1)) # TODO dim -1 ? Macht das richtige, aber finde nicht viel im Internet dazu, warum
-
-       # print(label_prediction)
-        return label_prediction
-
-
-
-def train(module, batch_size =50, n_epochs = 512, output_dim=1):
+def train(module, batch_size =5, n_epochs = 512, output_dim=1):
     """
 
     :param module: basically the dataset to be used
     :param batch_size: batch size for training
     :return:
     """
+
+    views = ['mRNA', 'DNA', 'microRNA', 'RPPA']
 
     # Setup all the data
     n_train_samples, n_test_samples, n_val_samples = module.setup()
@@ -232,6 +277,7 @@ def train(module, batch_size =50, n_epochs = 512, output_dim=1):
         for view in range(len(test_data)):
             test_data[view] = test_data[view].to(device=device)
 
+
         test_duration.to(device=device)
         test_event.to(device=device)
 
@@ -240,8 +286,10 @@ def train(module, batch_size =50, n_epochs = 512, output_dim=1):
                                                                         test_data[2].shape,
                                                                         test_data[3].shape))
 
-
-
+    # test_dur and test_ev need to be numpy arrays for EvalSurv()
+    test_duration = test_duration.numpy()
+    test_event = test_event.numpy()
+    print(test_duration)
     # Input dimensions (features for each view) for NN based on different data (train/validation/test)
     # Need to be the same for NN to work
     dimensions_train = [x.size(1) for x in train_data]
@@ -257,8 +305,8 @@ def train(module, batch_size =50, n_epochs = 512, output_dim=1):
     # all events = 1 (no patient censored)
     event_temporary_placeholder_train = (torch.ones(n_train_samples).to(torch.int32)).to(device=device)
     event_temporary_placeholder_val = (torch.ones(n_val_samples).to(torch.int32)).to(device=device)
-    event_temporary_placeholder_test = (torch.ones(n_test_samples).to(torch.int32)).to(device=device)
-
+    event_temporary_placeholder_test = (torch.ones(n_test_samples).to(torch.int32)).to(device=device).numpy()
+    print(event_temporary_placeholder_test)
 
     # transforming data input for pycox : all views as one tensor, views accessible via feature offset
 
@@ -318,33 +366,30 @@ def train(module, batch_size =50, n_epochs = 512, output_dim=1):
     test_d_pycox_df = pd.DataFrame(test_d_pycox.numpy())
 
 
-    # Set indexes for views for SALMON-NN implementation, which are to be passed through their own hidden layer
-    idx_hidden = [0,1] # 0 : mRNA, 1:DNA, 2:microRNA, 3:RPPA
 
-    # NN call
- #   net = NN(idx_hidden=idx_hidden,
- #            in_features=dimensions_train,
- #            output_dim=output_dim,
- #            feature_offset=feature_offsets_train)
+ #   net_test = NN_simple(dimensions, feature_offsets)
 
-    net_test = NN_simple(dimensions, feature_offsets)
 
+    # Call NN
+    net = NN_changeable(views,dimensions,feature_offsets,[[25,12,6],[25,12,6],[25],[25,12]],
+                        [['relu'],['relu','relu','relu'],['relu'],['relu','relu'],['relu']])
 
     # Set parameters for NN
-
-    optimizer = torch.optim.Adam(net_test.parameters())
+    optimizer = torch.optim.Adam(net.parameters())
     callbacks = [tt.callbacks.EarlyStopping()]
 
 
+
     # Call model
-    model = models.CoxPH(net_test,optimizer)
+    model = models.CoxPH(net,optimizer)
 
     # Set learning rate
     model.optimizer.set_lr(0.01)
 
     # Fit model
     log = model.fit(train_data_pycox,train_de_pycox,batch_size,n_epochs,callbacks,
-                    verbose=True,val_data=val_dde_pycox, val_batch_size=30)
+                    verbose=True,val_data=val_dde_pycox, val_batch_size=5)
+
 
     # Plot it
     _ = log.plot()
@@ -361,45 +406,29 @@ def train(module, batch_size =50, n_epochs = 512, output_dim=1):
     _ = plt.xlabel('Time')
 
 
+    # Evaluate with concordance, brier score and binomial log-likelihood
+    ev = EvalSurv(surv, test_duration, event_temporary_placeholder_test, censor_surv='km') # censor_surv : Kaplan-Meier
+
+    # concordance
+    concordance_index = ev.concordance_td()
+
+    #brier score
+    time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
+    _ = ev.brier_score(time_grid).plot
+    brier_score = ev.integrated_brier_score(time_grid)
+
+    #binomial log-likelihood
+    binomial_score = ev.integrated_nbll(time_grid)
+
+    print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
+                                                                                                       brier_score,
+                                                                                                       binomial_score))
+
+
+
 
 
 if __name__ == '__main__':
     module = DataInputNew.multimodule
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     train(module= module)
-
-
-
-
-
-""" 
-
-
-
-    for epoch in range(n_epochs):
-        for data,duration,event in trainloader_x:
-
-
-            # Convert data structure for NN (cause PyCox needs data like this)
-            current_batch = torch.empty(data[0].size(0), feature_offsets[-1]).to(torch.float32) # -1 largest index --> gives number of all features together
-
-            for idx_view,view in enumerate(data):
-                for idx_sample, sample in enumerate(view):
-                    current_batch[idx_sample][feature_offsets[idx_view]:feature_offsets[idx_view+1]] = sample
-
-            #forward
-
-            # event tensor size [batch,1], while target is [batch]
-            event = torch.squeeze(event)
-            hazard_predict = net_test(current_batch)
-            loss = criterion(hazard_predict, event)
-
-            #backward
-            optimizer.zero_grad()
-            loss.backward()
-
-            #ADAM step
-            optimizer.step()
-
-
-"""

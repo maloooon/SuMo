@@ -15,9 +15,17 @@ import torchtuples as tt
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 from pycox.evaluation import EvalSurv
+from torchvision import models as tmodels
+from torchsummary import summary
+import ReadInData
+
+
+#TODO : how to check whether dropout layer, batch norm actually have an impact ? --> run with same data and with dropout_prob = 0
+# TODO : didn't have wanted effect, didn't train at all (stopped at epoch 0)
 
 class NN_changeable(nn.Module):
-    def __init__(self,views,in_features,feature_offsets, n_hidden_layers_dims, activ_funcs):
+    def __init__(self,views,in_features,feature_offsets, n_hidden_layers_dims,
+                 activ_funcs,dropout_prob, dropout_layers, batch_norm, dropout_bool, batch_norm_bool):
         """
         :param views: list of views (strings)
         :param in_features: list of input features
@@ -30,6 +38,12 @@ class NN_changeable(nn.Module):
                             for each hidden layer for this view. If the list only contains one value (no sublists), this
                             activation function is to be used for each hidden layer and the output layer. Activation func
                             are to be put in as strings. 'relu', 'sigmoid' , 'softmax' , ..
+        :param dropout : probability of neuron dropout ; int
+        :param dropout_layers : layers in n_hidden_layers_dims where dropout is to be applied ; str ('yes'/'no')
+        :param batch_norm : layers in n_hidden_layers_dims where batch normalization is to be applied ; str ('yes'/'no')
+        :param dropout_bool : Decide wether dropout is applied or not ; bool (True/False)
+        :param batch_norm_bool : Decide wether batch normalization is applied or not ; bool (True/False)
+
         """
         super().__init__()
         self.views =views
@@ -37,9 +51,14 @@ class NN_changeable(nn.Module):
         self.feature_offsets = feature_offsets
         self.n_hidden_layers_dims = n_hidden_layers_dims
         self.activ_funcs = activ_funcs
-
+        self.dropout_prob = dropout_prob
+        self.dropout_layers = dropout_layers
+        self.batch_norm = batch_norm
+        self.dropout_bool = dropout_bool
+        self.batch_norm_bool = batch_norm_bool
         # Create list of lists which will store each hidden layer call for each view
-        self.hidden_layers = [[] for x in range(len(in_features))]
+        self.hidden_layers = [[] for x in range(len(in_features))] #TODO: add nn.ParameterList like in AE implementation !
+
 
         # Produce activation functions list of lists
 
@@ -77,13 +96,29 @@ class NN_changeable(nn.Module):
         for c,view in enumerate(n_hidden_layers_dims):
             for c2 in range(len(view)):
                 if c2 == 0: # first layer
-                    self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
-                                                                         n_hidden_layers_dims[c][c2]),
-                                                                         activ_funcs[c][c2]))
+                    if batch_norm_bool == True and batch_norm[c][c2] == 'yes':
+                        self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
+                                                                             n_hidden_layers_dims[c][c2]),
+                                                                             nn.BatchNorm1d(n_hidden_layers_dims[c][c2]),
+                                                                             activ_funcs[c][c2]))
+                    else:
+                        self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
+                                                                             n_hidden_layers_dims[c][c2]),
+                                                                             activ_funcs[c][c2]))
+
                 else: # other layers
-                    self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][c2-1],
-                                                                         n_hidden_layers_dims[c][c2]),
-                                                                         activ_funcs[c][c2]))
+                    if batch_norm_bool == True and batch_norm[c][c2] == 'yes':
+                        self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][c2-1],
+                                                                             n_hidden_layers_dims[c][c2]),
+                                                                             nn.BatchNorm1d(n_hidden_layers_dims[c][c2]),
+                                                                             activ_funcs[c][c2]))
+                    else:
+                        self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][c2-1],
+                                                                             n_hidden_layers_dims[c][c2]),
+                                                                             activ_funcs[c][c2]))
+
+
+
 
 
 
@@ -92,10 +127,26 @@ class NN_changeable(nn.Module):
         # and reduces them to output dim of 1
         sum_dim_last_layers = sum([dim[-1] for dim in n_hidden_layers_dims])
 
-        print(sum_dim_last_layers)
+
         self.final_out = nn.Sequential(nn.Linear(sum_dim_last_layers,1), activ_funcs[-1][0])
 
 
+        # Dropout
+        self.dropout = nn.Dropout(dropout_prob)
+
+
+
+        # Print the model
+        print("Data input has the following views : {}, each containing {} features.".format(self.views,
+                                                                                            self.in_features[0]))
+
+        print("Dropout : {}, Batch Normalization : {}".format(dropout_bool, batch_norm_bool))
+        for c,_ in enumerate(self.views):
+            print("The view {} has the following pipeline : {}, dropout in layers : {}".format(_, self.hidden_layers[c],
+                                                                                        dropout_layers[c]))
+
+        print("Finally, the last output of each layer is summed up ({} features) and casted to a single element, "
+              "the hazard".format(sum_dim_last_layers))
 
     def forward(self,x):
         """
@@ -132,8 +183,14 @@ class NN_changeable(nn.Module):
             for c2,encoder in enumerate(view):
                 if c2 == 0: #first layer
                     encoded_features[c].append(self.hidden_layers[c][c2](data_ordered[c]))
+                    # Apply dropout layer
+                    if self.dropout_bool == True and self.dropout_layers[c][c2] == 'yes':
+                        encoded_features[c][c2] = self.dropout(encoded_features[c][c2])
+
                 else : # other layers
                     encoded_features[c].append(self.hidden_layers[c][c2](encoded_features[c][c2-1]))
+                    if self.dropout_bool == True and self.dropout_layers[c][c2] == 'yes':
+                        encoded_features[c][c2] = self.dropout(encoded_features[c][c2])
 
 
 
@@ -222,19 +279,22 @@ class NN_simple(nn.Module):
 
 
 
-
-def train(module, batch_size =5, n_epochs = 512, output_dim=1):
+def train(module,views, batch_size =5, n_epochs = 512, lr_scheduler_type = 'onecyclecos'):
     """
 
     :param module: basically the dataset to be used
     :param batch_size: batch size for training
-    :return:
+    :param n_epochs: number of epochs
+    :param lr_scheduler_type: type of lr_scheduler : 'lambda','mulitplicative','step','multistep','exponential',...
     """
 
-    views = ['mRNA', 'DNA', 'microRNA', 'RPPA']
+
+
 
     # Setup all the data
     n_train_samples, n_test_samples, n_val_samples = module.setup()
+
+
 
     #Select method for feature selection
     module.feature_selection(method='pca')
@@ -254,10 +314,8 @@ def train(module, batch_size =5, n_epochs = 512, output_dim=1):
         train_duration.to(device=device)
         train_event.to(device=device)
 
-    print("Train data shape after feature selection {},{},{},{}".format(train_data[0].shape,
-                                                                        train_data[1].shape,
-                                                                        train_data[2].shape,
-                                                                        train_data[3].shape))
+    for c,_ in enumerate(train_data):
+        print("Train data shape after feature selection {}".format(train_data[c].shape))
 
     #Validation
     for val_data, val_duration, val_event in valloader:
@@ -267,10 +325,8 @@ def train(module, batch_size =5, n_epochs = 512, output_dim=1):
         val_duration.to(device=device)
         val_event.to(device=device)
 
-    print("Validation data shape after feature selection {},{},{},{}".format(val_data[0].shape,
-                                                                             val_data[1].shape,
-                                                                             val_data[2].shape,
-                                                                             val_data[3].shape))
+    for c,_ in enumerate(val_data):
+        print("Validation data shape after feature selection {}".format(val_data[c].shape))
 
     #Test
     for test_data, test_duration, test_event in testloader:
@@ -281,15 +337,12 @@ def train(module, batch_size =5, n_epochs = 512, output_dim=1):
         test_duration.to(device=device)
         test_event.to(device=device)
 
-    print("Test data shape after feature selection {},{},{},{}".format(test_data[0].shape,
-                                                                        test_data[1].shape,
-                                                                        test_data[2].shape,
-                                                                        test_data[3].shape))
+    for c,_ in enumerate(test_data):
+        print("Test data shape after feature selection {}".format(test_data[c].shape))
 
     # test_dur and test_ev need to be numpy arrays for EvalSurv()
     test_duration = test_duration.numpy()
     test_event = test_event.numpy()
-    print(test_duration)
     # Input dimensions (features for each view) for NN based on different data (train/validation/test)
     # Need to be the same for NN to work
     dimensions_train = [x.size(1) for x in train_data]
@@ -306,7 +359,7 @@ def train(module, batch_size =5, n_epochs = 512, output_dim=1):
     event_temporary_placeholder_train = (torch.ones(n_train_samples).to(torch.int32)).to(device=device)
     event_temporary_placeholder_val = (torch.ones(n_val_samples).to(torch.int32)).to(device=device)
     event_temporary_placeholder_test = (torch.ones(n_test_samples).to(torch.int32)).to(device=device).numpy()
-    print(event_temporary_placeholder_test)
+
 
     # transforming data input for pycox : all views as one tensor, views accessible via feature offset
 
@@ -372,23 +425,61 @@ def train(module, batch_size =5, n_epochs = 512, output_dim=1):
 
     # Call NN
     net = NN_changeable(views,dimensions,feature_offsets,[[25,12,6],[25,12,6],[25],[25,12]],
-                        [['relu'],['relu','relu','relu'],['relu'],['relu','relu'],['relu']])
+                        [['relu'],['relu','relu','relu'],['relu'],['relu','relu'],['relu']], 0.5,
+                        [['yes','yes','yes'],['yes','yes','yes'],['yes'],['yes','yes']],
+                        [['yes','yes','yes'],['yes','yes','yes'],['yes'],['yes','yes']],
+                        dropout_bool=True,batch_norm_bool=True)
+
+
 
     # Set parameters for NN
-    optimizer = torch.optim.Adam(net.parameters())
+    optimizer = torch.optim.Adam(net.parameters(), lr=0.1)
     callbacks = [tt.callbacks.EarlyStopping()]
+
+
+    # LR scheduler
+
+    #TODO : working ?
+    if lr_scheduler_type.lower() == 'lambda':
+        lambda1 = lambda epoch: 0.65 ** epoch
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer,lr_lambda=lambda1)
+
+
+
+    if lr_scheduler_type.lower() == 'onecyclecos':
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.1, steps_per_epoch=10, epochs=10)
+
+
+
+    lrs = []
+
+    for i in range(10):
+        optimizer.step()
+        lrs.append(optimizer.param_groups[0]["lr"])
+
+        scheduler.step()
+
 
 
 
     # Call model
     model = models.CoxPH(net,optimizer)
+  #  model2 = models.CoxPH(net_test,optimizer)
 
     # Set learning rate
-    model.optimizer.set_lr(0.01)
+  #  model.optimizer.set_lr(0.01)
+ #   model2.optimizer.set_lr(0.01)
+
+
+
+
 
     # Fit model
     log = model.fit(train_data_pycox,train_de_pycox,batch_size,n_epochs,callbacks,
                     verbose=True,val_data=val_dde_pycox, val_batch_size=5)
+
+ #   log2 = model2.fit(train_data_pycox,train_de_pycox,batch_size,n_epochs,callbacks,
+ #                     verbose=True,val_data=val_dde_pycox, val_batch_size=5)
 
 
     # Plot it
@@ -429,6 +520,8 @@ def train(module, batch_size =5, n_epochs = 512, output_dim=1):
 
 
 if __name__ == '__main__':
-    module = DataInputNew.multimodule
+    cancer_data = ReadInData.readcancerdata()
+    multimodule = DataInputNew.SurvMultiOmicsDataModule(cancer_data[17][0],cancer_data[17][1],cancer_data[17][2])
+    views = cancer_data[17][2]
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    train(module= module)
+    train(module= multimodule,views= views)

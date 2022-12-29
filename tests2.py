@@ -1,16 +1,16 @@
 import torch
+import numpy as np
 
 
 
 if __name__ == '__main__':
-    a = [['b','c'],['h']]
-
-    for c,x in enumerate(a):
-        for c2,z in enumerate(x):
-            if z.lower() == 'b':
-                a[c][c2] = 'dfu'
+    a = [[4,3,2],[3,2,1]]
 
 
-    print(a)
-
+    for c,view in enumerate(a):
+        temp = a[c].copy()
+        temp.reverse()
+        a[c] += temp[1:]
+        for x in view:
+            print(x)
 

@@ -39,15 +39,15 @@ if __name__ == '__main__':
     df_mRNA_features_no_numbers = pd.DataFrame(features_mRNA_no_numbers)
     df_DNA_features_no_number = pd.DataFrame(features_DNA_no_numbers)
 
-    df_mRNA_features_no_numbers.to_csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/mRNA_feat_for_transf.csv",
+    df_mRNA_features_no_numbers.to_csv("/Users/marlon/DataspellProjectsForSAMO/SAMO/TCGAData/PRAD/mRNA_feat_for_transf.csv",
                                        index=True)
-    df_DNA_features_no_number.to_csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/DNA_feat_for_transf.csv",
+    df_DNA_features_no_number.to_csv("/Users/marlon/DataspellProjectsForSAMO/SAMO/TCGAData/PRAD/DNA_feat_for_transf.csv",
                                      index=True)
 
 
     # Load proteins and interactions
 
-    ppi_data = pd.read_csv(os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+    ppi_data = pd.read_csv(os.path.join("/Users", "marlon", "DataspellProjectsForSAMO", "SAMO", "TCGAData", "PRAD",
                                         "pp.txt"), sep=" ", header=0)
 
 
@@ -77,7 +77,7 @@ if __name__ == '__main__':
     dict_proteins_data = {y: x for x, y in dict_proteins_data.items()}
 
     df_dict_proteins_data = pd.DataFrame(dict([(k,pd.Series(v)) for k,v in dict_proteins_data.items()]))
-    df_dict_proteins_data.to_csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/proteins.csv"
+    df_dict_proteins_data.to_csv("/Users/marlon/DataspellProjectsForSAMO/SAMO/TCGAData/PRAD/proteins.csv"
                                  ,index=True)
     # Edges in PPI network and according score
 
@@ -100,7 +100,7 @@ if __name__ == '__main__':
     # Convert to dataframe and create .csv-file, as we will need this for the creation of the adjacency matrix for
     # the PPI-network
     ppi_edges_scores_dataframe = pd.DataFrame(ppi_edges_scores.numpy())
-    ppi_edges_scores_dataframe.to_csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/ppi_edges_score.csv",
+    ppi_edges_scores_dataframe.to_csv("/Users/marlon/DataspellProjectsForSAMO/SAMO/TCGAData/PRAD/ppi_edges_score.csv",
                                       index=True)
 
 
@@ -111,7 +111,7 @@ if __name__ == '__main__':
 
     # feature to HGNC mapping
     mRNA_HGNC_full = pd.read_excel(
-        os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+        os.path.join("/Users", "marlon", "DataspellProjectsForSAMO", "SAMO", "TCGAData", "PRAD",
                      "mRNA_to_HGNC.xlsx"), index_col=0
     )
 
@@ -123,7 +123,7 @@ if __name__ == '__main__':
     mRNA_HGNC_only = mRNA_HGNC_full["HGNC"]
 
     mRNA_HGNC_only.to_csv(
-        os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+        os.path.join("/Users", "marlon", "DataspellProjectsForSAMO", "SAMO", "TCGAData", "PRAD",
                      "HGNC_only"),index= False
     )
 
@@ -160,7 +160,7 @@ if __name__ == '__main__':
     #HGNC to uniprot mapping
 
     uniprot_HGNC_mRNA_full = pd.read_csv(
-        os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+        os.path.join("/Users", "marlon", "DataspellProjectsForSAMO", "SAMO", "TCGAData", "PRAD",
                      "HGNC_mRNA_to_uniprot.tsv"), index_col=0, sep='\t'
     )
 
@@ -180,7 +180,7 @@ if __name__ == '__main__':
     # Needed for further conversion
     uniprot_HGNC_mRNA_full_entries = uniprot_HGNC_mRNA_full["Entry"] # Entry columns has uniprot values
 
-    uniprot_HGNC_mRNA_full_entries.to_csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/uniprot_mRNA_transf.csv", index=False)
+    uniprot_HGNC_mRNA_full_entries.to_csv("/Users/marlon/DataspellProjectsForSAMO/SAMO/TCGAData/PRAD/uniprot_mRNA_transf.csv", index=False)
 
     #counter = 0
     # Remove HGNC-values which couldn't be mapped to uniprot
@@ -205,7 +205,7 @@ if __name__ == '__main__':
 
     #Finally, uniprot values to proteins
     uniprot_to_proteins_mRNA_full = pd.read_csv(
-        os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
+        os.path.join("/Users", "marlon", "DataspellProjectsForSAMO", "SAMO", "TCGAData", "PRAD",
                      "uniprot_to_protein_mRNA.tsv"), index_col=0, sep="\t"
     )
 
@@ -299,7 +299,7 @@ if __name__ == '__main__':
 
     # Create a dataframe so we can save this file as a .csv and use it later on
     features_proteins_dataframe = pd.DataFrame(dict([(k,pd.Series(v)) for k,v in dict_features_proteins_mRNA.items()]))
-    features_proteins_dataframe.to_csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/mRNA_feat_proteins.csv",
+    features_proteins_dataframe.to_csv("/Users/marlon/DataspellProjectsForSAMO/SAMO/TCGAData/PRAD/mRNA_feat_proteins.csv",
                                        index=True)
 
 

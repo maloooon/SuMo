@@ -12,6 +12,51 @@ import matplotlib.pyplot as plt
 from pycox.evaluation import EvalSurv
 
 
+class AE_Hierarichal(nn.Module):
+    """Wrapper for hierarichal AE implementation : AE followed by another AE followed by NN for survival analysis.
+       The second AE may be used without an additional Decoder."""
+    def __init__(self,models,types,decoding_bool = False):
+        """
+
+        :param models: models to be used (AE, AE, NN)
+        :param types: different types of integration methods for the AE implementations (none = take
+                      middle layer of each view); input as list
+        :param decoding_bool: bool whether decoder should be used for the second AE or not
+        """
+
+        super().__init__()
+        self.models = models
+        self.types = types
+        self.decoding_bool = decoding_bool
+
+    def forward(self, x):
+        # First AE
+        ae_1 = self.models[0]
+        # Second AE
+        ae_2 = self.models[1]
+        # NN
+        nn = self.models[2]
+
+        if self.decoding_bool == True:
+            if self.types[0] == 'cross' and self.types[1] == 'cross':
+                pass
+                # TODO : wie sieht input von 2tem AE aus und was macht man mit 1tem element wise avg ?
+        if self.types[0] == 'none' and self.types[1] == 'concat':
+            view_data, final_out_1 = ae_1(x)
+            integrated,final_out_2 = ae_2(view_data)
+            hazard = nn(integrated)
+
+            return final_out_1, final_out_2, hazard, view_data
+
+
+
+
+
+
+
+
+
+
 class AE_NN(nn.Module):
     """Wrapper so we can train AE & NN together by using Pycox PH model"""
     def __init__(self, models, type):
@@ -25,38 +70,16 @@ class AE_NN(nn.Module):
         # NN call
         nn = self.models[1]
 
-        if self.type == 'concat':
-            concatenated_features, final_out = ae(x)
-            hazard = nn(concatenated_features)
-            return final_out, hazard
+
         if self.type == 'cross':
             element_wise_avg, final_out_cross, final_out = ae(x)
             hazard = nn(element_wise_avg)
             return final_out, final_out_cross, hazard
-        if self.type == 'elementwiseavg' or self.type == 'elementwisemean':
-            element_wise_avg, final_out = ae(x)
-            hazard = nn(element_wise_avg)
+        else:
+            integrated, final_out = ae(x)
+            hazard = nn(integrated)
             return final_out, hazard
-        if self.type == 'overallavg' or self.type == 'overallmean':
-            overall_mean, final_out = ae(x)
-            hazard = nn(overall_mean)
-            return final_out, hazard
-        if self.type == 'elementwisemin':
-            element_wise_min, final_out = ae(x)
-            hazard = nn(element_wise_min)
-            return final_out,hazard
-        if self.type == 'elementwisemax':
-            element_wise_max, final_out = ae(x)
-            hazard = nn(element_wise_max)
-            return final_out,hazard
-        if self.type == 'overallmax':
-            overall_max, final_out = ae(x)
-            hazard = nn(overall_max)
-            return final_out, hazard
-        if self.type == 'overallmin':
-            overall_min, final_out = ae(x)
-            hazard = nn(overall_min)
-            return final_out, hazard
+
 
 
 
@@ -65,8 +88,10 @@ class AE_NN(nn.Module):
 
 class AE(nn.Module):
     """AE module, input is each view itself (AE for each view)"""
-    def __init__(self, views, in_features, feature_offsets, n_hidden_layers_dims,
-                 activ_funcs,dropout_prob, dropout_layers, batch_norm, dropout_bool, batch_norm_bool, type,cross_mutation = None):
+    def __init__(self, views, in_features, feature_offsets = None, n_hidden_layers_dims = None,
+                 activ_funcs = None,dropout_prob = None, dropout_layers= None, batch_norm = None,
+                 dropout_bool = False, batch_norm_bool= False, type = None,cross_mutation = None,
+                 ae_hierarichcal_bool = False):
         """
         :param views: list of views (strings)
         :param in_features: list of input features
@@ -89,6 +114,8 @@ class AE(nn.Module):
         :param cross_mutation : list of integers of length views, deciding which crosses should be applied,
                                 e.g [1,3,0,2] will cross hidden feats of view 1 with decoder of view 2,
                                 hidden of 4 with dec of view 2 etc..
+        :param ae_hierarichcal_bool : choose whether this AE call is to be in the manner of hierarichcal ae implementation
+                                      (for the second AE)
         """
         super().__init__()
         self.views =views
@@ -106,6 +133,7 @@ class AE(nn.Module):
         self.hidden_layers = nn.ParameterList([nn.ParameterList([]) for x in range(len(in_features))])
         self.middle_dims = []
         self.cross_mutation = cross_mutation
+        self.ae_hierarichcal_bool = ae_hierarichcal_bool
 
 
         # Produce activation functions list of lists
@@ -280,6 +308,10 @@ class AE(nn.Module):
             print("The view {} has the following pipeline : {}, dropout in layers : {}".format(_, self.hidden_layers[c],dropout_layers[c]))
 
 
+        if type.lower() == 'none':
+            print("The output of each view between encoder and decoder will be passed to a NN for survival analysis"
+                  "or another AE before that. Note that the Input Dimensions need to be the same size for each view.")
+
         if type.lower() == 'concat':
             print("Finally, for ConcatAE, the output of each view between encoder and decoder  is concatenated  ({} features) "
                   "and will be passed to a NN for survival analysis".format(concatenated_features))
@@ -335,22 +367,33 @@ class AE(nn.Module):
         data_ordered = []
 
 
-        #Get batch size
-        batch_size = x.size(0)
 
-        for view in range(len(self.views)):
+        if self.ae_hierarichcal_bool == False:
+            #Get batch size
+            batch_size = x.size(0)
 
-            # Calculate the amount of features for current view via offset
-            feature_size = self.feature_offsets[view+1] - self.feature_offsets[view]
 
-            # Intialize an empty tensor to store data for current view
-            temp = torch.empty(batch_size,feature_size)
+            for view in range(len(self.views)):
 
-            # fill empty tensor with according features for view for each sample in batch
-            for i in range(batch_size):
-                temp[i, :] = x[i][self.feature_offsets[view] : self.feature_offsets[view+1]]
+                # Calculate the amount of features for current view via offset
+                feature_size = self.feature_offsets[view+1] - self.feature_offsets[view]
 
-            data_ordered.append(temp)
+                # Intialize an empty tensor to store data for current view
+                temp = torch.empty(batch_size,feature_size)
+
+                # fill empty tensor with according features for view for each sample in batch
+                for i in range(batch_size):
+                    temp[i, :] = x[i][self.feature_offsets[view] : self.feature_offsets[view+1]]
+
+                data_ordered.append(temp)
+        else:
+            # Data already processed
+            if type(x) is list:
+                data_ordered = x
+            else:
+                data_ordered.append(x)
+
+            batch_size = data_ordered[0].size(0)
 
 
 
@@ -392,6 +435,9 @@ class AE(nn.Module):
 
         # Concatenate the output, which will then be passed to a NN for survival analysis
         concatenated_features = torch.cat(tuple(data_middle), dim=-1)
+
+
+
 
         if self.type.lower() == 'overallmean' or self.type.lower() == 'overallavg':
             overall_mean = torch.mean(concatenated_features,1,True)
@@ -492,6 +538,9 @@ class AE(nn.Module):
             return element_wise_avg, final_out_cross, final_out
 
 
+        if self.type.lower() == 'none':
+            # Change structure of data so it can fit
+            return data_middle, final_out
 
         if self.type.lower() == 'elementwiseavg' or self.type.lower() == 'elementwisemean':
 
@@ -516,6 +565,44 @@ class AE(nn.Module):
         if self.type.lower() == 'overallmin':
 
             return overall_min, final_out
+
+
+
+class LossHierarichcalAE(nn.Module):
+    def __init__(self,alpha):
+        """
+
+        :param alpha: alpha is a list of 3 values, need to be 1 in sum
+        """
+        super().__init__()
+        assert sum(alpha), 'alpha needs to be 1 in sum'
+        self.alpha = alpha
+        self.loss_surv = models.loss.CoxPHLoss()
+        self.loss_ae = nn.MSELoss()
+
+
+    def forward(self, final_out, final_out_2, hazard, view_data, survival, input_data):
+        """
+
+        :param final_out: decoder output AE 1
+        :param final_out_2: decoder output AE 2
+        :param hazard: hazard
+        :param view_data: data between encoder and decoder of AE 1 (input of AE 2)
+        :param survival: duration,event
+        :param input_data: input_data for AE 1
+        :return:
+        """
+        duration,event = survival
+        loss_surv = self.loss_surv(hazard, duration, event)
+        loss_ae_1 = self.loss_ae(final_out, input_data)
+
+        # view data is a list of tensors for each view ; as final_out_2 has structure of just one tensor, we
+        # need to change structure accordingly
+        view_data = torch.cat(tuple(view_data), dim=1)
+        loss_ae_2 = self.loss_ae(final_out_2, view_data)
+
+        return self.alpha[0] * loss_surv + self.alpha[1] * loss_ae_1 + self.alpha[2] * loss_ae_2
+
 
 
 
@@ -587,7 +674,7 @@ class LossAECrossHazard(nn.Module):
 
 
 
-def train(module,views, batch_size =128, n_epochs = 512, lr_scheduler_type = 'onecyclecos', l2_regularization = False):
+def train(module,views, batch_size =25, n_epochs = 512, lr_scheduler_type = 'onecyclecos', l2_regularization = False):
     """
 
     :param module: basically the dataset to be used
@@ -727,17 +814,24 @@ def train(module,views, batch_size =128, n_epochs = 512, lr_scheduler_type = 'on
 
 
     all_models = nn.ModuleList()
- #   all_models.append(AE(views,dimensions,feature_offsets,[[10,5,2],[10,5,4],[10,5,1],[10,5,2]],
- #                        [['relu'],['relu','relu','relu'],['relu'],['relu','relu','relu'],['relu']], 0.5,
- #                        [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
- #                        [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
- #                        dropout_bool=True,batch_norm_bool=True,type='cross',cross_mutation=[1,2,3,0]))
+    all_models.append(AE(views,dimensions,feature_offsets,[[10,5,4],[10,5,4],[10,5,4],[10,5,4]],
+                         [['relu'],['relu','relu','relu'],['relu'],['relu','relu','relu'],['relu']], 0.2,
+                         [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+                         [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+                         dropout_bool=False,batch_norm_bool=True,type='none'))
 
-    all_models.append(AE(views,dimensions,feature_offsets,[[10,5,2]],
-                            [['relu'],['relu']], 0.5,
-                            [['yes','yes','yes']],
-                            [['yes','yes','yes']],
-                            dropout_bool=False,batch_norm_bool=True,type='elementwisemax'))
+#    all_models.append(AE(views,dimensions,feature_offsets,[[10,5,2]],
+#                            [['relu'],['relu']], 0.5,
+#                            [['yes','yes','yes']],
+#                            [['yes','yes','yes']],
+#                            dropout_bool=False,batch_norm_bool=True,type='none'))
+
+    all_models.append(AE(views,in_features=[4,4,4,4], n_hidden_layers_dims= [[10,5,4],[10,5,4],[10,5,4],[10,5,4]],
+                         activ_funcs = [['relu'],['relu','relu','relu'],['relu'],['relu','relu','relu'],['relu']],
+                         dropout_prob= 0.2,
+                         dropout_layers =[['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+                         batch_norm = [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+                         dropout_bool=False,batch_norm_bool=True,type='concat', ae_hierarichcal_bool= True))
 
 
 
@@ -748,13 +842,22 @@ def train(module,views, batch_size =128, n_epochs = 512, lr_scheduler_type = 'on
     #        For elementwise(mean/max/min), the in_feats for NN must be size of the largest output layer dim
 
     # TODO : some problem with batch_norm, perhaps : https://discuss.pytorch.org/t/error-expected-more-than-1-value-per-channel-when-training/26274
-    all_models.append(NN.NN_changeable(views = ['AE'],in_features = [2],
-                                       n_hidden_layers_dims= [[4, 2]],
+    all_models.append(NN.NN_changeable(views = ['AE'],in_features = [16],
+                                       n_hidden_layers_dims= [[8, 4]],
                                        activ_funcs = [['relu'], ['relu']],dropout_prob=0.2,dropout_layers=[['yes','yes']],
                                        batch_norm = [['yes','yes']],
                                        dropout_bool=True,batch_norm_bool=True,ae_bool=True))
 
-    full_net = AE_NN(all_models, type='elementwisemax')
+  #  all_models.append(NN.NN_changeable(views = views, in_features=[4,4,4,4], n_hidden_layers_dims=[[4,2], [4,2], [4,2], [4,2]],
+  #                                     activ_funcs = ['relu'], dropout_prob=0.2, dropout_layers=[['yes','yes'],['yes','yes'],
+  #                                                                                               ['yes','yes'],['yes','yes']],
+  #                                     batch_norm=[['yes','yes'],['yes','yes'],
+  #                                                 ['yes','yes'],['yes','yes']],dropout_bool=True, batch_norm_bool=True,
+  #                                    ae_bool=True))
+
+    full_net = AE_Hierarichal(all_models, types=['none','concat'])
+
+  #  full_net = AE_NN(all_models, type='none')
 
 
     # set optimizer
@@ -765,7 +868,8 @@ def train(module,views, batch_size =128, n_epochs = 512, lr_scheduler_type = 'on
 
     callbacks = [tt.callbacks.EarlyStopping()]
 
-    model = models.CoxPH(full_net,optimizer, loss=LossAEConcatHazard(0.6)) # Change Loss here
+ #   model = models.CoxPH(full_net,optimizer, loss=LossAEConcatHazard(0.6)) # Change Loss here
+    model = models.CoxPH(full_net, optimizer, loss=LossHierarichcalAE([0.4,0.2,0.4]))
 
 
   #  log = model.fit(*full_train,batch_size,n_epochs,verbose=True, val_data=full_validation, callbacks=callbacks)

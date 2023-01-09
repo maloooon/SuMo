@@ -1,11 +1,12 @@
 import os
 import pandas as pd
-def flatten(l):
-    """
-    :param l: list input
-    :return: flattened list (removal of one inner list layer)
-    """
-    return [item for sublist in l for item in sublist]
+import HelperFunctions as HF
+#def flatten(l):
+#    """
+#    :param l: list input
+#    :return: flattened list (removal of one inner list layer)
+#    """
+#    return [item for sublist in l for item in sublist]
 
 
 
@@ -17,7 +18,7 @@ def readcancerdata():
                     'STAD','TGCT','THCA','THYM','UCEC' ,'UCS', 'UVM']
 
     # Testing purposes : only LUAD data
-    cancer_names = ['SKCM']
+    cancer_names = ['LAML']
 
 
     cancer_data = [[] for x in range(len(cancer_names))]
@@ -37,8 +38,8 @@ def readcancerdata():
                          str(_) + "Views.csv"), index_col=0)
 
         cancer_data[c].append(data)
-        cancer_data[c].append(flatten(feat_offset.values.tolist()))
-        cancer_data[c].append(flatten(view_names.values.tolist()))
+        cancer_data[c].append(HF.flatten(feat_offset.values.tolist()))
+        cancer_data[c].append(HF.flatten(view_names.values.tolist()))
 
 
     return cancer_data

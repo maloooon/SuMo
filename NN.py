@@ -18,6 +18,7 @@ from pycox.evaluation import EvalSurv
 from torchvision import models as tmodels
 from torchsummary import summary
 import ReadInData
+import HelperFunctions as HF
 
 
 
@@ -200,9 +201,11 @@ class NN_changeable(nn.Module):
 
         #order data by views for diff. hidden layers
         data_ordered = []
-        #Get batch size
-        batch_size = x.size(0)
+
+
         if self.ae_bool == False:
+            #Get batch size
+            batch_size = x.size(0)
 
             for view in range(len(self.views)):
 
@@ -219,7 +222,16 @@ class NN_changeable(nn.Module):
                 data_ordered.append(temp)
         else:
             # Output of AE is already "processed"
-            data_ordered.append(x)
+
+            if type(x) is list:
+                data_ordered = x
+            else:
+                data_ordered.append(x)
+
+         #   if type(data_ordered[0]) is list:
+         #       # If AE has type 'none' , we need to flatten the list (as we have a list of lists of tensors)
+         #       data_ordered = HF.flatten(data_ordered)
+
 
 
         for c,view in enumerate(self.hidden_layers):

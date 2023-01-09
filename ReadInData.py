@@ -17,7 +17,7 @@ def readcancerdata():
                     'STAD','TGCT','THCA','THYM','UCEC' ,'UCS', 'UVM']
 
     # Testing purposes : only LUAD data
-    cancer_names = ['PRAD']
+    cancer_names = ['SKCM']
 
 
     cancer_data = [[] for x in range(len(cancer_names))]
@@ -25,15 +25,15 @@ def readcancerdata():
     for c,_ in enumerate(cancer_names):
         print("Reading in " + str(_) + " data...")
         data = pd.read_csv(
-            os.path.join("/Users", "marlon", "DataspellProjectsForSAMO", "SAMO", "TCGAData", str(_),
+            os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", str(_),
                          str(_) + "Data.csv"), index_col=0)
         print("Reading in " + str(_) + " offsets...")
         feat_offset = pd.read_csv(
-            os.path.join("/Users", "marlon", "DataspellProjectsForSAMO", "SAMO", "TCGAData", str(_),
+            os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", str(_),
                          str(_) + "DataFeatOffsets.csv"), index_col=0)
         print("Reading in " + str(_) + " view names...")
         view_names = pd.read_csv(
-            os.path.join("/Users", "marlon", "DataspellProjectsForSAMO", "SAMO", "TCGAData", str(_),
+            os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", str(_),
                          str(_) + "Views.csv"), index_col=0)
 
         cancer_data[c].append(data)

@@ -12,78 +12,64 @@ from pycox.models import CoxPH
 from pycox.evaluation import EvalSurv
 import sys
 
-if __name__ == '__main__':
-
-
-    np.random.seed(1234)
-    _ = torch.manual_seed(123)
-
-
-    df_train = metabric.read_df()
-    df_test = df_train.sample(frac=0.2)
-    df_train = df_train.drop(df_test.index)
-    df_val = df_train.sample(frac=0.2)
-    df_train = df_train.drop(df_val.index)
-
-
-    cols_standardize = ['x0', 'x1', 'x2', 'x3', 'x8']
-    cols_leave = ['x4', 'x5', 'x6', 'x7']
-
-    standardize = [([col], StandardScaler()) for col in cols_standardize]
-    leave = [(col, None) for col in cols_leave]
-
-    x_mapper = DataFrameMapper(standardize + leave)
-    x_train = x_mapper.fit_transform(df_train).astype('float32')
-    x_val = x_mapper.transform(df_val).astype('float32')
-    x_test = x_mapper.transform(df_test).astype('float32')
-
-    print("test" , x_test[0])
-
-    print("COX data: ", x_train.shape)
 
 
 
-    get_target = lambda df: (df['duration'].values, df['event'].values)
-    y_train = get_target(df_train)
-    y_val = get_target(df_val)
-    durations_test, events_test = get_target(df_test)
-    val = x_val, y_val
+np.random.seed(1234)
+_ = torch.manual_seed(123)
+
+
+df_train = metabric.read_df()
+df_test = df_train.sample(frac=0.2)
+df_train = df_train.drop(df_test.index)
+df_val = df_train.sample(frac=0.2)
+df_train = df_train.drop(df_val.index)
+
+
+cols_standardize = ['x0', 'x1', 'x2', 'x3', 'x8']
+cols_leave = ['x4', 'x5', 'x6', 'x7']
+
+standardize = [([col], StandardScaler()) for col in cols_standardize]
+leave = [(col, None) for col in cols_leave]
+
+x_mapper = DataFrameMapper(standardize + leave)
+x_train = x_mapper.fit_transform(df_train).astype('float32')
+x_val = x_mapper.transform(df_val).astype('float32')
+x_test = x_mapper.transform(df_test).astype('float32')
 
 
 
-    in_features = x_train.shape[1]
-    num_nodes = [32, 32]
-    out_features = 1
-    batch_norm = True
-    dropout = 0.1
-    output_bias = False
-
-    net = tt.practical.MLPVanilla(in_features, num_nodes, out_features, batch_norm,
-                                  dropout, output_bias=output_bias)
-
-    model = CoxPH(net, torch.optim.Adam(net.parameters(), lr=0.01))
-
-    batch_size = 50
-
-    model.optimizer.set_lr(0.01)
 
 
-    epochs = 512
-    callbacks = [tt.callbacks.EarlyStopping()]
-    verbose = True
+get_target = lambda df: (df['duration'].values, df['event'].values)
+y_train = get_target(df_train)
+y_val = get_target(df_val)
+durations_test, events_test = get_target(df_test)
+val = x_val, y_val
+"""
+in_features = x_train.shape[1]
+num_nodes = [32, 32]
+out_features = 1
+batch_norm = True
+dropout = 0.1
+output_bias = False
 
-   # print("random data : {}, shape : {} ".format(x_train_rand, x_train_rand.shape))
-  #  print("random survival : {}, shape : {}".format(survival_rand,survival_rand[0].shape))
-    log = model.fit(x_train, y_train, batch_size, epochs, callbacks, verbose,
-                    val_data=val, val_batch_size=batch_size)
+net = tt.practical.MLPVanilla(in_features, num_nodes, out_features, batch_norm,
+                              dropout, output_bias=output_bias)
 
 
-    _ = model.compute_baseline_hazards()
+model = CoxPH(net, tt.optim.Adam)
+batch_size = 256
 
 
-    surv = model.predict_surv_df(x_test)
+model.optimizer.set_lr(0.01)
 
 
-    surv.iloc[:, :5].plot()
-    plt.ylabel('S(t | x)')
-    _ = plt.xlabel('Time')
+epochs = 512
+callbacks = [tt.callbacks.EarlyStopping()]
+verbose = True
+
+
+log = model.fit(x_train, y_train, batch_size, epochs, callbacks, verbose,
+                val_data=val, val_batch_size=batch_size)
+"""

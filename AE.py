@@ -4,12 +4,69 @@ from torch import nn
 import ReadInData
 import DataInputNew
 from torch.optim import Adam
+import statistics
+from pycox import models
+import torchtuples as tt
+import NN
+import matplotlib.pyplot as plt
+from pycox.evaluation import EvalSurv
+
+
+class AE_NN(nn.Module):
+    """Wrapper so we can train AE & NN together by using Pycox PH model"""
+    def __init__(self, models, type):
+        super().__init__()
+        self.models = models
+        self.type = type
+
+    def forward(self, x):
+        # AE call
+        ae = self.models[0]
+        # NN call
+        nn = self.models[1]
+
+        if self.type == 'concat':
+            concatenated_features, final_out = ae(x)
+            hazard = nn(concatenated_features)
+            return final_out, hazard
+        if self.type == 'cross':
+            element_wise_avg, final_out_cross, final_out = ae(x)
+            hazard = nn(element_wise_avg)
+            return final_out, final_out_cross, hazard
+        if self.type == 'elementwiseavg' or self.type == 'elementwisemean':
+            element_wise_avg, final_out = ae(x)
+            hazard = nn(element_wise_avg)
+            return final_out, hazard
+        if self.type == 'overallavg' or self.type == 'overallmean':
+            overall_mean, final_out = ae(x)
+            hazard = nn(overall_mean)
+            return final_out, hazard
+        if self.type == 'elementwisemin':
+            element_wise_min, final_out = ae(x)
+            hazard = nn(element_wise_min)
+            return final_out,hazard
+        if self.type == 'elementwisemax':
+            element_wise_max, final_out = ae(x)
+            hazard = nn(element_wise_max)
+            return final_out,hazard
+        if self.type == 'overallmax':
+            overall_max, final_out = ae(x)
+            hazard = nn(overall_max)
+            return final_out, hazard
+        if self.type == 'overallmin':
+            overall_min, final_out = ae(x)
+            hazard = nn(overall_min)
+            return final_out, hazard
+
+
+
+
 
 
 class AE(nn.Module):
     """AE module, input is each view itself (AE for each view)"""
     def __init__(self, views, in_features, feature_offsets, n_hidden_layers_dims,
-                 activ_funcs,dropout_prob, dropout_layers, batch_norm, dropout_bool, batch_norm_bool, type):
+                 activ_funcs,dropout_prob, dropout_layers, batch_norm, dropout_bool, batch_norm_bool, type,cross_mutation = None):
         """
         :param views: list of views (strings)
         :param in_features: list of input features
@@ -29,6 +86,9 @@ class AE(nn.Module):
         :param dropout_bool : Decide wether dropout is applied or not ; bool (True/False)
         :param batch_norm_bool : Decide wether batch normalization is applied or not ; bool (True/False)
         :param type : concat, cross or both (concross)
+        :param cross_mutation : list of integers of length views, deciding which crosses should be applied,
+                                e.g [1,3,0,2] will cross hidden feats of view 1 with decoder of view 2,
+                                hidden of 4 with dec of view 2 etc..
         """
         super().__init__()
         self.views =views
@@ -45,6 +105,7 @@ class AE(nn.Module):
         # Create list of lists which will store each hidden layer call for each view (encoding & decoding stage)
         self.hidden_layers = nn.ParameterList([nn.ParameterList([]) for x in range(len(in_features))])
         self.middle_dims = []
+        self.cross_mutation = cross_mutation
 
 
         # Produce activation functions list of lists
@@ -83,6 +144,13 @@ class AE(nn.Module):
         # For each view, we add the dimensions of the hidden layers for the encoder backwards to the list (for decoding)
         # Accordingly, we need to do the same for activation functions, batch norm and dropout layers (mirroring it for decoding)
 
+        decoding_hidden = [[] for x in range(len(in_features))]
+        decoding_activation = [[] for x in range(len(in_features))]
+        decoding_batch = [[] for x in range(len(in_features))]
+        decoding_dropout = [[] for x in range(len(in_features))]
+
+
+
         for c,view in enumerate(n_hidden_layers_dims):
             # For output purposes, we save dim of the last layer for the encoder in a list
             self.middle_dims.append(n_hidden_layers_dims[c][-1])
@@ -96,6 +164,11 @@ class AE(nn.Module):
             temp_activation.reverse()
             temp_batch.reverse()
             temp_dropout.reverse()
+            # For CrossAE, we'll need decoding informations
+            decoding_hidden[c].append(temp_hidden)
+            decoding_activation[c].append(temp_activation)
+            decoding_batch[c].append(temp_batch)
+            decoding_dropout[c].append(temp_dropout)
             # concatenate temp to original list starting at first element (otherwise we would have the
             # element in the middle 2 times
             n_hidden_layers_dims[c] += temp_hidden[1:]
@@ -145,6 +218,9 @@ class AE(nn.Module):
                                                                    activ_funcs[c][c2]))
 
 
+        # mean/max/min output dimension element wise
+        mmm_output_dimension = max(self.middle_dims)
+
 
 
 
@@ -159,8 +235,36 @@ class AE(nn.Module):
 
 
         if type.lower() == 'cross':
-            #TODO : To be implemented
-            pass
+            # For the crossAE implementation, we now need to cross middle hidden features and encoders.
+            # for n views there are n! possible mutations (each view has n-1 possible encoder it can take for crossAE)
+            # To have the strongest learning effect, the user can choose which mutation he wants in the beginning
+            # or it is randomized and then kept for the remainder of all epochs of training.
+
+            # We are only interested in the decoding stages, thus we only look at the hidden layers starting at the
+            # middle position
+            middle_pos = []
+            for x in n_hidden_layers_dims:
+                middle_pos.append(len(x)//2)
+
+            # For crossAE implementation, we might need a helping layer to set the dimensions of the hidden feats of view
+            # i to the input dim of the first decoding layer of view j
+            self.helping_layer = nn.ParameterList(nn.ParameterList([]) for x in range(len(in_features)))
+            # boolean list saving whether view needs additional helping layer or not
+            self.needs_help_bool = [False for x in range(len(in_features))]
+
+            for c, view in enumerate(n_hidden_layers_dims):
+                # if the middle hidden feat dim size of current view is not the same as the hidden feat dim size
+                # of view which decoder will be taken to decode the current view hidden dim feats
+                if n_hidden_layers_dims[c][middle_pos[c]] != n_hidden_layers_dims[cross_mutation[c]][middle_pos[cross_mutation[c]]]:
+                    self.needs_help_bool[c] = True
+                    # In this case we need a helping layer
+                    # no activation func, no batch norm etc. --> only fit the data so it can be passed on to the chosen decoder
+                    self.helping_layer[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][middle_pos[c]],
+                                                                         n_hidden_layers_dims[cross_mutation[c]][middle_pos[cross_mutation[c]]])))
+
+
+
+
 
 
 
@@ -173,11 +277,50 @@ class AE(nn.Module):
 
         print("Dropout : {}, Batch Normalization : {}".format(dropout_bool, batch_norm_bool))
         for c,_ in enumerate(self.views):
-            print("The view {} has the following pipeline : {}, dropout in layers : {}".format(_, self.hidden_layers[c],
-                                                                                               dropout_layers[c]))
+            print("The view {} has the following pipeline : {}, dropout in layers : {}".format(_, self.hidden_layers[c],dropout_layers[c]))
 
-        print("Finally, the output of each view between encoder and decoder  is summed up ({} features) "
-              "and will be passed to a NN for survival analysis".format(concatenated_features))
+
+        if type.lower() == 'concat':
+            print("Finally, for ConcatAE, the output of each view between encoder and decoder  is concatenated  ({} features) "
+                  "and will be passed to a NN for survival analysis".format(concatenated_features))
+
+        if type.lower() == 'cross':
+            for c, _ in enumerate(self.helping_layer):
+                print( "For CrossAE implementation we have the following helping layers : {} for view {}"
+                   .format(self.helping_layer[c], self.views[c]))
+            print("Finally, for CrossAE, the output of each view between encoder and decoder  is averaged element-wise"
+                  ", thus {} elements  will be passed to a NN for survival analysis".format(mmm_output_dimension))
+
+        if type.lower() == 'elementwisemean' or type.lower() == 'elementwiseavg':
+            print("Finally, for EMeanAE (EAvgAE), the output of each view between encoder and decoder is averaged ({} features)"
+                  "and will be passed to a NN for survival analysis".format(mmm_output_dimension))
+
+        if type.lower() == 'overallmean' or type.lower() == 'overallavg':
+            print("Finally, for OMeanAE (OAvgAE), the mean of the output of each view between encoder and decoder is calculated"
+                  "(1 feature) and then passed to a NN for survival analysis")
+
+        if type.lower() == 'overallmax':
+            print("Finally, for OMaxAE, the max of the output of each view between encoder and decoder is calculated"
+                  "(1 feature) and then passed to a NN for survival analysis")
+
+        if type.lower() == 'elementwisemax':
+            print("Finally, for EMaxAE, the output of each view between encoder and decoder is averaged ({} features)"
+                  "and will be passed to a NN for survival analysis".format(mmm_output_dimension))
+
+        if type.lower() == 'overallmin':
+            print("Finally, for OMinAE, the min of the output of each view between encoder and decoder is calculated"
+                  "(1 feature) and then passed to a NN for survival analysis")
+
+        if type.lower() == 'elementwisemin':
+            print("Finally, for EMinAE, the output of each view between encoder and decoder is averaged ({} features)"
+                  "and will be passed to a NN for survival analysis".format(mmm_output_dimension))
+
+
+
+
+
+
+
 
 
     def forward(self,x):
@@ -185,6 +328,8 @@ class AE(nn.Module):
         # list of lists to store encoded features for each view
         # Note that encoded features will have BOTH features for encoding stage and decoding stage !
         encoded_features = [[] for x in range(len(self.views))]
+        help_features = []
+        cross_features = [[] for x in range(len(self.views))]
 
         #order data by views for diff. hidden layers
         data_ordered = []
@@ -233,19 +378,99 @@ class AE(nn.Module):
         # The data we're interested in is in the middle of the encoding and decoding stage
 
         data_middle = []
+        middle_pos = []
 
-        for c,view in enumerate(encoded_features):
-            middle = len(view) // 2
-            data_middle.append(view[middle])
+        for c,view in enumerate(self.n_hidden_layers_dims):
+            middle = (len(view) // 2)
+            middle_pos.append(middle)
+            data_middle.append(encoded_features[c][middle])
 
-        if self.type.lower() == 'concat':
 
-            # Concatenate the output, which will then be passed to a NN for survival analysis
-            concatenated_features = torch.cat(tuple(data_middle), dim=-1)
+
+
+
+
+        # Concatenate the output, which will then be passed to a NN for survival analysis
+        concatenated_features = torch.cat(tuple(data_middle), dim=-1)
+
+        if self.type.lower() == 'overallmean' or self.type.lower() == 'overallavg':
+            overall_mean = torch.mean(concatenated_features,1,True)
+
+        if self.type.lower() == 'overallmax':
+            overall_max = torch.amax(concatenated_features,1,True)
+
+
+        if self.type.lower() == 'overallmin':
+            overall_min = torch.amin(concatenated_features,1,True)
+
+
+        # element wise avg needs all the views to have the same dim (so we can take the avg over each value),
+        # If they don't, we take the averages where we can and else just use singleton values of views as "avg"
+        # find largest middle hidden feat dim
+        size = 0
+        hidden_sizes = []
+        for _ in data_middle:
+            # store sizes of each middle hidden feat dim
+            hidden_sizes.append(_.size(1))
+            if _.size(1) > size:
+                size = _.size(1)
+
+
+        element_wise_avg = torch.empty(batch_size,size)
+        element_wise_max = torch.empty(batch_size,size)
+        element_wise_min = torch.empty(batch_size,size)
+
+
+
+        for x in range(size):
+
+            for i in range(batch_size):
+                temp = []
+                for _ in data_middle:
+                    # element for averaging exists :
+                    if _.size(1) - 1 >= x: # -1 due to indexing
+                        temp.append(_[i][x])
+                if self.type.lower() == 'cross' or self.type.lower() == 'elementwisemean' or self.type.lower() == 'elementwiseavg':
+                    mean = torch.mean(torch.stack(temp))
+                    element_wise_avg[i][x] = mean
+                if self.type.lower() == 'elementwisemax':
+                    max = torch.amax(torch.stack(temp))
+                    element_wise_max[i][x] = max
+                if self.type.lower() == 'elementwisemin':
+                    min = torch.amin(torch.stack(temp))
+                    element_wise_min[i][x] = min
 
 
         if self.type.lower() == 'cross':
-            pass
+            for c,view in enumerate(self.hidden_layers):
+                # If we need to apply the helping layer ...
+                if self.needs_help_bool[c] == True:
+                    # Take data in middle of current view and give to helping layer
+                    help_features.append(self.helping_layer[c][0](data_middle[c]))
+                else:
+                    # Otherwise just pass to help_features (just so we have everything neatly in one list)
+                    help_features.append(data_middle[c])
+
+                # Now pass to according decoder
+                for c2 in range(len(view) -1):
+                    # wait for decoding stage ...
+                    if c2 < middle_pos[c]:
+                        continue
+                    if c2 == middle_pos[c]:
+                        # "first" (middle) layer
+                        cross_features[c].append(self.hidden_layers[self.cross_mutation[c]][c2 + 1](help_features[c]))
+                    else:
+                        # all other layers
+                        cross_features[c].append(self.hidden_layers[self.cross_mutation[c]][c2 + 1](cross_features[c][-1]))
+
+            final_out_cross = torch.cat(tuple([dim[-1] for dim in cross_features]), dim=-1)
+
+
+
+
+
+
+
 
 
         # For training purposes, we will also need the final decoder output of the AE
@@ -254,19 +479,122 @@ class AE(nn.Module):
         final_out = torch.cat(tuple([dim[-1] for dim in encoded_features]), dim=-1)
 
 
-        return concatenated_features, final_out
+        if self.type.lower() == 'concat':
+            # Finally, we will pass the concatenated features to a NN to get the hazard ratio.
+            # The final output (final_out) will be used to train the AE.
+
+
+            return concatenated_features, final_out
+
+        if self.type.lower() == 'cross':
+            # element_wise_avg will be passed to a NN to get the hazard ratio
+            # final_out_cross will be used to train the AE
+            return element_wise_avg, final_out_cross, final_out
+
+
+
+        if self.type.lower() == 'elementwiseavg' or self.type.lower() == 'elementwisemean':
+
+            return element_wise_avg, final_out
+
+        if self.type.lower() == 'overallavg' or self.type.lower() == 'overallmean':
+
+            return overall_mean, final_out
+
+        if self.type.lower() == 'elementwisemax':
+
+            return element_wise_max, final_out
+
+        if self.type.lower() == 'overallmax':
+
+            return overall_max, final_out
+
+        if self.type.lower() == 'elementwisemin':
+
+            return element_wise_min, final_out
+
+        if self.type.lower() == 'overallmin':
+
+            return overall_min, final_out
+
+
+
+class LossAEConcatHazard(nn.Module):
+    def __init__(self,alpha):
+        """
+
+        :param alpha:
+        """
+        super().__init__()
+        assert (alpha >= 0) and (alpha <= 1), 'Need alpha in [0,1]'
+        self.alpha = alpha
+        self.loss_surv = models.loss.CoxPHLoss()
+        self.loss_ae = nn.MSELoss()
+
+
+
+    """First argument of output needs to be output of the net, second same structure as tuple structure of targets in
+       dataset """
+    def forward(self, final_out, hazard, survival, input_data):
+        """
+
+        :param concatenated_features: Output of middle layer between encoded & decoded (x features from each view for one sample concatenated)
+        :param final_out: decoded final output
+        :param duration: duration
+        :param event : event
+        :param input_data: covariate input into AE
+        :return: combined loss
+        """
+        duration,event = survival
+        loss_surv = self.loss_surv(hazard, duration,event)
+        loss_ae = self.loss_ae(final_out, input_data)
+        return self.alpha * loss_surv + (1- self.alpha) * loss_ae
+
+
+
+class LossAECrossHazard(nn.Module):
+    def __init__(self,alpha):
+        """
+
+        :param alpha:
+        """
+        super().__init__()
+        assert (alpha >= 0) and (alpha <= 1), 'Need alpha in [0,1]'
+        self.alpha = alpha
+        self.loss_surv = models.loss.CoxPHLoss()
+        self.loss_ae = nn.MSELoss()
+
+
+    """First argument of output needs to be output of the net, second same structure as tuple structure of targets in
+       dataset """
+    def forward(self, final_out, final_out_cross, hazard, survival, input_data):
+        """
+
+        :param concatenated_features: Output of middle layer between encoded & decoded (x features from each view for one sample concatenated)
+        :param final_out: decoded final output
+        :param duration: duration
+        :param event : event
+        :param input_data: covariate input into AE
+        :return: combined loss
+        """
+        duration,event = survival
+        loss_surv = self.loss_surv(hazard, duration,event)
+        loss_ae = self.loss_ae(final_out, input_data) + self.loss_ae(final_out_cross, input_data)
+        return self.alpha * loss_surv + (1- self.alpha) * loss_ae
 
 
 
 
 
-def train(module,views, batch_size =5, n_epochs = 512, lr_scheduler_type = 'onecyclecos'):
+
+def train(module,views, batch_size =128, n_epochs = 512, lr_scheduler_type = 'onecyclecos', l2_regularization = False):
     """
 
     :param module: basically the dataset to be used
     :param batch_size: batch size for training
     :param n_epochs: number of epochs
     :param lr_scheduler_type: type of lr_scheduler : 'lambda','mulitplicative','step','multistep','exponential',...
+    :param l2_regularization : bool whether should be applied or not
     """
 
 
@@ -349,31 +677,168 @@ def train(module,views, batch_size =5, n_epochs = 512, lr_scheduler_type = 'onec
 
     feature_sum = feature_sum_train
 
+    # Initialize empty tensors to store the data for train/validation/test
+    train_data_pycox = torch.empty(n_train_samples, feature_sum_train).to(torch.float32)
+    val_data_pycox = torch.empty(n_val_samples, feature_sum_val).to(torch.float32)
+    test_data_pycox = torch.empty(n_test_samples, feature_sum_test).to(torch.float32)
 
-    # Call AE
-    net = AE(views,dimensions,feature_offsets,[[10,5,2],[10,5,2],[10,5,2],[10,5,2]],
-                        [['relu'],['relu','relu','relu'],['relu'],['relu','relu','relu'],['relu']], 0.5,
-                        [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-                        [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-                        dropout_bool=False,batch_norm_bool=True,type='concat')
+    # Train
+    for idx_view,view in enumerate(train_data):
+        for idx_sample, sample in enumerate(view):
+            train_data_pycox[idx_sample][feature_offsets_train[idx_view]:
+                                         feature_offsets_train[idx_view+1]] = sample
+
+    # Validation
+    for idx_view,view in enumerate(val_data):
+        for idx_sample, sample in enumerate(view):
+            val_data_pycox[idx_sample][feature_offsets_val[idx_view]:
+                                       feature_offsets_val[idx_view+1]] = sample
+
+    # Test
+    for idx_view,view in enumerate(test_data):
+        for idx_sample, sample in enumerate(view):
+            test_data_pycox[idx_sample][feature_offsets_test[idx_view]:
+                                        feature_offsets_test[idx_view+1]] = sample
+
+
+    # Turn validation (duration,event) in correct structure for pycox .fit() call
+    # dde : data duration event ; de: duration event ; d : data
+    train_duration_numpy = train_duration.detach().cpu().numpy()
+    train_event_numpy = train_event.detach().cpu().numpy()
+    val_duration_numpy = val_duration.detach().cpu().numpy()
+    val_event_numpy = val_event.detach().cpu().numpy()
+
+
+
+    train_de_pycox = (train_duration, train_event)
+    val_dde_pycox = val_data_pycox, (val_duration, val_event)
+    val_de_pycox = (val_duration, val_event)
+    test_d_pycox = test_data_pycox
+
+    train_data_pycox_numpy = train_data_pycox.detach().cpu().numpy()
+    val_data_pycox_numpy = val_data_pycox.detach().cpu().numpy()
+    train_de_pycox_numpy = (train_duration_numpy, train_event_numpy)#event_temporary_placeholder_train_numpy)
+    val_de_pycox_numpy = (val_duration_numpy, val_event_numpy)
+    train_ded_pycox = tt.tuplefy(train_de_pycox, train_data_pycox) # TODO : Problem hier wegen (221,) und (221,20) als shapes
+
+    full_train = tt.tuplefy(train_data_pycox, (train_de_pycox, train_data_pycox))
+    full_validation = tt.tuplefy(val_data_pycox, (val_de_pycox, val_data_pycox))
+
+
+
+    all_models = nn.ModuleList()
+ #   all_models.append(AE(views,dimensions,feature_offsets,[[10,5,2],[10,5,4],[10,5,1],[10,5,2]],
+ #                        [['relu'],['relu','relu','relu'],['relu'],['relu','relu','relu'],['relu']], 0.5,
+ #                        [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+ #                        [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+ #                        dropout_bool=True,batch_norm_bool=True,type='cross',cross_mutation=[1,2,3,0]))
+
+    all_models.append(AE(views,dimensions,feature_offsets,[[10,5,2]],
+                            [['relu'],['relu']], 0.5,
+                            [['yes','yes','yes']],
+                            [['yes','yes','yes']],
+                            dropout_bool=False,batch_norm_bool=True,type='elementwisemax'))
+
+
+
+    # Note : For Concat, the in_feats for NN need to be the sum of all last output layer dimensions.
+    #        For Cross, the in_feats for NN need to be the size of the largest output layer dim, as we take the
+    #                    element wise avg
+    #        For overall(mean/max/min), the in_feats for NN is 1 (as we take the overall average)
+    #        For elementwise(mean/max/min), the in_feats for NN must be size of the largest output layer dim
+
+    # TODO : some problem with batch_norm, perhaps : https://discuss.pytorch.org/t/error-expected-more-than-1-value-per-channel-when-training/26274
+    all_models.append(NN.NN_changeable(views = ['AE'],in_features = [2],
+                                       n_hidden_layers_dims= [[4, 2]],
+                                       activ_funcs = [['relu'], ['relu']],dropout_prob=0.2,dropout_layers=[['yes','yes']],
+                                       batch_norm = [['yes','yes']],
+                                       dropout_bool=True,batch_norm_bool=True,ae_bool=True))
+
+    full_net = AE_NN(all_models, type='elementwisemax')
+
 
     # set optimizer
-    optimizer = Adam(net.parameters(), lr=0.01)
-    print(net.parameters())
+    if l2_regularization == True:
+        optimizer = Adam(full_net.parameters(), lr=0.01, weight_decay=0.0001)
+    else:
+        optimizer = Adam(full_net.parameters(), lr=0.01)
+
+    callbacks = [tt.callbacks.EarlyStopping()]
+
+    model = models.CoxPH(full_net,optimizer, loss=LossAEConcatHazard(0.6)) # Change Loss here
+
+
+  #  log = model.fit(*full_train,batch_size,n_epochs,verbose=True, val_data=full_validation, callbacks=callbacks)
+    log = model.fit(train_data_pycox,train_ded_pycox,batch_size,n_epochs,verbose=True, val_data=full_validation,
+                    callbacks=callbacks)
+
+    # Plot it
+    _ = log.plot()
+
+    # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
+    _ = model.compute_baseline_hazards()
+
+    # Predict based on test data
+    surv = model.predict_surv_df(test_d_pycox)
+
+    # Plot it
+    surv.iloc[:, :5].plot()
+    plt.ylabel('S(t | x)')
+    _ = plt.xlabel('Time')
+
+
+    # Evaluate with concordance, brier score and binomial log-likelihood
+    ev = EvalSurv(surv, test_duration, test_event, censor_surv='km') # censor_surv : Kaplan-Meier
+
+    # concordance
+    concordance_index = ev.concordance_td()
+
+    #brier score
+    time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
+    _ = ev.brier_score(time_grid).plot
+    brier_score = ev.integrated_brier_score(time_grid)
+
+    #binomial log-likelihood
+    binomial_score = ev.integrated_nbll(time_grid)
+
+    print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
+                                                                                                       brier_score,
+                                                                                                       binomial_score))
+
+    """
+    # Call AE
+    net = AE(views,dimensions,feature_offsets,[[10,5,2],[10,5,2],[10,5,2],[10,5,2]],
+             [['relu'],['relu','relu','relu'],['relu'],['relu','relu','relu'],['relu']], 0.5,
+             [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+             [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+             dropout_bool=False,batch_norm_bool=True,type='concat')#,cross_mutation=[1,2,3,0])
+
+
+    # set optimizer
+    optimizer = Adam(net.parameters(), lr=0.001)
+
     # set loss function
     criterion = nn.MSELoss() # reconstrution loss
     # data loader for AE
     ae_dataloader = module.train_dataloader(batch_size=batch_size)
 
 
+    model = models.CoxPH(net,optimizer, loss=LossAEConcatHazard(0.6))
 
+
+   # log = model.fit(*full_train,batch_size,n_epochs,verbose=True,val_data=val_dde_pycox,val_batch_size=5)
 
 
 
     compressed = []
     for epoch in range(n_epochs):
         loss = 0
+        loss_cross = 0
         for train_data_ae, train_duration_ae, train_event_ae in ae_dataloader:
+
+        #    if torch.count_nonzero(train_event_ae) == train_event_ae.size(0): # We skip iteration if all event values are 0, because log partial likelihood will drive itself to NaN and we get no loss
+        #        continue
+
             #changing data structure of loaded data (needed for pycox)
             train_data_pycox_batch = torch.empty(batch_size, feature_sum_train).to(torch.float32)
             for view in range(len(train_data_ae)):
@@ -381,6 +846,11 @@ def train(module,views, batch_size =5, n_epochs = 512, lr_scheduler_type = 'onec
 
             train_duration_ae.to(device=device)
             train_event_ae.to(device=device)
+
+            train_de_pycox = (train_duration_ae, train_event_ae)
+
+
+
 
             for idx_view,view in enumerate(train_data_ae):
                 for idx_sample, sample in enumerate(view):
@@ -390,35 +860,56 @@ def train(module,views, batch_size =5, n_epochs = 512, lr_scheduler_type = 'onec
             optimizer.zero_grad()
 
             # compressed features is what we are interested in
-            compressed_feats, final_out = net(train_data_pycox_batch)
+       #     compressed_feats, final_out, final_out_cross, element_wise_avg = net(train_data_pycox_batch)
+            compressed_features, final_out = net(train_data_pycox_batch)
             if epoch == n_epochs - 1: # save compressed_features of last epoch for each batch
-                compressed.append(compressed_feats) # list of tensors of compressed for each batch
+                compressed.append(compressed_features) # list of tensors of compressed for each batch
+
+
+
+
+
+
+
+
 
             train_loss = criterion(final_out, train_data_pycox_batch)
 
-            train_loss.backward()
+         #   train_loss_2 = criterion(final_out_cross, train_data_pycox_batch)
 
+
+         #   full_loss = train_loss + train_loss_2
+         #   full_loss.backward()
+            train_loss.backward()
             optimizer.step()
 
+        #    train_loss_2.backward()
+
+        #    optimizer.step()
+
             loss += train_loss.item()
+         #   loss_cross += train_loss_2.item()
+
 
 
 
         loss = loss / len(ae_dataloader)
+     #   loss_cross = loss_cross / len(ae_dataloader)
 
-        print("epoch : {}/{}, loss = {:.6f} ".format(epoch + 1, n_epochs, loss))
+        print("epoch : {}/{}, loss first stage = {:.6f} ".format(epoch + 1, n_epochs, loss))
+     #   print("epoch : {}/{}, loss cross stage = {:.6f} ".format(epoch + 1, n_epochs, loss_cross))
 
 
 
 
-
+    """
 
 if __name__ == '__main__':
     cancer_data = ReadInData.readcancerdata()
     multimodule = DataInputNew.SurvMultiOmicsDataModule(cancer_data[0][0],cancer_data[0][1],cancer_data[0][2])
     views = cancer_data[0][2]
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    train(module= multimodule,views= views)
+    train(module= multimodule,views= views, l2_regularization=True)
 
 
 

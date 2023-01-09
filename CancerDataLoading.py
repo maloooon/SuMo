@@ -25,7 +25,7 @@ if __name__ == '__main__':
     # Count amount of cancer types we have
 
 
-    dir_path = '/Users/marlon/DataspellProjectsForSAMO/SAMO/TCGAData'
+    dir_path = '/Users/marlon/Desktop/Project/TCGAData'
     cancer_types = 0
 
     for base, dirs, files in os.walk(dir_path):
@@ -50,10 +50,10 @@ if __name__ == '__main__':
     not_dropped_indices = [set() for x in range(len(cancers))]
 
     for c, cancer_name in enumerate(cancers):
-        if os.path.exists(os.path.join("/Users", "marlon", "DataspellProjectsForSAMO", "SAMO", "TCGAData", cancer_name,
+        if os.path.exists(os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
                                        "TCGA_" + cancer_name + "_1_mRNA.csv")):
             data_mRNA = pd.read_csv(
-                os.path.join("/Users", "marlon", "DataspellProjectsForSAMO", "SAMO", "TCGAData", cancer_name,
+                os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
                              "TCGA_" + cancer_name + "_1_mRNA.csv"), index_col=0)
             samples[c].append(len(data_mRNA))
             # We need to reset indices bc meta data and view data have different index names
@@ -69,10 +69,10 @@ if __name__ == '__main__':
             views[c].append('mRNA')
 
 
-        if os.path.exists(os.path.join("/Users", "marlon", "DataspellProjectsForSAMO", "SAMO", "TCGAData", cancer_name,
+        if os.path.exists(os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
                                        "TCGA_" + cancer_name + "_2_DNA.csv")):
             data_DNA = pd.read_csv(
-                os.path.join("/Users", "marlon", "DataspellProjectsForSAMO", "SAMO", "TCGAData", cancer_name,
+                os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
                              "TCGA_" + cancer_name + "_2_DNA.csv"), index_col=0)
 
             samples[c].append(len(data_DNA))
@@ -88,10 +88,10 @@ if __name__ == '__main__':
             views[c].append('DNA')
 
 
-        if os.path.exists(os.path.join("/Users", "marlon", "DataspellProjectsForSAMO", "SAMO", "TCGAData", cancer_name,
+        if os.path.exists(os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
                                        "TCGA_" + cancer_name + "_3_miRNA.csv")):
             data_miRNA = pd.read_csv(
-                os.path.join("/Users", "marlon", "DataspellProjectsForSAMO", "SAMO", "TCGAData", cancer_name,
+                os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
                              "TCGA_" + cancer_name + "_3_miRNA.csv"), index_col=0)
             samples[c].append(len(data_miRNA))
             data_miRNA.reset_index(drop=True, inplace=True)
@@ -106,10 +106,10 @@ if __name__ == '__main__':
             views[c].append('microRNA')
 
 
-        if os.path.exists(os.path.join("/Users", "marlon", "DataspellProjectsForSAMO", "SAMO", "TCGAData", cancer_name,
+        if os.path.exists(os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
                                        "TCGA_" + cancer_name + "_4_RPPA.csv")):
             data_RPPA = pd.read_csv(
-                os.path.join("/Users", "marlon", "DataspellProjectsForSAMO", "SAMO", "TCGAData", cancer_name,
+                os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
                              "TCGA_" + cancer_name + "_4_RPPA.csv"), index_col=0)
 
 
@@ -130,7 +130,7 @@ if __name__ == '__main__':
 
         # Meta data needs to be available for each type, otherwise we can't do survival analysis
         meta_data = pd.read_csv(
-            os.path.join("/Users", "marlon", "DataspellProjectsForSAMO", "SAMO", "TCGAData", cancer_name,
+            os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
                          "TCGA_" + cancer_name + "_meta.csv"), index_col=0, keep_default_na=False)
         meta_data.rename(
             {"clin:vital_status": "event"}, axis="columns", inplace=True
@@ -221,9 +221,9 @@ if __name__ == '__main__':
 
     # Load all to csv's
     for c,_ in enumerate(cancers):
-        cancer_data_dfs[c].to_csv("/Users/marlon/DataspellProjectsForSAMO/SAMO/TCGAData/" + _ + "/" + _ + "Data.csv")
-        feature_offsets_dfs[c].to_csv("/Users/marlon/DataspellProjectsForSAMO/SAMO/TCGAData/" + _ +"/" + _ + "DataFeatOffsets.csv")
-        view_names_dfs[c].to_csv("/Users/marlon/DataspellProjectsForSAMO/SAMO/TCGAData/" + _ + "/" + _ + "Views.csv")
+        cancer_data_dfs[c].to_csv("/Users/marlon/Desktop/Project/TCGAData/" + _ + "/" + _ + "Data.csv")
+        feature_offsets_dfs[c].to_csv("/Users/marlon/Desktop/Project/TCGAData/" + _ +"/" + _ + "DataFeatOffsets.csv")
+        view_names_dfs[c].to_csv("/Users/marlon/Desktop/Project/TCGAData/" + _ + "/" + _ + "Views.csv")
 
 
 

@@ -20,12 +20,20 @@ from torchsummary import summary
 import ReadInData
 
 
+
+
+
+from pycox.datasets import metabric
+from sklearn.preprocessing import StandardScaler
+from sklearn_pandas import DataFrameMapper
+
 #TODO : how to check whether dropout layer, batch norm actually have an impact ? --> run with same data and with dropout_prob = 0
 # TODO : didn't have wanted effect, didn't train at all (stopped at epoch 0)
 
 class NN_changeable(nn.Module):
-    def __init__(self,views,in_features,feature_offsets, n_hidden_layers_dims,
-                 activ_funcs,dropout_prob, dropout_layers, batch_norm, dropout_bool, batch_norm_bool):
+    def __init__(self,views,in_features,feature_offsets = None, n_hidden_layers_dims =None,
+                 activ_funcs = None,dropout_prob = None, dropout_layers = None,
+                 batch_norm = None, dropout_bool = None, batch_norm_bool = None, ae_bool = False):
         """
         :param views: list of views (strings)
         :param in_features: list of input features
@@ -43,6 +51,7 @@ class NN_changeable(nn.Module):
         :param batch_norm : layers in n_hidden_layers_dims where batch normalization is to be applied ; str ('yes'/'no')
         :param dropout_bool : Decide wether dropout is applied or not ; bool (True/False)
         :param batch_norm_bool : Decide wether batch normalization is applied or not ; bool (True/False)
+        :param ae_bool : Check whether we pass data from AE (concatenated or element wise avg)
 
         """
         super().__init__()
@@ -56,6 +65,7 @@ class NN_changeable(nn.Module):
         self.batch_norm = batch_norm
         self.dropout_bool = dropout_bool
         self.batch_norm_bool = batch_norm_bool
+        self.ae_bool = ae_bool
         # Create list of lists which will store each hidden layer call for each view
         self.hidden_layers = [[] for x in range(len(in_features))] #TODO: add nn.ParameterList like in AE implementation !
 
@@ -63,10 +73,11 @@ class NN_changeable(nn.Module):
         # Produce activation functions list of lists
 
 
-        if len(activ_funcs) == 1:
+        if len(activ_funcs) == 1 and type(activ_funcs[0]) is not list:
 
             func = activ_funcs[0]
             activ_funcs = [[func] for x in range(len(views) + 1)]
+
 
 
         if len(activ_funcs) == len(views) + 1:
@@ -87,6 +98,7 @@ class NN_changeable(nn.Module):
                     elif activfunc.lower() == 'softmax':
                         activ_funcs[c][c2] = nn.Softmax()
 
+
         else:
             raise ValueError("Your activation function input seems to be wrong. Check if it is a list of lists with a"
                              " sublist for each view and one list for the output layer or just a single activation function"
@@ -97,25 +109,50 @@ class NN_changeable(nn.Module):
             for c2 in range(len(view)):
                 if c2 == 0: # first layer
                     if batch_norm_bool == True and batch_norm[c][c2] == 'yes':
-                        self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
-                                                                             n_hidden_layers_dims[c][c2]),
-                                                                             nn.BatchNorm1d(n_hidden_layers_dims[c][c2]),
-                                                                             activ_funcs[c][c2]))
+                        if activ_funcs[c][c2] != 'none':
+                            self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
+                                                                                 n_hidden_layers_dims[c][c2]),
+                                                                                 nn.BatchNorm1d(n_hidden_layers_dims[c][c2]),
+                                                                                 activ_funcs[c][c2]))
+                        else:
+                            self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
+                                                                                 n_hidden_layers_dims[c][c2]),
+                                                                       nn.BatchNorm1d(n_hidden_layers_dims[c][c2])
+                                                                       ))
+
                     else:
-                        self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
-                                                                             n_hidden_layers_dims[c][c2]),
-                                                                             activ_funcs[c][c2]))
+                        if activ_funcs[c][c2] != 'none':
+                            self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
+                                                                                 n_hidden_layers_dims[c][c2]),
+                                                                                 activ_funcs[c][c2]))
+                        else:
+                            self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
+                                                                                 n_hidden_layers_dims[c][c2])
+                                                                       ))
+
 
                 else: # other layers
                     if batch_norm_bool == True and batch_norm[c][c2] == 'yes':
-                        self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][c2-1],
-                                                                             n_hidden_layers_dims[c][c2]),
-                                                                             nn.BatchNorm1d(n_hidden_layers_dims[c][c2]),
-                                                                             activ_funcs[c][c2]))
+                        if activ_funcs[c][c2] != 'none':
+                            self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][c2-1],
+                                                                                 n_hidden_layers_dims[c][c2]),
+                                                                                 nn.BatchNorm1d(n_hidden_layers_dims[c][c2]),
+                                                                                 activ_funcs[c][c2]))
+                        else:
+                            self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][c2-1],
+                                                                                 n_hidden_layers_dims[c][c2]),
+                                                                       nn.BatchNorm1d(n_hidden_layers_dims[c][c2])
+                                                                       ))
                     else:
-                        self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][c2-1],
-                                                                             n_hidden_layers_dims[c][c2]),
-                                                                             activ_funcs[c][c2]))
+                        if activ_funcs[c][c2] != 'none':
+                            self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][c2-1],
+                                                                                 n_hidden_layers_dims[c][c2]),
+                                                                                 activ_funcs[c][c2]))
+                        else:
+                            self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][c2-1],
+                                                                                 n_hidden_layers_dims[c][c2])
+                                                                       ))
+
 
 
 
@@ -127,8 +164,11 @@ class NN_changeable(nn.Module):
         # and reduces them to output dim of 1
         sum_dim_last_layers = sum([dim[-1] for dim in n_hidden_layers_dims])
 
+        if activ_funcs[-1][0] != 'none':
+            self.final_out = nn.Sequential(nn.Linear(sum_dim_last_layers,1), activ_funcs[-1][0])
+        else:
+            self.final_out = nn.Sequential(nn.Linear(sum_dim_last_layers,1))
 
-        self.final_out = nn.Sequential(nn.Linear(sum_dim_last_layers,1), activ_funcs[-1][0])
 
 
         # Dropout
@@ -160,24 +200,27 @@ class NN_changeable(nn.Module):
 
         #order data by views for diff. hidden layers
         data_ordered = []
-
-
         #Get batch size
         batch_size = x.size(0)
+        if self.ae_bool == False:
 
-        for view in range(len(self.views)):
+            for view in range(len(self.views)):
 
-            # Calculate the amount of features for current view via offset
-            feature_size = self.feature_offsets[view+1] - self.feature_offsets[view]
+                # Calculate the amount of features for current view via offset
+                feature_size = self.feature_offsets[view+1] - self.feature_offsets[view]
 
-            # Intialize an empty tensor to store data for current view
-            temp = torch.empty(batch_size,feature_size)
+                # Intialize an empty tensor to store data for current view
+                temp = torch.empty(batch_size,feature_size)
 
-            # fill empty tensor with according features for view for each sample in batch
-            for i in range(batch_size):
-                temp[i, :] = x[i][self.feature_offsets[view] : self.feature_offsets[view+1]]
+                # fill empty tensor with according features for view for each sample in batch
+                for i in range(batch_size):
+                    temp[i, :] = x[i][self.feature_offsets[view] : self.feature_offsets[view+1]]
 
-            data_ordered.append(temp)
+                data_ordered.append(temp)
+        else:
+            # Output of AE is already "processed"
+            data_ordered.append(x)
+
 
         for c,view in enumerate(self.hidden_layers):
             for c2,encoder in enumerate(view):
@@ -215,71 +258,32 @@ class NN_changeable(nn.Module):
 
 
 
-
-
 class NN_simple(nn.Module):
-    def __init__(self,in_features,feature_offsets):
+    def __init__(self,in_features):
         """Simple NN with hidden layer structure for each view, concatenate everything in the end"""
         super().__init__()
         self.in_features = in_features # list of input features for each view
-        self.feature_offsets = feature_offsets
-
-        self.hidden_1 = [] # hidden layers for each view after input
-        self.hidden_2 = [] # hidden layers for each view after hidden layers 1
-
-        for view in in_features:
-            layer = nn.Sequential(nn.Linear(view, 28), nn.ReLU())
-            self.hidden_1.append(layer)
-            layer_2 = nn.Sequential(nn.Linear(28,5), nn.ReLU())
-            self.hidden_2.append(layer_2)
-
-        self.out = nn.Sequential(nn.Linear(20,1), nn.ReLU()) # 1 output feature (hazard)
 
 
+
+        self.layer1 = nn.Sequential(nn.Linear(in_features,10), nn.ReLU()) # 1 output feature (hazard)
+        self.layer2 = nn.Sequential(nn.Linear(10,5), nn.ReLU())
+        self.out = nn.Sequential(nn.Linear(5,1), nn.ReLU())
 
     def forward(self,x):
-        """
+        x = self.layer1(x)
+        x = self.layer2(x)
+        out = self.out(x)
 
-        :param x: data input
-        :return: predicted hazard
-        """
-        encoded_hidden_1 = []
-        encoded_hidden_2 = []
-        batch_size = x.size(0)
-        for view in range(len(self.in_features)):
-
-            feature_size = self.feature_offsets[view+1] - self.feature_offsets[view] # calculating amount of features for current view via offset
-            temp = torch.empty(batch_size,feature_size)
-
-            # fill empty tensor with according features for view for each sample in batch
-            for i in range(batch_size):
-                temp[i, :] = x[i][self.feature_offsets[view] : self.feature_offsets[view+1]]
-
-            # temp is now a tensor which has only the features for a specific view for the whole batch
-            # apply to hidden layer in column 1 for according view
-            encoded_hidden_1.append(self.hidden_1[view](temp))
-
-            # take the latent features from hidden column 1 for this view and pass to hidden column 2
-            encoded_hidden_2.append(self.hidden_2[view](encoded_hidden_1[view]))
-
-
-        # after everything is done, take all the outputs from hidden column 2 and pass to output layer
-
-
-        final_in = torch.cat(tuple(encoded_hidden_2), dim=-1) # so that it becomes a single tensor of dim [batch_size, hidden column 2 out features]
-
-        hazard_predict = self.out(final_in)
-
-
-
-        return hazard_predict
+        return out
 
 
 
 
 
 
-def train(module,views, batch_size =5, n_epochs = 512, lr_scheduler_type = 'onecyclecos'):
+
+def train(module,views,device, batch_size =128, n_epochs = 512, lr_scheduler_type = 'onecyclecos'):
     """
 
     :param module: basically the dataset to be used
@@ -361,6 +365,11 @@ def train(module,views, batch_size =5, n_epochs = 512, lr_scheduler_type = 'onec
     event_temporary_placeholder_test = (torch.ones(n_test_samples).to(torch.int32)).to(device=device).numpy()
 
 
+
+
+
+
+
     # transforming data input for pycox : all views as one tensor, views accessible via feature offset
 
     # Get feature offsets for train/validation/test
@@ -386,7 +395,11 @@ def train(module,views, batch_size =5, n_epochs = 512, lr_scheduler_type = 'onec
     val_data_pycox = torch.empty(n_val_samples, feature_sum_val).to(torch.float32)
     test_data_pycox = torch.empty(n_test_samples, feature_sum_test).to(torch.float32)
 
+
+
     # Fill up tensors with data
+
+
 
     # Train
     for idx_view,view in enumerate(train_data):
@@ -409,8 +422,8 @@ def train(module,views, batch_size =5, n_epochs = 512, lr_scheduler_type = 'onec
 
     # Turn validation (duration,event) in correct structure for pycox .fit() call
     # dde : data duration event ; de: duration event ; d : data
-    train_de_pycox = (train_duration, event_temporary_placeholder_train)
-    val_dde_pycox = val_data_pycox, (val_duration, event_temporary_placeholder_val)
+    train_de_pycox = (train_duration, train_event)
+    val_dde_pycox = val_data_pycox, (val_duration, val_event)
     test_d_pycox = test_data_pycox
     #test_dde_pycox = torch.cat((test_data_pycox,
     #                            test_duration.unsqueeze(dim=1),
@@ -424,16 +437,22 @@ def train(module,views, batch_size =5, n_epochs = 512, lr_scheduler_type = 'onec
 
 
     # Call NN
-    net = NN_changeable(views,dimensions,feature_offsets,[[25,12,6],[25,12,6],[25],[25,12]],
-                        [['relu'],['relu','relu','relu'],['relu'],['relu','relu'],['relu']], 0.5,
-                        [['yes','yes','yes'],['yes','yes','yes'],['yes'],['yes','yes']],
-                        [['yes','yes','yes'],['yes','yes','yes'],['yes'],['yes','yes']],
-                        dropout_bool=True,batch_norm_bool=True)
+   # net = NN_changeable(views,dimensions,feature_offsets,[[10,5,2],[10,5,2],[5],[10,5]],
+   #                     [['relu'],['relu','relu','relu'],['relu'],['relu','relu'],['relu']], 0.5,
+   #                     [['yes','yes','yes'],['yes','yes','yes'],['yes'],['yes','yes']],
+   #                     [['yes','yes','yes'],['yes','yes','yes'],['yes'],['yes','yes']],
+   #                     dropout_bool=True,batch_norm_bool=False)
+    #TODO : Batch norm problem (see AE)
+
+    net = NN_changeable(views, dimensions, feature_offsets_train,
+                        n_hidden_layers_dims = [[10,5]], activ_funcs = [['relu'],['relu']],
+                        dropout_prob= 0.2,dropout_layers = [['yes' ,'yes']],
+                        batch_norm = [['yes','yes']], dropout_bool= True, batch_norm_bool= False)
 
 
 
     # Set parameters for NN
-    optimizer = torch.optim.Adam(net.parameters(), lr=0.1)
+    optimizer = torch.optim.Adam(net.parameters(), lr=0.01)
     callbacks = [tt.callbacks.EarlyStopping()]
 
 
@@ -475,8 +494,8 @@ def train(module,views, batch_size =5, n_epochs = 512, lr_scheduler_type = 'onec
 
 
     # Fit model
-    log = model.fit(train_data_pycox,train_de_pycox,batch_size,n_epochs,callbacks,
-                    verbose=True,val_data=val_dde_pycox, val_batch_size=5)
+    log = model.fit(train_data_pycox,train_de_pycox,batch_size,n_epochs,callbacks = callbacks,
+                    verbose=True,val_data=val_dde_pycox, val_batch_size=10)
 
  #   log2 = model2.fit(train_data_pycox,train_de_pycox,batch_size,n_epochs,callbacks,
  #                     verbose=True,val_data=val_dde_pycox, val_batch_size=5)
@@ -498,7 +517,7 @@ def train(module,views, batch_size =5, n_epochs = 512, lr_scheduler_type = 'onec
 
 
     # Evaluate with concordance, brier score and binomial log-likelihood
-    ev = EvalSurv(surv, test_duration, event_temporary_placeholder_test, censor_surv='km') # censor_surv : Kaplan-Meier
+    ev = EvalSurv(surv, test_duration, test_event, censor_surv='km') # censor_surv : Kaplan-Meier
 
     # concordance
     concordance_index = ev.concordance_td()
@@ -521,7 +540,8 @@ def train(module,views, batch_size =5, n_epochs = 512, lr_scheduler_type = 'onec
 
 if __name__ == '__main__':
     cancer_data = ReadInData.readcancerdata()
-    multimodule = DataInputNew.SurvMultiOmicsDataModule(cancer_data[17][0],cancer_data[17][1],cancer_data[17][2])
-    views = cancer_data[17][2]
+    multimodule = DataInputNew.SurvMultiOmicsDataModule(cancer_data[0][0],cancer_data[0][1],cancer_data[0][2])
+    views = cancer_data[0][2]
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    train(module= multimodule,views= views)
+    train(module= multimodule,views= views, device=device)
+

@@ -98,6 +98,31 @@ class F_mRMR():
     pass
 
 
+class PPI():
+
+    def __init__(self,train):
+        self.train = train
+
+    def get_matrices(self):
+        # Read in protein data
+        prot_to_feat = pd.read_csv(
+            os.path.join("/Users", "marlon", "Desktop", "Project", "ProteinToFeature.csv"),index_col=0)
+
+        # For each sample an adjacency matrix and a feature matrix is to be created
+
+        # Feature matrix :
+
+        samples = self.train[0].size(0)
+
+        for _ in range(len(samples)):
+            pass
+
+
+
+
+
+
+
 class F_eigengene_matrices():
     """Implemented with R :
        https://github.com/huangzhii/lmQCM
@@ -439,6 +464,7 @@ class F_PPI_NETWORK():
 
 
         return adjacency_matrix_ppi, feature_matrices_mRNA
+
 
 
 

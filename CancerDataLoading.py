@@ -46,6 +46,7 @@ if __name__ == '__main__':
     # amount of samples
     samples = [[] for x in range(len(cancers))]
 
+
     # Track non dropped indices, which are these that have atleast 100 not NaN feature values in a sample for each view
     not_dropped_indices = [set() for x in range(len(cancers))]
 
@@ -219,11 +220,24 @@ if __name__ == '__main__':
      #   x.dropna(thresh=100, inplace=True)
 
 
+
+
+    # Storing all feature names without duplicates (needed for PPI-Network preparation)
+    features = set()
+
+    for cancer in cancer_data_dfs:
+        features.update(list(cancer.columns))
+
+    features_df = pd.DataFrame(features)
+
     # Load all to csv's
     for c,_ in enumerate(cancers):
         cancer_data_dfs[c].to_csv("/Users/marlon/Desktop/Project/TCGAData/" + _ + "/" + _ + "Data.csv")
         feature_offsets_dfs[c].to_csv("/Users/marlon/Desktop/Project/TCGAData/" + _ +"/" + _ + "DataFeatOffsets.csv")
         view_names_dfs[c].to_csv("/Users/marlon/Desktop/Project/TCGAData/" + _ + "/" + _ + "Views.csv")
+
+    features_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/AllFeatures.csv")
+
 
 
 

@@ -18,7 +18,7 @@ def readcancerdata():
                     'STAD','TGCT','THCA','THYM','UCEC' ,'UCS', 'UVM']
 
     # Testing purposes : only LUAD data
-    cancer_names = ['LAML']
+    cancer_names = ['PRAD']
 
 
     cancer_data = [[] for x in range(len(cancer_names))]

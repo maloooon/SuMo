@@ -603,18 +603,21 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
         if method.lower() == 'ppi':
-            ppn_train_mRNA = FeatureSelection.F_PPI_NETWORK(self.x_train)
-            ppn_test_mRNA = FeatureSelection.F_PPI_NETWORK(self.x_test)
-            adjacency_matrix_train, feature_matrices_train = ppn_train_mRNA.setup()
-            adjacency_matrix_test, feature_matrices_test = ppn_test_mRNA.setup()
+            ppn_train_mRNA = FeatureSelection.PPI(self.x_train)
 
-            print("Adjacency matrix : {}".format(adjacency_matrix_train))
-            print("Feature matrix mRNA : {} of size {} (samples, proteins, features). "
-                  "For each sample, we have {} proteins and {} possible features".format
-                  (feature_matrices_train, feature_matrices_train.shape, feature_matrices_train.size(1), feature_matrices_train.size(2)))
+
+
+          #  ppn_test_mRNA = FeatureSelection.F_PPI_NETWORK(self.x_test)
+          #  adjacency_matrix_train, feature_matrices_train = ppn_train_mRNA.setup()
+          #  adjacency_matrix_test, feature_matrices_test = ppn_test_mRNA.setup()
+
+           # print("Adjacency matrix : {}".format(adjacency_matrix_train))
+           # print("Feature matrix mRNA : {} of size {} (samples, proteins, features). "
+           #       "For each sample, we have {} proteins and {} possible features".format
+           #       (feature_matrices_train, feature_matrices_train.shape, feature_matrices_train.size(1), feature_matrices_train.size(2)))
 
             # TODO : build own dataloader for this class as differs from other data structures
-            return adjacency_matrix_train, feature_matrices_train, adjacency_matrix_test, feature_matrices_test
+           # return adjacency_matrix_train, feature_matrices_train, adjacency_matrix_test, feature_matrices_test
 
 
 

@@ -15,7 +15,7 @@ from pycox.evaluation import EvalSurv
 class AE_Hierarichal(nn.Module):
     """Wrapper for hierarichal AE implementation : AE followed by another AE followed by NN for survival analysis.
        The second AE may be used without an additional Decoder."""
-    def __init__(self,models,types,decoding_bool = False):
+    def __init__(self,models,types):
         """
 
         :param models: models to be used (AE, AE, NN)
@@ -27,7 +27,7 @@ class AE_Hierarichal(nn.Module):
         super().__init__()
         self.models = models
         self.types = types
-        self.decoding_bool = decoding_bool
+
 
     def forward(self, x):
         # First AE
@@ -37,16 +37,14 @@ class AE_Hierarichal(nn.Module):
         # NN
         nn = self.models[2]
 
-        if self.decoding_bool == True:
-            if self.types[0] == 'cross' and self.types[1] == 'cross':
-                pass
-                # TODO : wie sieht input von 2tem AE aus und was macht man mit 1tem element wise avg ?
+
         if self.types[0] == 'none' and self.types[1] == 'concat':
             view_data, final_out_1 = ae_1(x)
             integrated,final_out_2 = ae_2(view_data)
             hazard = nn(integrated)
 
             return final_out_1, final_out_2, hazard, view_data
+
 
 
 
@@ -91,7 +89,7 @@ class AE(nn.Module):
     def __init__(self, views, in_features, feature_offsets = None, n_hidden_layers_dims = None,
                  activ_funcs = None,dropout_prob = None, dropout_layers= None, batch_norm = None,
                  dropout_bool = False, batch_norm_bool= False, type = None,cross_mutation = None,
-                 ae_hierarichcal_bool = False):
+                 ae_hierarichcal_bool = False, ae_hierarichcal_decoding_bool = False):
         """
         :param views: list of views (strings)
         :param in_features: list of input features
@@ -116,6 +114,7 @@ class AE(nn.Module):
                                 hidden of 4 with dec of view 2 etc..
         :param ae_hierarichcal_bool : choose whether this AE call is to be in the manner of hierarichcal ae implementation
                                       (for the second AE)
+        :param ae_hierarichcal_decoding_bool : choose whether in hierarichcal AE setting, the second AE has a decoder
         """
         super().__init__()
         self.views =views
@@ -134,6 +133,8 @@ class AE(nn.Module):
         self.middle_dims = []
         self.cross_mutation = cross_mutation
         self.ae_hierarichcal_bool = ae_hierarichcal_bool
+        self.ae_hierarichcal_decoding_bool = ae_hierarichcal_decoding_bool
+
 
 
         # Produce activation functions list of lists
@@ -569,7 +570,7 @@ class AE(nn.Module):
 
 
 class LossHierarichcalAE(nn.Module):
-    def __init__(self,alpha):
+    def __init__(self,alpha, decoding_bool = True):
         """
 
         :param alpha: alpha is a list of 3 values, need to be 1 in sum
@@ -579,6 +580,7 @@ class LossHierarichcalAE(nn.Module):
         self.alpha = alpha
         self.loss_surv = models.loss.CoxPHLoss()
         self.loss_ae = nn.MSELoss()
+        self.decoding_bool = decoding_bool
 
 
     def forward(self, final_out, final_out_2, hazard, view_data, survival, input_data):
@@ -599,9 +601,13 @@ class LossHierarichcalAE(nn.Module):
         # view data is a list of tensors for each view ; as final_out_2 has structure of just one tensor, we
         # need to change structure accordingly
         view_data = torch.cat(tuple(view_data), dim=1)
-        loss_ae_2 = self.loss_ae(final_out_2, view_data)
+        if self.decoding_bool == True:
+            loss_ae_2 = self.loss_ae(final_out_2, view_data)
+            return self.alpha[0] * loss_surv + self.alpha[1] * loss_ae_1 + self.alpha[2] * loss_ae_2
+        else:
+            # TODO : input vom loss darf hierfür nicht 3geteilt sein, nur 2 Zahlen ! oder wie bei anderen Losses dann nur 1 Zahl alpha ?
+            return self.alpha[0] * loss_surv + self.alpha[1] * loss_ae_1
 
-        return self.alpha[0] * loss_surv + self.alpha[1] * loss_ae_1 + self.alpha[2] * loss_ae_2
 
 
 
@@ -869,7 +875,7 @@ def train(module,views, batch_size =25, n_epochs = 512, lr_scheduler_type = 'one
     callbacks = [tt.callbacks.EarlyStopping()]
 
  #   model = models.CoxPH(full_net,optimizer, loss=LossAEConcatHazard(0.6)) # Change Loss here
-    model = models.CoxPH(full_net, optimizer, loss=LossHierarichcalAE([0.4,0.2,0.4]))
+    model = models.CoxPH(full_net, optimizer, loss=LossHierarichcalAE(alpha= [0.5,0.5], decoding_bool=False))
 
 
   #  log = model.fit(*full_train,batch_size,n_epochs,verbose=True, val_data=full_validation, callbacks=callbacks)

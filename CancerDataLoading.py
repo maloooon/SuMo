@@ -45,6 +45,8 @@ if __name__ == '__main__':
     views = [[] for x in range(len(cancers))]
     # amount of samples
     samples = [[] for x in range(len(cancers))]
+    # features per cancer per view (needed for PPI network construction)
+    features_per_cancer_per_view = [[] for x in range(len(cancers))]
 
 
     # Track non dropped indices, which are these that have atleast 100 not NaN feature values in a sample for each view
@@ -67,6 +69,7 @@ if __name__ == '__main__':
 
             cancer_data[c].append(data_mRNA)
             n_features[c].append(len(data_mRNA.columns))
+            features_per_cancer_per_view[c].append(list(data_mRNA.columns.values))
             views[c].append('mRNA')
 
 
@@ -86,6 +89,7 @@ if __name__ == '__main__':
 
             cancer_data[c].append(data_DNA)
             n_features[c].append(len(data_DNA.columns))
+            features_per_cancer_per_view[c].append(list(data_DNA.columns.values))
             views[c].append('DNA')
 
 
@@ -104,6 +108,7 @@ if __name__ == '__main__':
 
             cancer_data[c].append(data_miRNA)
             n_features[c].append(len(data_miRNA.columns))
+            features_per_cancer_per_view[c].append(list(data_miRNA.columns.values))
             views[c].append('microRNA')
 
 
@@ -126,6 +131,7 @@ if __name__ == '__main__':
 
             cancer_data[c].append(data_RPPA)
             n_features[c].append(len(data_RPPA.columns))
+            features_per_cancer_per_view[c].append(list(data_RPPA.columns.values))
             views[c].append('RPPA')
 
 
@@ -179,6 +185,7 @@ if __name__ == '__main__':
     feature_offsets_dfs = []
     cancer_data_dfs = []
     view_names_dfs = []
+    features_per_cancer_per_view_dfs = [[] for x in range(len(cancers))]
     # Dataframe for each cancers feature offsets
     for _ in feature_offsets:
         feature_offsets_dfs.append(pd.DataFrame(_))
@@ -192,6 +199,11 @@ if __name__ == '__main__':
     # Dataframe for each cancer views
     for _ in views:
         view_names_dfs.append(pd.DataFrame(_))
+
+
+    for c,cancer in enumerate(features_per_cancer_per_view):
+        for view in cancer:
+            features_per_cancer_per_view_dfs[c].append(pd.DataFrame(view))
 
 
     drop_indices = [[] for x in range(len(cancers))]
@@ -235,6 +247,9 @@ if __name__ == '__main__':
         cancer_data_dfs[c].to_csv("/Users/marlon/Desktop/Project/TCGAData/" + _ + "/" + _ + "Data.csv")
         feature_offsets_dfs[c].to_csv("/Users/marlon/Desktop/Project/TCGAData/" + _ +"/" + _ + "DataFeatOffsets.csv")
         view_names_dfs[c].to_csv("/Users/marlon/Desktop/Project/TCGAData/" + _ + "/" + _ + "Views.csv")
+
+        for c2,x in enumerate(views[c]):
+            features_per_cancer_per_view_dfs[c][c2].to_csv("/Users/marlon/Desktop/Project/TCGAData/" + _ + "/" + x + "FeatureNames.csv")
 
     features_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/AllFeatures.csv")
 

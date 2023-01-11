@@ -271,7 +271,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
 
-    def feature_selection(self, method = None):
+    def feature_selection(self, method = None, feature_names = None): # feature_names needed for PPI network
 
         if method.lower() == 'eigengenes':
 
@@ -603,7 +603,8 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
         if method.lower() == 'ppi':
-            ppn_train_mRNA = FeatureSelection.PPI(self.x_train)
+            ppi_train_mRNA = FeatureSelection.PPI(self.x_train, feature_names)
+            ppi_train_mRNA.get_matrices()
 
 
 

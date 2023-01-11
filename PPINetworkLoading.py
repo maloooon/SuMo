@@ -20,17 +20,17 @@ with gzip.open('/Users/marlon/Desktop/Project/9606.protein.links.v11.5.txt.gz', 
                 proteins[protein1] = len(proteins) # Assign an ID to protein
             if protein2 not in proteins:
                 proteins[protein2] = len(proteins)
-            interactions1.append(proteins[protein1])
-            interactions2.append(proteins[protein2])
+#            interactions1.append(proteins[protein1])
+#            interactions2.append(proteins[protein2])
 
-edge_index = [interactions1, interactions2]
+#edge_index = [interactions1, interactions2]
 
 
 # Save proteins and interactions for future use
-proteins_df = pd.DataFrame({'proteins': list(proteins.keys()), 'ids': proteins.values()})
-proteins_df.to_csv('/Users/marlon/Desktop/Project/proteins.csv')
-interactions_df = pd.DataFrame({'protein1': interactions1, 'protein2': interactions2})
-interactions_df.to_csv('/Users/marlon/Desktop/Project/interactions.csv')
+#proteins_df = pd.DataFrame({'proteins': list(proteins.keys()), 'ids': proteins.values()})
+#proteins_df.to_csv('/Users/marlon/Desktop/Project/proteins.csv')
+#interactions_df = pd.DataFrame({'protein1': interactions1, 'protein2': interactions2})
+#interactions_df.to_csv('/Users/marlon/Desktop/Project/interactions.csv')
 
 
 # Read ensemble data

@@ -17,6 +17,9 @@ import os
 import time
 import math
 import subprocess
+import HelperFunctions as HF
+from collections import defaultdict
+import gzip
 
 
 
@@ -100,8 +103,15 @@ class F_mRMR():
 
 class PPI():
 
-    def __init__(self,train):
+    def __init__(self,train, feature_names):
+        """
+
+        :param train:
+        :param feature_names: list of lists containing feature names (original ones)
+        """
         self.train = train
+        self.feature_names = feature_names
+
 
     def get_matrices(self):
         # Read in protein data
@@ -110,12 +120,124 @@ class PPI():
 
         # For each sample an adjacency matrix and a feature matrix is to be created
 
-        # Feature matrix :
+        # Feature matrix : size AxB, where A : proteins, B feature values
 
         samples = self.train[0].size(0)
 
-        for _ in range(len(samples)):
-            pass
+        # Lists of all feature names with protein mapping and all according proteins
+        all_features = list(prot_to_feat.iloc[:,1].values)
+        all_proteins = list(prot_to_feat.iloc[:,0].values)
+
+
+
+
+        # First, get feature names into the right structure
+        fixed_features = []
+
+        for idx,view in enumerate(self.feature_names):
+            features_fix = []
+            for idx2, feat in enumerate(view):
+
+                index_1 = feat.find(':')
+                index_2 = feat.find('|')
+
+
+                if index_1 != -1:
+                    if index_2 != -1:
+                        features_fix.append(feat[index_1+1:index_2].upper())
+                    else:
+                        features_fix.append(feat[index_1+1:].upper())
+                else:
+                    if index_2 != -1:
+                        features_fix.append(feat[0:index_2].upper())
+                    else:
+                        features_fix.append(feat.upper())
+
+                features_fix[-1] = features_fix[-1].replace('-','')
+
+            fixed_features.append(features_fix)
+
+
+        # Find features for which we have protein mappings
+        # This list will store all indices that have mappings so we can access feature names and proteins by it
+        all_features_mapped_indices = [[] for _ in range(len(self.feature_names))]
+        # also store indices just for the current cancer, as we need that to access the correct values in self.train
+        cancer_features_mapped_indices = [[] for _ in range(len(self.feature_names))] # len is amount views
+
+        # Store proteins with indices
+        proteins_used = {}
+
+        for c,view in enumerate(fixed_features):
+            for c2,_ in enumerate(view):
+                if fixed_features[c][c2] in all_features:
+                    idx = all_features.index(fixed_features[c][c2])
+                    if all_proteins[idx] not in proteins_used:
+                        proteins_used[all_proteins[idx]] = len(proteins_used)
+                    all_features_mapped_indices[c].append(idx)
+                    cancer_features_mapped_indices[c].append(c2)
+
+
+        all_mappings = []
+
+        for sample in range(samples):
+            # Dictionary to store protein - feature value
+            prot_to_feat_values = defaultdict(list)
+
+
+            for c,view in enumerate(cancer_features_mapped_indices):
+                for c2,_ in enumerate(view):
+                    idx = all_features_mapped_indices[c][c2]
+                    prot_to_feat_values[all_proteins[idx]].append(self.train[c][sample,_])
+            all_mappings.append(prot_to_feat_values)
+
+
+
+        # store feature values as themselves, as we can now access their respective protein via index of proteins_used
+
+        features_used = [[] for _ in range(samples)]
+        for c,mapping in enumerate(all_mappings):
+            features = list(mapping.values())
+
+            for _ in features:
+                features_used[c].append(torch.stack(tuple(_)))
+
+
+
+
+        # For the adjacency matrix, we need to get the interactions and fit it so that we only take the interactions,
+        # for which we have mappings from proteins to feature values
+
+
+
+
+
+        interactions1 = []
+        interactions2 = []
+        with gzip.open('/Users/marlon/Desktop/Project/9606.protein.links.v11.5.txt.gz', 'rt') as f:
+            next(f) # Ignore the header
+            for line in f:
+                protein1, protein2, score = line.strip().split()
+                score = int(score)
+                if score >= 700: # Filter interactions with more confidence
+                    protein1 = protein1.split('.')[1]
+                    protein2 = protein2.split('.')[1]
+                    # First, check that both proteins in the interaction are in our mappings
+                    if protein1 in proteins_used and protein2 in proteins_used:
+                        interactions1.append(proteins_used[protein1])
+                        interactions2.append(proteins_used[protein2])
+
+        edge_index = [interactions1, interactions2]
+
+
+        # features_used : all samples and used features as list of tensors, respective protein to be found via index
+        #                 of proteins_used
+        # proteins_used : proteins with indices
+        # edge_index : interaction of proteins via indices
+
+
+
+
+
 
 
 

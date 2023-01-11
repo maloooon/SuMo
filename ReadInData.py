@@ -37,9 +37,19 @@ def readcancerdata():
             os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", str(_),
                          str(_) + "Views.csv"), index_col=0)
 
+        views = HF.flatten(view_names.values.tolist())
+        print("Reading in " + str(_) + " feature names...")
+        names = []
+        for view in views:
+            feat_names = pd.read_csv(
+                os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", str(_),
+                             str(view) + "FeatureNames.csv"), index_col=0)
+            names.append(HF.flatten(feat_names.values.tolist()))
+
         cancer_data[c].append(data)
         cancer_data[c].append(HF.flatten(feat_offset.values.tolist()))
-        cancer_data[c].append(HF.flatten(view_names.values.tolist()))
+        cancer_data[c].append(views)
+        cancer_data[c].append(names)
 
 
     return cancer_data

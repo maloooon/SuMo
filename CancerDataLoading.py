@@ -62,7 +62,7 @@ if __name__ == '__main__':
             # We need to reset indices bc meta data and view data have different index names
             data_mRNA.reset_index(drop=True,inplace=True)
 
-            temp = data_mRNA.dropna(thresh=100)
+            temp = data_mRNA.dropna(thresh=100) # TODO : prozentual , wv werden entfernt ?
             indices = list(temp.index.values)
 
             not_dropped_indices[c].update(indices)

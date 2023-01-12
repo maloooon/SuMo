@@ -270,30 +270,6 @@ class NN_changeable(nn.Module):
 
 
 
-class NN_simple(nn.Module):
-    def __init__(self,in_features):
-        """Simple NN with hidden layer structure for each view, concatenate everything in the end"""
-        super().__init__()
-        self.in_features = in_features # list of input features for each view
-
-
-
-        self.layer1 = nn.Sequential(nn.Linear(in_features,10), nn.ReLU()) # 1 output feature (hazard)
-        self.layer2 = nn.Sequential(nn.Linear(10,5), nn.ReLU())
-        self.out = nn.Sequential(nn.Linear(5,1), nn.ReLU())
-
-    def forward(self,x):
-        x = self.layer1(x)
-        x = self.layer2(x)
-        out = self.out(x)
-
-        return out
-
-
-
-
-
-
 
 def train(module,views,device, batch_size =128, n_epochs = 512, lr_scheduler_type = 'onecyclecos'):
     """
@@ -368,18 +344,6 @@ def train(module,views,device, batch_size =128, n_epochs = 512, lr_scheduler_typ
     assert (dimensions_train == dimensions_val == dimensions_test), 'Feature mismatch between train/val/test'
 
     dimensions = dimensions_train
-
-    # We'll use a fake event placeholder, bc current data has too many censored patients
-    # which doesn't work with PyCox implementation
-    # all events = 1 (no patient censored)
-    event_temporary_placeholder_train = (torch.ones(n_train_samples).to(torch.int32)).to(device=device)
-    event_temporary_placeholder_val = (torch.ones(n_val_samples).to(torch.int32)).to(device=device)
-    event_temporary_placeholder_test = (torch.ones(n_test_samples).to(torch.int32)).to(device=device).numpy()
-
-
-
-
-
 
 
     # transforming data input for pycox : all views as one tensor, views accessible via feature offset

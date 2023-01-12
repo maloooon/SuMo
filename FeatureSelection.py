@@ -178,17 +178,72 @@ class PPI():
 
 
         all_mappings = []
+        all_mappings_indices = []
+        # TODO :  missing values --> median
 
         for sample in range(samples):
-            # Dictionary to store protein - feature value
-            prot_to_feat_values = defaultdict(list)
+            # Dictionary to store protein - feature value // for each view single list, we'll need that to calculate the median more easily
+            # since now it is clear, which tensor values accord to which view
+         #   prot_to_feat_values = defaultdict(lambda: [[], [], [], []])
+
+            prot_to_feat_values = defaultdict(lambda: [[], []])  # TODO : make variable for diff data inputs --> need to check if we really have both dna and mRNA data (only these have proteins)
+
+            # track indices for median (so we know whether added element is from mRNA or DNA
+            prot_to_feat_values_indices = defaultdict(list)
 
 
             for c,view in enumerate(cancer_features_mapped_indices):
+                # miRNA/RPPA no protein-protein data
+                if c== 2 or c== 3:
+                    continue
                 for c2,_ in enumerate(view):
                     idx = all_features_mapped_indices[c][c2]
-                    prot_to_feat_values[all_proteins[idx]].append(self.train[c][sample,_])
+                  #  prot_to_feat_values[all_proteins[idx]][c].append(torch.unsqueeze(self.train[c][sample,_], 0))
+                    prot_to_feat_values[all_proteins[idx]][c].append(self.train[c][sample,_].item())
+                    prot_to_feat_values_indices[all_proteins[idx]].append(c)
             all_mappings.append(prot_to_feat_values)
+            all_mappings_indices.append(prot_to_feat_values_indices)
+
+
+        # for missing values for certain feature values in protein mapping, we take the median of features for
+        # this view
+        all_medians = []
+        # First, find protein which has the most feature values (so that we know for how many dimensions we have
+        # to create medians)
+        for c,mapping in enumerate(all_mappings):
+         #   key_len_max = max(all_mappings_indices[c], key=lambda x: len(all_mappings_indices[c][x]))
+         #   len_max = len(all_mappings[c][key_len_max])
+            # now calculate the medians (TODO: fixxed medians calculated at the beginning or changing with each new added value --> how could I make that time efficient?)
+            medians = [[] for i in range(2)]
+            for feature_values_listed in all_mappings[c].values():
+                for c,feature_value in enumerate(feature_values_listed):
+                    # if there is a feature value for that view
+                    if len(feature_value) != 0:
+                 #       medians[c].append(feature_value[0].item())
+                        medians[c].append(feature_value[0])
+
+            for c,_ in enumerate(medians):
+               # if c == 2:
+               #     # miRNA data has no proteins, hence len == 0 : leads to ZeroDivisionError
+               #     continue
+           #     medians[c] = torch.unsqueeze(torch.tensor(sum(medians[c]) / len(medians[c])), 0) # Note : RPPA only has 0 values, as RPPA also has no feature values (empty entries for features) --> rausgenommen
+                medians[c] = (sum(medians[c])) / len(medians[c])
+            all_medians.append(medians)
+
+
+            # check for missing values
+   #         for protein_idx in all_mappings[c]:
+                # in this case we have missing values
+         #       if len(all_mappings_indices[c][protein_idx]) != len_max:
+                    # find for which view(s) we have missing values
+                    # we have 2 views (with proteins) at most :
+     #           for view_idx in range(2):
+     #               if view_idx not in all_mappings_indices[c][protein_idx]:
+                        # add median
+     #                   all_mappings[c][protein_idx][view_idx] = all_medians[-1][view_idx]
+
+
+
 
 
 
@@ -196,16 +251,36 @@ class PPI():
 
         features_used = [[] for _ in range(samples)]
         for c,mapping in enumerate(all_mappings):
-            features = list(mapping.values())
+            for c2,protein_idx in enumerate(mapping):
+                for c3, feat_values in enumerate(mapping[protein_idx]):
+                    if len(feat_values) == 0:
+                        # set median in place
+                        all_mappings[c][protein_idx][c3].append(all_medians[c][c3])
 
-            for _ in features:
-                features_used[c].append(torch.stack(tuple(_)))
+            for feat_values_listed in mapping.values():
 
+                features_dlisted = HF.flatten(feat_values_listed)# dlisted : list of lists
+
+
+             #   features_used[c].append(torch.cat(tuple(features_dlisted)))
+                features_used[c].append(features_dlisted)
+
+
+        # Flatten once more (needed for conversion to Dataframe, bc it needs to be 2dimensional
+        for c in range(len(features_used)):
+            features_used[c] = HF.flatten(features_used[c])
+
+
+        # turn into tensor
+        features_used = torch.tensor(features_used)
 
 
 
         # For the adjacency matrix, we need to get the interactions and fit it so that we only take the interactions,
         # for which we have mappings from proteins to feature values
+
+        # for missing values (as we need same input dimensions for each proteins feature values), we take the median of
+        # the features
 
 
 
@@ -233,6 +308,11 @@ class PPI():
         #                 of proteins_used
         # proteins_used : proteins with indices
         # edge_index : interaction of proteins via indices
+        interactions_df = pd.DataFrame({'protein1': interactions1, 'protein2': interactions2})
+        interactions_df.to_csv('/Users/marlon/Desktop/Project/interactions.csv')
+
+
+        return features_used, edge_index
 
 
 

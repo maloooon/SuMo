@@ -820,24 +820,24 @@ def train(module,views, batch_size =25, n_epochs = 512, lr_scheduler_type = 'one
 
 
     all_models = nn.ModuleList()
-    all_models.append(AE(views,dimensions,feature_offsets,[[10,5,4],[10,5,4],[10,5,4],[10,5,4]],
-                         [['relu'],['relu','relu','relu'],['relu'],['relu','relu','relu'],['relu']], 0.2,
-                         [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-                         [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-                         dropout_bool=False,batch_norm_bool=True,type='none'))
+#    all_models.append(AE(views,dimensions,feature_offsets,[[10,5,4],[10,5,4],[10,5,4],[10,5,4]],
+#                         [['relu'],['relu','relu','relu'],['relu'],['relu','relu','relu'],['relu']], 0.2,
+#                         [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+#                         [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+#                         dropout_bool=False,batch_norm_bool=True,type='none'))
 
-#    all_models.append(AE(views,dimensions,feature_offsets,[[10,5,2]],
-#                            [['relu'],['relu']], 0.5,
-#                            [['yes','yes','yes']],
-#                            [['yes','yes','yes']],
-#                            dropout_bool=False,batch_norm_bool=True,type='none'))
+    all_models.append(AE(views,dimensions,feature_offsets,[[10,5,2]],
+                            [['relu'],['relu']], 0.5,
+                            [['yes','yes','yes']],
+                            [['yes','yes','yes']],
+                            dropout_bool=False,batch_norm_bool=True,type='concat'))
 
-    all_models.append(AE(views,in_features=[4,4,4,4], n_hidden_layers_dims= [[10,5,4],[10,5,4],[10,5,4],[10,5,4]],
-                         activ_funcs = [['relu'],['relu','relu','relu'],['relu'],['relu','relu','relu'],['relu']],
-                         dropout_prob= 0.2,
-                         dropout_layers =[['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-                         batch_norm = [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-                         dropout_bool=False,batch_norm_bool=True,type='concat', ae_hierarichcal_bool= True))
+#    all_models.append(AE(views,in_features=[4,4,4,4], n_hidden_layers_dims= [[10,5,4],[10,5,4],[10,5,4],[10,5,4]],
+#                         activ_funcs = [['relu'],['relu','relu','relu'],['relu'],['relu','relu','relu'],['relu']],
+#                         dropout_prob= 0.2,
+#                         dropout_layers =[['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+#                         batch_norm = [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+#                         dropout_bool=False,batch_norm_bool=True,type='concat', ae_hierarichcal_bool= True))
 
 
 
@@ -848,7 +848,7 @@ def train(module,views, batch_size =25, n_epochs = 512, lr_scheduler_type = 'one
     #        For elementwise(mean/max/min), the in_feats for NN must be size of the largest output layer dim
 
     # TODO : some problem with batch_norm, perhaps : https://discuss.pytorch.org/t/error-expected-more-than-1-value-per-channel-when-training/26274
-    all_models.append(NN.NN_changeable(views = ['AE'],in_features = [16],
+    all_models.append(NN.NN_changeable(views = ['AE'],in_features = [2],
                                        n_hidden_layers_dims= [[8, 4]],
                                        activ_funcs = [['relu'], ['relu']],dropout_prob=0.2,dropout_layers=[['yes','yes']],
                                        batch_norm = [['yes','yes']],
@@ -861,9 +861,9 @@ def train(module,views, batch_size =25, n_epochs = 512, lr_scheduler_type = 'one
   #                                                 ['yes','yes'],['yes','yes']],dropout_bool=True, batch_norm_bool=True,
   #                                    ae_bool=True))
 
-    full_net = AE_Hierarichal(all_models, types=['none','concat'])
+ #   full_net = AE_Hierarichal(all_models, types=['none','concat'])
 
-  #  full_net = AE_NN(all_models, type='none')
+    full_net = AE_NN(all_models, type='concat')
 
 
     # set optimizer
@@ -874,8 +874,8 @@ def train(module,views, batch_size =25, n_epochs = 512, lr_scheduler_type = 'one
 
     callbacks = [tt.callbacks.EarlyStopping()]
 
- #   model = models.CoxPH(full_net,optimizer, loss=LossAEConcatHazard(0.6)) # Change Loss here
-    model = models.CoxPH(full_net, optimizer, loss=LossHierarichcalAE(alpha= [0.5,0.5], decoding_bool=False))
+    model = models.CoxPH(full_net,optimizer, loss=LossAEConcatHazard(0.6)) # Change Loss here
+ #   model = models.CoxPH(full_net, optimizer, loss=LossHierarichcalAE(alpha= [0.5,0.5], decoding_bool=False))
 
 
   #  log = model.fit(*full_train,batch_size,n_epochs,verbose=True, val_data=full_validation, callbacks=callbacks)

@@ -604,23 +604,29 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
         if method.lower() == 'ppi':
             ppi_train = FeatureSelection.PPI(self.x_train, feature_names)
-            features_train, edge_index_train = ppi_train.get_matrices()
-
-            # Write to CSV files
+            features_used, proteins_used, edge_index = ppi_train.get_matrices()
 
 
-
-            data_train = features_train.numpy()
-
-            data_train_df = pd.DataFrame(data_train)
-
-            data_train_df.to_csv("/Users/marlon/Desktop/Project/TrainPPIPRAD.csv")
 
             # Note : self.x_train is not to be used as the training data for PPI, but we need the duration&event values
             self.train_set = MultiOmicsDataset(self.x_train,
                                                self.duration_train,
                                                self.event_train,
                                                type = 'processed')
+            self.val_set = MultiOmicsDataset(self.x_val,
+                                             self.duration_val,
+                                             self.event_val,
+                                             type = 'processed')
+
+            self.test_set = MultiOmicsDataset(self.x_test,
+                                              self.duration_test,
+                                              self.event_test,
+                                              type = 'processed')
+
+
+
+
+            return features_used, proteins_used, edge_index
 
 
 

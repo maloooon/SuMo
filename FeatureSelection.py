@@ -168,13 +168,17 @@ class PPI():
         proteins_used = {}
 
         for c,view in enumerate(fixed_features):
+            # miRNA/RPPA no protein data
+            if c == 2 or c == 3:
+                continue
             for c2,_ in enumerate(view):
                 if fixed_features[c][c2] in all_features:
+                    # fixed features are the features of our cancer data
                     idx = all_features.index(fixed_features[c][c2])
                     if all_proteins[idx] not in proteins_used:
                         proteins_used[all_proteins[idx]] = len(proteins_used)
-                    all_features_mapped_indices[c].append(idx)
-                    cancer_features_mapped_indices[c].append(c2)
+                    all_features_mapped_indices[c].append(idx) # this will help us to get the index for the right protein
+                    cancer_features_mapped_indices[c].append(c2) # this will help us to get the index for the right feature values
 
 
         all_mappings = []
@@ -231,20 +235,6 @@ class PPI():
             all_medians.append(medians)
 
 
-            # check for missing values
-   #         for protein_idx in all_mappings[c]:
-                # in this case we have missing values
-         #       if len(all_mappings_indices[c][protein_idx]) != len_max:
-                    # find for which view(s) we have missing values
-                    # we have 2 views (with proteins) at most :
-     #           for view_idx in range(2):
-     #               if view_idx not in all_mappings_indices[c][protein_idx]:
-                        # add median
-     #                   all_mappings[c][protein_idx][view_idx] = all_medians[-1][view_idx]
-
-
-
-
 
 
         # store feature values as themselves, as we can now access their respective protein via index of proteins_used
@@ -266,9 +256,9 @@ class PPI():
                 features_used[c].append(features_dlisted)
 
 
-        # Flatten once more (needed for conversion to Dataframe, bc it needs to be 2dimensional
-        for c in range(len(features_used)):
-            features_used[c] = HF.flatten(features_used[c])
+        # Flatten once more (needed for GCN structure)
+    #    for c in range(len(features_used)):                         # REMOVE
+    #        features_used[c] = HF.flatten(features_used[c])         # REMOVE
 
 
         # turn into tensor
@@ -308,11 +298,25 @@ class PPI():
         #                 of proteins_used
         # proteins_used : proteins with indices
         # edge_index : interaction of proteins via indices
-        interactions_df = pd.DataFrame({'protein1': interactions1, 'protein2': interactions2})
-        interactions_df.to_csv('/Users/marlon/Desktop/Project/interactions.csv')
 
 
-        return features_used, edge_index
+        ###### Test purposes : Read out once and take this data to write model -            ######
+        ###### later on, the whole PPI process needs to be done for each train/val/test set ######
+     #   interactions_df = pd.DataFrame({'protein1': interactions1, 'protein2': interactions2})
+     #   interactions_df.to_csv('/Users/marlon/Desktop/Project/interactions.csv')
+
+     #   proteins_used_df = pd.DataFrame(proteins_used, index=[0])
+     #   proteins_used_df.to_csv('/Users/marlon/Desktop/Project/proteins.csv')
+
+     #   features_used = features_used.numpy()
+     #   features_used_df = pd.DataFrame(features_used)
+     #   features_used_df.to_csv('/Users/marlon/Desktop/Project/features.csv')
+
+
+
+        return features_used, proteins_used, edge_index
+
+
 
 
 

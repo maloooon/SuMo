@@ -375,8 +375,6 @@ def train(module,views,device, batch_size =128, n_epochs = 512, lr_scheduler_typ
 
     # Fill up tensors with data
 
-
-
     # Train
     for idx_view,view in enumerate(train_data):
         for idx_sample, sample in enumerate(view):
@@ -409,26 +407,23 @@ def train(module,views,device, batch_size =128, n_epochs = 512, lr_scheduler_typ
 
 
 
- #   net_test = NN_simple(dimensions, feature_offsets)
-
-
     # Call NN
-   # net = NN_changeable(views,dimensions,feature_offsets,[[10,5,2],[10,5,2],[5],[10,5]],
-   #                     [['relu'],['relu','relu','relu'],['relu'],['relu','relu'],['relu']], 0.5,
-   #                     [['yes','yes','yes'],['yes','yes','yes'],['yes'],['yes','yes']],
-   #                     [['yes','yes','yes'],['yes','yes','yes'],['yes'],['yes','yes']],
-   #                     dropout_bool=True,batch_norm_bool=False)
+    net = NN_changeable(views,dimensions,feature_offsets,[[10,5],[10,5],[10,5],[10,5]],
+                        [['relu'],['relu'],['relu'],['relu'],['none']], 0.1,
+                        [['yes','yes'],['yes','yes',],['yes', 'yes'],['yes','yes']],
+                        [['yes','yes'],['yes','yes'],['yes','yes'],['yes','yes']],
+                        dropout_bool=True,batch_norm_bool=False)
     #TODO : Batch norm problem (see AE)
 
-    net = NN_changeable(views, dimensions, feature_offsets_train,
-                        n_hidden_layers_dims = [[10,5]], activ_funcs = [['relu'],['relu']],
-                        dropout_prob= 0.2,dropout_layers = [['yes' ,'yes']],
-                        batch_norm = [['yes','yes']], dropout_bool= True, batch_norm_bool= False)
+#    net = NN_changeable(views, dimensions, feature_offsets_train,
+#                        n_hidden_layers_dims = [[10,5]], activ_funcs = [['relu'],['relu']],
+#                        dropout_prob= 0.2,dropout_layers = [['yes' ,'yes']],
+#                        batch_norm = [['yes','yes']], dropout_bool= True, batch_norm_bool= False)
 
 
 
     # Set parameters for NN
-    optimizer = torch.optim.Adam(net.parameters(), lr=0.01)
+    optimizer = torch.optim.Adam(net.parameters(), lr=0.001)
     callbacks = [tt.callbacks.EarlyStopping()]
 
 
@@ -516,8 +511,8 @@ def train(module,views,device, batch_size =128, n_epochs = 512, lr_scheduler_typ
 
 if __name__ == '__main__':
     cancer_data = ReadInData.readcancerdata()
-    multimodule = DataInputNew.SurvMultiOmicsDataModule(cancer_data[0][0],cancer_data[0][1],cancer_data[0][2])
+    multimodule = DataInputNew.SurvMultiOmicsDataModule(cancer_data[0][0],cancer_data[0][1],cancer_data[0][2],onezeronorm_bool=False)
     views = cancer_data[0][2]
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    train(module= multimodule,views= views, device=device)
+    train(module= multimodule,views= views, device=device, batch_size=32, n_epochs=100)
 

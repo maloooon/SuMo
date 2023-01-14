@@ -18,6 +18,8 @@ from pycox.evaluation import EvalSurv
 from torch_geometric.data import Data, DataLoader, Batch
 from torch_geometric.nn import GCNConv, SAGEConv, GraphConv, SAGPooling
 from torch_geometric.nn import global_max_pool as gmp
+import math
+import matplotlib.pyplot as plt
 
 
 
@@ -25,46 +27,83 @@ from torch_geometric.nn import global_max_pool as gmp
 
 class GCN(nn.Module):
     """https://pytorch-geometric.readthedocs.io/en/latest/modules/nn.html#torch_geometric.nn.conv.GraphConv"""
-    def __init__(self, num_nodes, edge_index, in_features):
+    def __init__(self, num_nodes, edge_index, in_features, n_hidden_layer_dims, activ_funcs, dropout_prob = 0.1, ratio = 0.1):
         super(GCN, self).__init__()
         self.num_nodes = num_nodes # number of proteins
         self.edge_index = edge_index
-        self.in_features = in_features # how many features per node (?) ; in_channel = -1 derive from first input (?)
-        self.conv1 = GraphConv(in_features, 2) #in_channels / out_channels
-        self.pool1 = SAGPooling(2, ratio=0.1, GNN=GraphConv) # in channel same as out of conv1
-        self.fc1 = nn.Linear(1230, 1024, bias=False) #in_channel --> feature size after SAGPooling (not clear yet how do get to this number)
-        self.bn1 = nn.BatchNorm1d(1024)
-        self.dropout1 = nn.Dropout(0.1)
-        self.fc2 = nn.Linear(1024, 512, bias=False)
-        self.bn2 = nn.BatchNorm1d(512)
-        self.dropout2 = nn.Dropout(0.1)
-        self.fc3 = nn.Linear(512, 1, bias=False)
-        self.bn3 = nn.BatchNorm1d(1)
-        self.dropout3 = nn.Dropout(0.1)
-        self.sigmoid = nn.Sigmoid()
+        self.ratio = ratio # SAGPooling ratio
+        self.in_features = in_features # how many features per node
+        self.n_hidden_layer_dims = n_hidden_layer_dims
+        self.activ_funcs = activ_funcs
+        self.dropout_prob = dropout_prob
+        self.hidden_layers = nn.ParameterList([])
+        self.params_for_print = nn.ParameterList([])
+
+
+        for c,afunc in enumerate(activ_funcs):
+                if afunc.lower() == 'relu':
+                    activ_funcs[c] = nn.ReLU()
+                elif afunc.lower() == 'sigmoid':
+                    activ_funcs[c] = nn.Sigmoid()
+
+
+
+        self.conv1 = GraphConv(in_features, in_features)
+        self.params_for_print.append(self.conv1)
+        self.params_for_print.append(nn.ReLU) # TODO : not tested
+        self.pool1 = SAGPooling(in_features, ratio=ratio, GNN=GraphConv) # in channel same as out of conv1
+        self.params_for_print.append(self.pool1)
+
+        first_in = math.ceil(ratio * (in_features * num_nodes))
+        for c in range(len(n_hidden_layer_dims) +1):
+            if c == 0: # first layer
+                self.hidden_layers.append(nn.Sequential(nn.Linear(first_in, n_hidden_layer_dims[0]),
+                                                        nn.BatchNorm1d(n_hidden_layer_dims[0]),
+                                                        activ_funcs[0]))
+                self.params_for_print.append(self.hidden_layers[-1])
+
+            elif c == len(n_hidden_layer_dims): # last layer (no activation function)
+                self.hidden_layers.append(nn.Sequential(nn.Linear(n_hidden_layer_dims[-1], 1),
+                                                        nn.BatchNorm1d(1),
+                                                        ))
+                self.params_for_print.append(self.hidden_layers[-1])
+            else: # other layers
+                self.hidden_layers.append(nn.Sequential(nn.Linear(n_hidden_layer_dims[c-1], n_hidden_layer_dims[c]),
+                                                        nn.BatchNorm1d(n_hidden_layer_dims[c]),
+                                                        activ_funcs[c]))
+                self.params_for_print.append(self.hidden_layers[-1])
+
+
+
+
+        print("Model: ", self.params_for_print)
+
+
         self.batches = {}
+        self.dropout = nn.Dropout(dropout_prob)
+
 
     def forward(self, data):
         batch_size = data.shape[0]
-        x = data[:, :self.num_nodes * 2] # * 6 bc 6 features per protein, so in my case 2 (?)
-        x = x.reshape(batch_size, self.num_nodes, 2)
+        x = data[:, :self.num_nodes * self.in_features]
+        x = x.reshape(batch_size, self.num_nodes, self.in_features)
         if batch_size not in self.batches:
             l = []
             for i in range(batch_size):
                 l.append(Data(x=x[i], edge_index=self.edge_index))
             batch = Batch.from_data_list(l)
             self.batches[batch_size] = batch
-            print('ok')
+
         batch = self.batches[batch_size]
-        x = x.reshape(-1, 2)
+        x = x.reshape(-1, self.in_features)
         x = F.relu(self.conv1(x=x, edge_index=batch.edge_index))
         x, edge_index, _, batch, perm, score = self.pool1(
             x, batch.edge_index, None, batch.batch)
         x = x.view(batch_size, -1)
-        # print(x.shape)
-        x = self.dropout1(self.bn1(torch.relu(self.fc1(x))))
-        x = self.dropout2(self.bn2(torch.relu(self.fc2(x))))
-        x = self.dropout3(self.bn3(self.fc3(x)))
+
+        for layer in self.hidden_layers:
+            x = layer(x)
+
         return x
 
 
@@ -90,7 +129,7 @@ def normalize_by_column(data):
 
 
 
-def train(module,views, batch_size =25, n_epochs = 512, lr_scheduler_type = 'onecyclecos', l2_regularization = False, feature_names = None):
+def train(module,views, batch_size =128, n_epochs = 512, lr_scheduler_type = 'onecyclecos', l2_regularization = False, feature_names = None, batch_size_validation=20):
     """
 
     :param module: basically the dataset to be used
@@ -109,7 +148,7 @@ def train(module,views, batch_size =25, n_epochs = 512, lr_scheduler_type = 'one
 
 
     #Select method for feature selection
-    features_used, proteins_used, edge_index = module.feature_selection('ppi', feature_names)
+    edge_index, proteins_used = module.feature_selection('ppi', feature_names)
 
     # Load Dataloaders
     trainloader = module.train_dataloader(batch_size=n_train_samples) # all training examples
@@ -120,151 +159,106 @@ def train(module,views, batch_size =25, n_epochs = 512, lr_scheduler_type = 'one
 
     #Train
     for train_data, train_duration, train_event in trainloader:
-        for view in range(len(train_data)):
-            train_data[view] = train_data[view].to(device=device)
 
+        train_data.to(device=device)
         train_duration.to(device=device)
         train_event.to(device=device)
 
-    for c,_ in enumerate(train_data):
-        print("Train data shape after feature selection {}".format(train_data[c].shape))
+    print("Train data shape after feature selection {}".format(train_data.shape))
 
     #Validation
     for val_data, val_duration, val_event in valloader:
-        for view in range(len(val_data)):
-            val_data[view] = val_data[view].to(device=device)
 
+        val_data.to(device=device)
         val_duration.to(device=device)
         val_event.to(device=device)
 
-    for c,_ in enumerate(val_data):
-        print("Validation data shape after feature selection {}".format(val_data[c].shape))
+
+    print("Validation data shape after feature selection {}".format(val_data.shape))
 
     #Test
     for test_data, test_duration, test_event in testloader:
-        for view in range(len(test_data)):
-            test_data[view] = test_data[view].to(device=device)
 
-
+        test_data.to(device=device)
         test_duration.to(device=device)
         test_event.to(device=device)
 
-    for c,_ in enumerate(test_data):
-        print("Test data shape after feature selection {}".format(test_data[c].shape))
 
+    print("Test data shape after feature selection {}".format(test_data.shape))
 
+    views_with_proteins = train_data.size(2)
 
-    # Input dimensions (features for each view) for NN based on different data (train/validation/test)
-    # Need to be the same for NN to work
-    dimensions_train = [x.size(1) for x in train_data]
-    dimensions_val = [x.size(1) for x in val_data]
-    dimensions_test = [x.size(1) for x in test_data]
-
-    assert (dimensions_train == dimensions_val == dimensions_test), 'Feature mismatch between train/val/test'
-
-    dimensions = dimensions_train
-
-    # Get feature offsets for train/validation/test
-    # Need to be the same for NN to work
-    feature_offsets_train = [0] + np.cumsum(dimensions_train).tolist()
-    feature_offsets_val = [0] + np.cumsum(dimensions_val).tolist()
-    feature_offsets_test = [0] + np.cumsum(dimensions_test).tolist()
-
-    feature_offsets = feature_offsets_train
-
-    # Number of all features (summed up) for train/validation/test
-    # These need to be the same, otherwise NN won't work
-    feature_sum_train = feature_offsets_train[-1]
-    feature_sum_val = feature_offsets_val[-1]
-    feature_sum_test = feature_offsets_test[-1]
-
-    feature_sum = feature_sum_train
-
-    # Initialize empty tensors to store the data for train/validation/test
-    train_data_pycox = torch.empty(n_train_samples, feature_sum_train).to(torch.float32)
-    val_data_pycox = torch.empty(n_val_samples, feature_sum_val).to(torch.float32)
-    test_data_pycox = torch.empty(n_test_samples, feature_sum_test).to(torch.float32)
-
-    # Train
-    for idx_view,view in enumerate(train_data):
-        for idx_sample, sample in enumerate(view):
-            train_data_pycox[idx_sample][feature_offsets_train[idx_view]:
-                                         feature_offsets_train[idx_view+1]] = sample
-
-    # Validation
-    for idx_view,view in enumerate(val_data):
-        for idx_sample, sample in enumerate(view):
-            val_data_pycox[idx_sample][feature_offsets_val[idx_view]:
-                                       feature_offsets_val[idx_view+1]] = sample
-
-    # Test
-    for idx_view,view in enumerate(test_data):
-        for idx_sample, sample in enumerate(view):
-            test_data_pycox[idx_sample][feature_offsets_test[idx_view]:
-                                        feature_offsets_test[idx_view+1]] = sample
-
-
-    # Turn validation (duration,event) in correct structure for pycox .fit() call
-    # dde : data duration event ; de: duration event ; d : data
-    train_duration_numpy = train_duration.detach().cpu().numpy()
-    train_event_numpy = train_event.detach().cpu().numpy()
-    val_duration_numpy = val_duration.detach().cpu().numpy()
-    val_event_numpy = val_event.detach().cpu().numpy()
-
-
-
-    train_de_pycox = (train_duration, train_event)
-    val_dde_pycox = val_data_pycox, (val_duration, val_event)
-    val_de_pycox = (val_duration, val_event)
-    test_d_pycox = test_data_pycox
-
-    train_data_pycox_numpy = train_data_pycox.detach().cpu().numpy()
-    val_data_pycox_numpy = val_data_pycox.detach().cpu().numpy()
-    train_de_pycox_numpy = (train_duration_numpy, train_event_numpy)#event_temporary_placeholder_train_numpy)
-    val_de_pycox_numpy = (val_duration_numpy, val_event_numpy)
-    train_ded_pycox = tt.tuplefy(train_de_pycox, train_data_pycox) # TODO : Problem hier wegen (221,) und (221,20) als shapes
-
-    full_train = tt.tuplefy(train_data_pycox, (train_de_pycox, train_data_pycox))
-    full_validation = tt.tuplefy(val_data_pycox, (val_de_pycox, val_data_pycox))
-
-
-
-
-    num_features = 2  # only mRNA & DNA data
+    num_features = views_with_proteins
     num_nodes = len(proteins_used)
-
 
 
     # normalizing data by rows (genes)
 
     # reshape not necessary as data already implemented in this manner
-    # features_used = features_used.reshape(-1, num_nodes, num_features) # first dimensions (samples) is derived, so that 2/3 dimension we have [...], [...] where each list has num_features elements and we have num_nodes in total
-    for i in range(num_features):
-        features_used[:,:,i] = normalize(features_used[:,:,i])
+    # features_used = features_used.reshape(-1, num_nodes, num_features)
+    # first dimensions (samples) is derived, so that 2/3 dimension we have [...], [...]
+    # where each list has num_features elements and we have num_nodes in total
 
-    features_used = features_used.reshape(-1, num_nodes * num_features)
+    for i in range(num_features):
+        train_data[:,:,i] = normalize(train_data[:,:,i])
+        val_data[:,:,i] = normalize(val_data[:,:,i])
+        test_data[:,:,i] = normalize(test_data[:,:,i])
+
+
+    # reshape structure for use of GCN
+    train_data = train_data.reshape(-1, num_nodes * num_features)
+    val_data = val_data.reshape(-1, num_nodes * num_features)
+    test_data = test_data.reshape(-1, num_nodes * num_features)
 
     callbacks = [tt.callbacks.EarlyStopping(patience=10)]
+
+    val_full = (val_data, (val_duration,val_event))
+    train_de_pycox = (train_duration, train_event)
 
 
     torch.manual_seed(0)
     edge_index = torch.LongTensor(edge_index).to(device)
-    net = GCN(len(proteins_used), edge_index, in_features=num_features).to(device)
+    net = GCN(len(proteins_used), edge_index, in_features=num_features,n_hidden_layer_dims=[1024,512,256],
+              activ_funcs=['sigmoid','sigmoid','sigmoid']).to(device)
 
     model = CoxPH(net, tt.optim.Adam(0.001))
 
-    log = model.fit(features_used,train_de_pycox, batch_size, n_epochs, callbacks, verbose=True)
+    log = model.fit(train_data,train_de_pycox, batch_size, n_epochs, callbacks, verbose=True,
+                    val_data=val_full, val_batch_size= batch_size_validation)
 
-    train = features_used, train_de_pycox
+    train = train_data, train_de_pycox
 
     _ = model.compute_baseline_hazards(*train)
 
+    surv = model.predict_surv_df(test_data)
 
 
+    # Plot it
+    surv.iloc[:, :5].plot()
+    plt.ylabel('S(t | x)')
+    _ = plt.xlabel('Time')
+
+    # test_dur and test_ev need to be numpy arrays for EvalSurv()
+    test_duration = test_duration.numpy()
+    test_event = test_event.numpy()
+
+    ev = EvalSurv(surv, test_duration, test_event, censor_surv='km')
 
 
+    # concordance
+    concordance_index = ev.concordance_td()
 
+    #brier score
+    time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
+    _ = ev.brier_score(time_grid).plot
+    brier_score = ev.integrated_brier_score(time_grid)
 
+    #binomial log-likelihood
+    binomial_score = ev.integrated_nbll(time_grid)
+
+    print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
+                                                                                                       brier_score,
+                                                                                                       binomial_score))
 
 
 
@@ -276,7 +270,8 @@ if __name__ == '__main__':
     views = cancer_data[0][2]
     feature_names = cancer_data[0][3]
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    train(module= multimodule,views= views, l2_regularization=True, feature_names=feature_names,batch_size=32,n_epochs=100)
+    train(module= multimodule,views= views, l2_regularization=True, feature_names=feature_names,batch_size=16,n_epochs=100,
+          batch_size_validation=5)
 
 
 

@@ -29,11 +29,18 @@ class MultiOmicsDataset(Dataset):
     # in dem tensor jeweils features sample1, features sample 2, ...
 
     def __init__(self, X, duration, event, type= 'new'):
-        self.type = type # type of data : new data is unprocessed, 'processed' means already feature selected
-        self.n_views = len(X) # number views (mRNA, DNA, microRNA, RPPA)
+        self.type = type
+
+        # Change dtypes of tensors for usage of NN later on
+        self.duration = duration
+        self.event = event
+        self.duration = torch.from_numpy(self.duration).to(torch.float32)
+        self.event = torch.from_numpy(self.event).to(torch.int32)
+
 
 
         if self.type == 'new':
+            self.n_views = len(X) # number views (mRNA, DNA, microRNA, RPPA)
             self.X = [torch.nan_to_num(x_view) for x_view in X]
             self.mask = [torch.isnan(x_view) for x_view in X] #List of booleans for each numeric value in samples ;True : NaN values
             self.n_samples = X[0].size(0) # number samples # TODO: versch- sample Anzahlen bei eigengenes
@@ -47,31 +54,17 @@ class MultiOmicsDataset(Dataset):
 
         # TODO : center data,  , mit dne null values arbeiten // mean mutation
         elif self.type == 'processed':
+            self.n_views = len(X) # number views (mRNA, DNA, microRNA, RPPA)
             self.X = X
+            self.n_samples = X[0].size(0)
+            for view in range(len(self.X)):
+                self.X[view] = self.X[view].to(torch.float32)
 
 
-        self.duration = duration
-        self.event = event
-        # Change dtypes of tensors for usage of NN later on
-        for view in range(len(self.X)):
-            self.X[view] = self.X[view].to(torch.float32)
-        self.duration = torch.from_numpy(self.duration).to(torch.float32)
-        self.event = torch.from_numpy(self.event).to(torch.int32)
+        elif self.type == 'ppi':
+            self.X = X
+            self.n_samples = X.size(0)
 
-
-        self.n_samples = X[0].size(0)
-
-#y = torch.from_numpy(boston.target.reshape(-1, 1)).float()
-
-            # no mask anymore --> we have selected features now, so old mask doesn't make sense (?)
-            # make new mask based on new data ?
-
-            # no size check as e.g. in eigengenematrix diff. amount of samples due to preprocessing
-
-
-      #  self.duration = duration
-      #  self.event = event
-        self.type = type
 
 
     def __len__(self):
@@ -88,6 +81,8 @@ class MultiOmicsDataset(Dataset):
         elif self.type == 'processed':
             return [self.X[m][index, :] for m in range(self.n_views)], \
                    self.duration[index], self.event[index]
+        elif self.type == 'ppi':
+            return self.X[index], self.duration[index], self.event[index]
 
 
 
@@ -353,7 +348,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
           #  variance = [0.8,0.8,0.8,0.8] # TODO : Grid search
             # We need to choose a steady number of components for the NN later on, because otherwise we have
             # different numbers for train/val/test, which won't work with PyCox implementation
-            components = 20 # TODO: diff cancer types will need different amount of components (not every type can generate e.g. 50 pc's
+            components = 25 # TODO: diff cancer types will need different amount of components (not every type can generate e.g. 50 pc's
 
 
             for view in range(self.n_views):
@@ -367,12 +362,6 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                 PCA_test_tensors.append(torch.tensor(pc_test_view))
                 PCA_validation_tensors.append(torch.tensor(pc_val_view))
 
-
-
-   #         for c,view in enumerate(self.view_names):
-   #             print("{} PCA feature selection : {} of size {} (samples, PC components).".format(view,
-   #                                                                                               PCA_train_tensors[c],
-   #                                                                                               PCA_train_tensors[c].shape))
 
 
 
@@ -603,47 +592,38 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
         if method.lower() == 'ppi':
-            ppi_train = FeatureSelection.PPI(self.x_train, feature_names)
-            features_used, proteins_used, edge_index = ppi_train.get_matrices()
+            ppi_train = FeatureSelection.PPI(self.x_train, feature_names, self.view_names)
+            ppi_val = FeatureSelection.PPI(self.x_val, feature_names, self.view_names)
+            ppi_test = FeatureSelection.PPI(self.x_test, feature_names, self.view_names)
+
+            data_train,edge_index_train, proteins_used_train = ppi_train.get_matrices()
+            data_val, edge_index_val, proteins_used_val = ppi_val.get_matrices()
+            data_test, edge_index_test, proteins_used_test = ppi_test.get_matrices()
 
 
+            # edge indexes and used proteins are to be the same amongst train/val/test
+            edge_index = edge_index_train
+            proteins_used = proteins_used_train
 
-            # Note : self.x_train is not to be used as the training data for PPI, but we need the duration&event values
-            self.train_set = MultiOmicsDataset(self.x_train,
+            self.train_set = MultiOmicsDataset(data_train,
                                                self.duration_train,
                                                self.event_train,
-                                               type = 'processed')
-            self.val_set = MultiOmicsDataset(self.x_val,
+                                               type = 'ppi')
+
+            self.val_set = MultiOmicsDataset(data_val,
                                              self.duration_val,
                                              self.event_val,
-                                             type = 'processed')
+                                             type = 'ppi')
 
-            self.test_set = MultiOmicsDataset(self.x_test,
+            self.test_set = MultiOmicsDataset(data_test,
                                               self.duration_test,
                                               self.event_test,
-                                              type = 'processed')
+                                              type = 'ppi')
 
 
 
 
-            return features_used, proteins_used, edge_index
-
-
-
-          #  ppn_test_mRNA = FeatureSelection.F_PPI_NETWORK(self.x_test)
-          #  adjacency_matrix_train, feature_matrices_train = ppn_train_mRNA.setup()
-          #  adjacency_matrix_test, feature_matrices_test = ppn_test_mRNA.setup()
-
-           # print("Adjacency matrix : {}".format(adjacency_matrix_train))
-           # print("Feature matrix mRNA : {} of size {} (samples, proteins, features). "
-           #       "For each sample, we have {} proteins and {} possible features".format
-           #       (feature_matrices_train, feature_matrices_train.shape, feature_matrices_train.size(1), feature_matrices_train.size(2)))
-
-            # TODO : build own dataloader for this class as differs from other data structures
-           # return adjacency_matrix_train, feature_matrices_train, adjacency_matrix_test, feature_matrices_test
-
-
-
+            return edge_index, proteins_used
 
 
 

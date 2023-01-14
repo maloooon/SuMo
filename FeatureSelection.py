@@ -28,17 +28,15 @@ class F_PCA():
     input : List[torch.Tensor]
     components : int
 
-    def __init__(self, train, test = None, components = 20, keep_variance = 0.5):
+    def __init__(self, train, components = 80, keep_variance = 0.3):
         """
 
         :param train:
-        :param test:
         :param components: choose number of components one wants to use
         :param keep_variance: choose minimal number of PC components such that x % variance is retained
         """
         self.components = components
         self.train = train #training input
-        self.test = test
         self.keep_variance = keep_variance
 
 
@@ -96,21 +94,28 @@ class F_VARIANCE():
         return data_selected, index_list
 
 
-class F_mRMR():
-    """For classification tasks"""
-    pass
 
 
 class PPI():
 
-    def __init__(self,train, feature_names):
+    def __init__(self,train, feature_names, view_names):
         """
 
         :param train:
         :param feature_names: list of lists containing feature names (original ones)
+        :param view_names: names of views
         """
         self.train = train
         self.feature_names = feature_names
+        self.view_names = [x.upper() for x in view_names]
+
+        if 'DNA' not in self.view_names or 'MRNA' not in self.view_names:
+            raise Exception("neither DNA nor mRNA data in input : no protein data.")
+            exit()
+
+
+
+
 
 
     def get_matrices(self):
@@ -169,7 +174,7 @@ class PPI():
 
         for c,view in enumerate(fixed_features):
             # miRNA/RPPA no protein data
-            if c == 2 or c == 3:
+            if self.view_names[c] == 'MIRNA' or self.view_names[c] == 'RPPA':
                 continue
             for c2,_ in enumerate(view):
                 if fixed_features[c][c2] in all_features:
@@ -183,14 +188,20 @@ class PPI():
 
         all_mappings = []
         all_mappings_indices = []
-        # TODO :  missing values --> median
+
 
         for sample in range(samples):
-            # Dictionary to store protein - feature value // for each view single list, we'll need that to calculate the median more easily
+            # Dictionary to store protein - feature value // for each view single list,
+            # we'll need that to calculate the median more easily
             # since now it is clear, which tensor values accord to which view
-         #   prot_to_feat_values = defaultdict(lambda: [[], [], [], []])
 
-            prot_to_feat_values = defaultdict(lambda: [[], []])  # TODO : make variable for diff data inputs --> need to check if we really have both dna and mRNA data (only these have proteins)
+
+            # Only mRNA/DNA has protein data
+            co1 = self.view_names.count('MRNA')
+            co2 = self.view_names.count('DNA')
+            co_sum = co1+co2
+
+            prot_to_feat_values = defaultdict(lambda: [[] for x in range(co_sum)])
 
             # track indices for median (so we know whether added element is from mRNA or DNA
             prot_to_feat_values_indices = defaultdict(list)
@@ -198,7 +209,7 @@ class PPI():
 
             for c,view in enumerate(cancer_features_mapped_indices):
                 # miRNA/RPPA no protein-protein data
-                if c== 2 or c== 3:
+                if self.view_names[c] == 'MIRNA' or self.view_names[c] == 'RPPA':
                     continue
                 for c2,_ in enumerate(view):
                     idx = all_features_mapped_indices[c][c2]
@@ -215,10 +226,9 @@ class PPI():
         # First, find protein which has the most feature values (so that we know for how many dimensions we have
         # to create medians)
         for c,mapping in enumerate(all_mappings):
-         #   key_len_max = max(all_mappings_indices[c], key=lambda x: len(all_mappings_indices[c][x]))
-         #   len_max = len(all_mappings[c][key_len_max])
-            # now calculate the medians (TODO: fixxed medians calculated at the beginning or changing with each new added value --> how could I make that time efficient?)
-            medians = [[] for i in range(2)]
+
+            # now calculate the medians
+            medians = [[] for i in range(co_sum)]
             for feature_values_listed in all_mappings[c].values():
                 for c,feature_value in enumerate(feature_values_listed):
                     # if there is a feature value for that view
@@ -227,10 +237,7 @@ class PPI():
                         medians[c].append(feature_value[0])
 
             for c,_ in enumerate(medians):
-               # if c == 2:
-               #     # miRNA data has no proteins, hence len == 0 : leads to ZeroDivisionError
-               #     continue
-           #     medians[c] = torch.unsqueeze(torch.tensor(sum(medians[c]) / len(medians[c])), 0) # Note : RPPA only has 0 values, as RPPA also has no feature values (empty entries for features) --> rausgenommen
+
                 medians[c] = (sum(medians[c])) / len(medians[c])
             all_medians.append(medians)
 
@@ -256,24 +263,13 @@ class PPI():
                 features_used[c].append(features_dlisted)
 
 
-        # Flatten once more (needed for GCN structure)
-    #    for c in range(len(features_used)):                         # REMOVE
-    #        features_used[c] = HF.flatten(features_used[c])         # REMOVE
+        # Flatten once more
+    #    for c in range(len(features_used)):
+    #        features_used[c] = HF.flatten(features_used[c])
 
 
         # turn into tensor
         features_used = torch.tensor(features_used)
-
-
-
-        # For the adjacency matrix, we need to get the interactions and fit it so that we only take the interactions,
-        # for which we have mappings from proteins to feature values
-
-        # for missing values (as we need same input dimensions for each proteins feature values), we take the median of
-        # the features
-
-
-
 
 
         interactions1 = []
@@ -300,21 +296,8 @@ class PPI():
         # edge_index : interaction of proteins via indices
 
 
-        ###### Test purposes : Read out once and take this data to write model -            ######
-        ###### later on, the whole PPI process needs to be done for each train/val/test set ######
-     #   interactions_df = pd.DataFrame({'protein1': interactions1, 'protein2': interactions2})
-     #   interactions_df.to_csv('/Users/marlon/Desktop/Project/interactions.csv')
 
-     #   proteins_used_df = pd.DataFrame(proteins_used, index=[0])
-     #   proteins_used_df.to_csv('/Users/marlon/Desktop/Project/proteins.csv')
-
-     #   features_used = features_used.numpy()
-     #   features_used_df = pd.DataFrame(features_used)
-     #   features_used_df.to_csv('/Users/marlon/Desktop/Project/features.csv')
-
-
-
-        return features_used, proteins_used, edge_index
+        return features_used,edge_index, proteins_used
 
 
 
@@ -483,6 +466,10 @@ class F_AE(nn.Module):
         out_d_final = torch.relu(in_d_final)
 
         return out_d_final, out_layer_reduced
+
+
+
+
 
 
 

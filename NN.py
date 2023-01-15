@@ -271,7 +271,7 @@ class NN_changeable(nn.Module):
 
 
 
-def train(module,views,device, batch_size =128, n_epochs = 512, lr_scheduler_type = 'onecyclecos'):
+def train(module,device, batch_size =128, n_epochs = 512, lr_scheduler_type = 'onecyclecos'): # TODO :CHANGE ÜBERALL
     """
 
     :param module: basically the dataset to be used
@@ -284,12 +284,12 @@ def train(module,views,device, batch_size =128, n_epochs = 512, lr_scheduler_typ
 
 
     # Setup all the data
-    n_train_samples, n_test_samples, n_val_samples = module.setup()
+    n_train_samples, n_test_samples, n_val_samples, view_names = module.setup() # TODO : CHANGE ÜBERALL
 
 
 
     #Select method for feature selection
-    module.feature_selection(method='pca')
+    module.feature_selection(method='variance')
 
     # Load Dataloaders
     trainloader = module.train_dataloader(batch_size=n_train_samples) # all training examples
@@ -408,11 +408,11 @@ def train(module,views,device, batch_size =128, n_epochs = 512, lr_scheduler_typ
 
 
     # Call NN
-    net = NN_changeable(views,dimensions,feature_offsets,[[10,5],[10,5],[10,5],[10,5]],
-                        [['relu'],['relu'],['relu'],['relu'],['none']], 0.1,
+    net = NN_changeable(view_names,dimensions,feature_offsets,[[10,5] for i in range(len(view_names))],
+                        [['relu'],['relu'],['relu'],['none']], 0.1,
                         [['yes','yes'],['yes','yes',],['yes', 'yes'],['yes','yes']],
                         [['yes','yes'],['yes','yes'],['yes','yes'],['yes','yes']],
-                        dropout_bool=True,batch_norm_bool=False)
+                        dropout_bool=False,batch_norm_bool=False)
     #TODO : Batch norm problem (see AE)
 
 #    net = NN_changeable(views, dimensions, feature_offsets_train,
@@ -512,7 +512,7 @@ def train(module,views,device, batch_size =128, n_epochs = 512, lr_scheduler_typ
 if __name__ == '__main__':
     cancer_data = ReadInData.readcancerdata()
     multimodule = DataInputNew.SurvMultiOmicsDataModule(cancer_data[0][0],cancer_data[0][1],cancer_data[0][2],onezeronorm_bool=False)
-    views = cancer_data[0][2]
+   # views = cancer_data[0][2] # TODO: CHANGE ÜBERALL
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    train(module= multimodule,views= views, device=device, batch_size=32, n_epochs=100)
+    train(module= multimodule, device=device, batch_size=32, n_epochs=100) # TODO : CHANGE ÜBERALL (views raus)
 

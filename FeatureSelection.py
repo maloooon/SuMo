@@ -43,6 +43,7 @@ class F_PCA():
     def apply_pca(self):
         self.pca = PCA(n_components= self.components)
 
+
         #As we already standardized & transformed the data with StandardScaler(), we can apply PCA directly
         self.pca.fit(self.train)
         pca_train_data = self.pca.transform(self.train)
@@ -92,6 +93,12 @@ class F_VARIANCE():
 
 
         return data_selected, index_list
+
+
+
+class F_VARIANCE_V2():
+    pass
+
 
 
 

@@ -241,13 +241,45 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         self.x_train = [torch.nan_to_num(x_view) for x_view in self.x_train]
         self.x_train_mask = [torch.isnan(x_view) for x_view in self.x_train] #List of booleans for each numeric value in samples ;True : NaN values
 
+        # We check for each view how many 0s this view contains
+        train_zeros = []
+        for view in self.x_train:
+            curr_view_count = torch.count_nonzero(view)
+            train_zeros.append(curr_view_count)
+
+        removed_views_index = []
+        for x,count in enumerate(train_zeros):
+            # If there arent atleast 10 % values greater than 0 for this view for all samples, remove this view
+            # from consideration
+            if count < int(0.1 * ((self.feature_offsets[x + 1] - self.feature_offsets[x]) * n_train_samples)):
+                print("{} has nearly only 0 values. We don't take this data into consideration.".format(self.view_names[x]))
+                removed_views_index.append(x)
+
+
+
+
         self.x_test = [torch.nan_to_num(x_view) for x_view in self.x_test]
         self.x_test_mask = [torch.isnan(x_view) for x_view in self.x_test]
 
         self.x_val = [torch.nan_to_num(x_view) for x_view in self.x_val]
         self.x_val_mask = [torch.isnan(x_view) for x_view in self.x_val]
 
-        return n_train_samples, n_test_samples, n_val_samples
+        for index in sorted(removed_views_index, reverse=True):
+            del self.x_train[index]
+            del self.x_test[index]
+            del self.x_val[index]
+            del self.view_names[index]
+            diff = self.feature_offsets[index + 1] - self.feature_offsets[index]
+            for c,_ in enumerate(self.feature_offsets):
+                if c > (index + 1): # TODO :check if mRNA & RPPA gets deleted
+                    self.feature_offsets[c] = self.feature_offsets[c] - diff
+            del self.feature_offsets[index+1]
+            # TODO : also for mask if to be implemented ; ganze Prinzip msus auch für val und test set noch implementiert werden
+
+        self.n_views = self.n_views - len(removed_views_index) # TODO : wenn val/test set auch noch, muss removed views index train/val/test sei
+
+
+        return n_train_samples, n_test_samples, n_val_samples, self.view_names
 
 
     def label_transform(self, num_durations):
@@ -387,17 +419,36 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         if method.lower() == 'variance':
             variance_train_tensors = []
             variance_test_tensors = []
-            #variance_selected_features = []
-            thresholds = [0.8,0.8,0.8,0.6] # TODO : Grid Search
+            variance_val_tensors = []
+
+            thresholds = [0.8,0.8,0.8,0] # TODO : Grid Search
 
             for view in range(self.n_views):
+
                 view_train_variance = FeatureSelection.F_VARIANCE(self.x_train[view], threshold= thresholds[view])
+                view_val_variance = FeatureSelection.F_VARIANCE(self.x_val[view], threshold= thresholds[view])
                 view_test_variance = FeatureSelection.F_VARIANCE(self.x_test[view], threshold = thresholds[view])
                 data_train_variance, mask_train_variance = view_train_variance.apply_variance()
+                data_val_variance, mask_val_variance = view_val_variance.apply_variance()
                 data_test_variance, mask_test_variance = view_test_variance.apply_variance()
-             #   variance_selected_features.append([DataInputNew.features[view][index] for index in mask_variance]) #TODO : wenn man feature namen kennen will
                 variance_train_tensors.append(torch.tensor(data_train_variance))
+                variance_val_tensors.append(torch.tensor(data_val_variance))
                 variance_test_tensors.append(torch.tensor(data_test_variance))
+
+            # We need to set the amount of features for each view across train/val/test sets to the same value
+            # for the neural nets
+            minimum = 10000000
+            for c in range(len(self.view_names)):
+
+                temp = min([variance_train_tensors[c].size(1), variance_val_tensors[c].size(1), variance_test_tensors[c].size(1)])
+                if temp < minimum:
+                    minimum = temp
+
+            for c in range(len(self.view_names)):
+                variance_train_tensors[c] = variance_train_tensors[c][:,0:minimum]
+                variance_val_tensors[c] = variance_val_tensors[c][:,0:minimum]
+                variance_test_tensors[c] = variance_test_tensors[c][:,0:minimum]
+
 
 
 
@@ -419,6 +470,11 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                                               self.duration_test,
                                               self.event_test,
                                               type = 'processed')
+
+            self.val_set = MultiOmicsDataset(variance_val_tensors,
+                                             self.duration_val,
+                                             self.event_val,
+                                             type = 'processed')
 
 
 

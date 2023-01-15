@@ -17,8 +17,8 @@ def readcancerdata():
                     'KIRC','KIRP','LAML','LGG','LIHC','LUAD','LUSC','MESO','PAAD','PCPG','READ','SARC','SKCM',
                     'STAD','TGCT','THCA','THYM','UCEC' ,'UCS', 'UVM']
 
-    # Testing purposes : only LUAD data
-    cancer_names = ['LAML']
+    # Testing purposes :
+    cancer_names = ['LUAD']
 
 
     cancer_data = [[] for x in range(len(cancer_names))]

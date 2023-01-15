@@ -227,10 +227,6 @@ if __name__ == '__main__':
         x.reset_index(inplace=True, drop=True)
 
 
-        # Drop every row which doesn't have atleast 100 real values (not NaN values)
-        # TODO : best thresh ?
-     #   x.dropna(thresh=100, inplace=True)
-
 
 
 

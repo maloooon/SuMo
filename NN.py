@@ -12,13 +12,11 @@ from torch.optim import Adam
 from sklearn.model_selection import KFold
 from torch.utils.data.sampler import SubsetRandomSampler
 
-#TODO : how to check whether dropout layer, batch norm actually have an impact ? --> run with same data and with dropout_prob = 0
-# TODO : didn't have wanted effect, didn't train at all (stopped at epoch 0)
 
 class NN_changeable(nn.Module):
     def __init__(self,views,in_features,feature_offsets = None, n_hidden_layers_dims =None,
                  activ_funcs = None,dropout_prob = None, dropout_layers = None,
-                 batch_norm = None, dropout_bool = None, batch_norm_bool = None, ae_bool = False):
+                 batch_norm = None, dropout_bool = None, batch_norm_bool = None, ae_bool = False, print_bool = False):
         """
         :param views: list of views (strings)
         :param in_features: list of input features
@@ -37,6 +35,7 @@ class NN_changeable(nn.Module):
         :param dropout_bool : Decide wether dropout is applied or not ; bool (True/False)
         :param batch_norm_bool : Decide wether batch normalization is applied or not ; bool (True/False)
         :param ae_bool : Check whether we pass data from AE (concatenated or element wise avg)
+        :param print_bool : Decide whether the model is to be printed (needed so we don't get a print for each validation set in cross validation
 
         """
         super().__init__()
@@ -52,7 +51,8 @@ class NN_changeable(nn.Module):
         self.batch_norm_bool = batch_norm_bool
         self.ae_bool = ae_bool
         # Create list of lists which will store each hidden layer call for each view
-        self.hidden_layers = [[] for x in range(len(in_features))] #TODO: add nn.ParameterList like in AE implementation !
+        self.hidden_layers = nn.ParameterList([nn.ParameterList([]) for x in range(len(in_features))])
+        self.print_bool = print_bool
 
 
         # Produce activation functions list of lists
@@ -160,18 +160,21 @@ class NN_changeable(nn.Module):
         self.dropout = nn.Dropout(dropout_prob)
 
 
+        if print_bool == True:
+            # Print the model
+            print("Data input has the following views : {}, each containing {} features.".format(self.views,
+                                                                                                self.in_features[0]))
 
-        # Print the model
-        print("Data input has the following views : {}, each containing {} features.".format(self.views,
-                                                                                            self.in_features[0]))
+            print("Dropout : {}, Batch Normalization : {}".format(dropout_bool, batch_norm_bool))
+            for c,_ in enumerate(self.views):
+                print("The view {} has the following pipeline : {}, dropout in layers : {}".format(_, self.hidden_layers[c],
+                                                                                            dropout_layers[c]))
 
-        print("Dropout : {}, Batch Normalization : {}".format(dropout_bool, batch_norm_bool))
-        for c,_ in enumerate(self.views):
-            print("The view {} has the following pipeline : {}, dropout in layers : {}".format(_, self.hidden_layers[c],
-                                                                                        dropout_layers[c]))
+            print("Finally, the last output of each layer is summed up ({} features) and casted to a single element, "
+                  "the hazard".format(sum_dim_last_layers))
 
-        print("Finally, the last output of each layer is summed up ({} features) and casted to a single element, "
-              "the hazard".format(sum_dim_last_layers))
+
+
 
     def forward(self,x):
         """
@@ -212,12 +215,6 @@ class NN_changeable(nn.Module):
             else:
                 data_ordered.append(x)
 
-         #   if type(data_ordered[0]) is list:
-         #       # If AE has type 'none' , we need to flatten the list (as we have a list of lists of tensors)
-         #       data_ordered = HF.flatten(data_ordered)
-
-
-
         for c,view in enumerate(self.hidden_layers):
             for c2,encoder in enumerate(view):
                 if c2 == 0: #first layer
@@ -247,8 +244,13 @@ class NN_changeable(nn.Module):
 
 
 
-def train(module,device, batch_size =128, n_epochs = 512, lr_scheduler_type = 'onecyclecos', l2_regularization='no',
-          val_batch_size = 16, number_folds = 5): # TODO :CHANGE ÜBERALL
+def train(module,
+          device,
+          batch_size =128,
+          n_epochs = 512,
+          l2_regularization = False,
+          val_batch_size = 16,
+          number_folds = 5): # TODO :CHANGE ÜBERALL
     """
 
     :param module: basically the dataset to be used
@@ -449,16 +451,26 @@ def train(module,device, batch_size =128, n_epochs = 512, lr_scheduler_type = 'o
 
         torch.manual_seed(0)
         # Call NN
-        net = NN_changeable(view_names,dimensions,feature_offsets,[[64,32,16] for i in range(len(view_names))],
-                            [['relu'],['relu'],['relu'],['none']], 0.1,
-                            [['yes','yes','yes'],['yes','yes','yes'],['yes', 'yes','yes'],['no','no','no']],
-                            [['yes','yes'],['yes','yes'],['yes','yes'],['yes','yes']],
-                            dropout_bool=False,batch_norm_bool=False)
+        if fold == 0:
+            net = NN_changeable(view_names,dimensions,feature_offsets,[[64,32,16] for i in range(len(view_names))],
+                                [['relu'],['relu'],['relu'],['none']], 0.1,
+                                [['yes','yes','yes'],['yes','yes','yes'],['yes', 'yes','yes'],['no','no','no']],
+                                [['yes','yes'],['yes','yes'],['yes','yes'],['yes','yes']],
+                                dropout_bool=False,batch_norm_bool=False,print_bool=True)
+        else:
+            net = NN_changeable(view_names,dimensions,feature_offsets,[[64,32,16] for i in range(len(view_names))],
+                                [['relu'],['relu'],['relu'],['none']], 0.1,
+                                [['yes','yes','yes'],['yes','yes','yes'],['yes', 'yes','yes'],['no','no','no']],
+                                [['yes','yes'],['yes','yes'],['yes','yes'],['yes','yes']],
+                                dropout_bool=False,batch_norm_bool=False,print_bool=False)
+
 
         # Dropout makes performance worse !
+        # Batch norm only works if each batch has enough samples --> check that the last batch in an epoch (which may
+        # get cut off since we don't have enough samples anymore) is bigger than 3-5 (?) samples for BatchNorm to work
 
 
-        #TODO : Batch norm problem (see AE)
+
 
 
         # Set parameters for NN
@@ -469,31 +481,6 @@ def train(module,device, batch_size =128, n_epochs = 512, lr_scheduler_type = 'o
             optimizer = Adam(net.parameters(), lr=0.01)
 
         callbacks = [tt.callbacks.EarlyStopping(patience=10)]
-
-
-
-
-        # LR scheduler
-        #TODO : working ?
-        if lr_scheduler_type.lower() == 'lambda':
-            lambda1 = lambda epoch: 0.65 ** epoch
-            scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer,lr_lambda=lambda1)
-
-
-
-        if lr_scheduler_type.lower() == 'onecyclecos':
-            scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.1, steps_per_epoch=10, epochs=10)
-
-        lrs = []
-
-        for i in range(10):
-            optimizer.step()
-            lrs.append(optimizer.param_groups[0]["lr"])
-
-            scheduler.step()
-
-
-
 
 
 
@@ -550,3 +537,28 @@ def train(module,device, batch_size =128, n_epochs = 512, lr_scheduler_type = 'o
                                                                                                            binomial_score))
 
 
+
+
+
+
+
+
+
+
+        # LR scheduler
+#      if lr_scheduler_type.lower() == 'lambda':
+#          lambda1 = lambda epoch: 0.65 ** epoch
+#          scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer,lr_lambda=lambda1)
+
+
+
+#      if lr_scheduler_type.lower() == 'onecyclecos':
+#          scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.1, steps_per_epoch=10, epochs=10)
+
+#      lrs = []
+
+#      for i in range(10):
+#          optimizer.step()
+#          lrs.append(optimizer.param_groups[0]["lr"])
+
+#          scheduler.step()

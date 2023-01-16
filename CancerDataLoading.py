@@ -3,21 +3,7 @@ import os
 import torch
 import numpy as np
 
-"""
 
-# DataSpellProjectsForSAMO/SAMO/TCGAData/PRAD
-    data_transform = pd.read_csv(
-        os.path.join("/Users", "marlon", "DataspellProjectsForSAMO", "SAMO", "TCGAData", "PRAD",
-                     "1.tsv"), index_col=0, sep='\t'
-    )
-
-    names_mRNA = (data_transform["Entry Name"])
-    #names_mRNA.to_csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/mRNA_transf.csv")
-
-    #names_mRNA_tensor = torch.tensor(names_mRNA.values)
-
-
-"""
 
 if __name__ == '__main__':
 

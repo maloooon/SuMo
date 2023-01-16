@@ -96,11 +96,6 @@ class F_VARIANCE():
 
 
 
-class F_VARIANCE_V2():
-    pass
-
-
-
 
 
 class PPI():
@@ -109,18 +104,28 @@ class PPI():
         """
 
         :param train:
-        :param feature_names: list of lists containing feature names (original ones)
+        :param feature_names: tuple : (view_name, list of lists containing feature names (original ones) for this view)
         :param view_names: names of views
         """
         self.train = train
         self.feature_names = feature_names
+
         self.view_names = [x.upper() for x in view_names]
 
         if 'DNA' not in self.view_names or 'MRNA' not in self.view_names:
             raise Exception("neither DNA nor mRNA data in input : no protein data.")
-            exit()
 
 
+
+        # Check which view names we have and if needed, delete features from feature_names (bc view may have been
+        # deleted in preprocessing)
+        temp = []
+        for x in self.feature_names:
+            view_name = x[0].upper()
+            if view_name in self.view_names:
+                temp.append(x[1])
+
+        self.feature_names = temp
 
 
 
@@ -220,7 +225,6 @@ class PPI():
                     continue
                 for c2,_ in enumerate(view):
                     idx = all_features_mapped_indices[c][c2]
-                  #  prot_to_feat_values[all_proteins[idx]][c].append(torch.unsqueeze(self.train[c][sample,_], 0))
                     prot_to_feat_values[all_proteins[idx]][c].append(self.train[c][sample,_].item())
                     prot_to_feat_values_indices[all_proteins[idx]].append(c)
             all_mappings.append(prot_to_feat_values)
@@ -240,7 +244,7 @@ class PPI():
                 for c,feature_value in enumerate(feature_values_listed):
                     # if there is a feature value for that view
                     if len(feature_value) != 0:
-                 #       medians[c].append(feature_value[0].item())
+
                         medians[c].append(feature_value[0])
 
             for c,_ in enumerate(medians):
@@ -266,13 +270,7 @@ class PPI():
                 features_dlisted = HF.flatten(feat_values_listed)# dlisted : list of lists
 
 
-             #   features_used[c].append(torch.cat(tuple(features_dlisted)))
                 features_used[c].append(features_dlisted)
-
-
-        # Flatten once more
-    #    for c in range(len(features_used)):
-    #        features_used[c] = HF.flatten(features_used[c])
 
 
         # turn into tensor

@@ -61,22 +61,36 @@ class AE_NN(nn.Module):
         super().__init__()
         self.models = models
         self.type = type
+        # AE call
+        self.ae = self.models[0]
+        # NN call
+        self.nn = self.models[1]
+
 
     def forward(self, x):
-        # AE call
-        ae = self.models[0]
-        # NN call
-        nn = self.models[1]
 
 
         if self.type == 'cross':
-            element_wise_avg, final_out_cross, final_out = ae(x)
-            hazard = nn(element_wise_avg)
+            element_wise_avg, final_out_cross, final_out = self.ae(x)
+            hazard = self.nn(element_wise_avg)
             return final_out, final_out_cross, hazard
         else:
-            integrated, final_out = ae(x)
-            hazard = nn(integrated)
-            return final_out, hazard
+            integrated, final_out, input_data = self.ae(x)
+            hazard = self.nn(integrated)
+            return final_out, hazard,input_data
+
+
+    def predict(self,x):
+        # Will be used by model.predict later.
+        if self.type == 'cross':
+            element_wise_avg, final_out_cross, final_out = self.ae(x)
+            hazard = self.nn(element_wise_avg)
+            return hazard
+        else:
+            integrated, final_out, input_data = self.ae(x)
+            hazard = self.nn(integrated)
+            return hazard
+
 
 
 
@@ -360,6 +374,7 @@ class AE(nn.Module):
 
         # list of lists to store encoded features for each view
         # Note that encoded features will have BOTH features for encoding stage and decoding stage !
+        input_data_raw = x
         encoded_features = [[] for x in range(len(self.views))]
         help_features = []
         cross_features = [[] for x in range(len(self.views))]
@@ -529,9 +544,10 @@ class AE(nn.Module):
         if self.type.lower() == 'concat':
             # Finally, we will pass the concatenated features to a NN to get the hazard ratio.
             # The final output (final_out) will be used to train the AE.
+            # x : input_data
 
 
-            return concatenated_features, final_out
+            return concatenated_features, final_out, input_data_raw
 
         if self.type.lower() == 'cross':
             # element_wise_avg will be passed to a NN to get the hazard ratio
@@ -628,7 +644,7 @@ class LossAEConcatHazard(nn.Module):
 
     """First argument of output needs to be output of the net, second same structure as tuple structure of targets in
        dataset """
-    def forward(self, final_out, hazard, survival, input_data):
+    def forward(self, final_out, hazard,input_data, duration,event):
         """
 
         :param concatenated_features: Output of middle layer between encoded & decoded (x features from each view for one sample concatenated)
@@ -638,7 +654,7 @@ class LossAEConcatHazard(nn.Module):
         :param input_data: covariate input into AE
         :return: combined loss
         """
-        duration,event = survival
+      #  duration,event = survival
         loss_surv = self.loss_surv(hazard, duration,event)
         loss_ae = self.loss_ae(final_out, input_data)
         return self.alpha * loss_surv + (1- self.alpha) * loss_ae
@@ -680,7 +696,7 @@ class LossAECrossHazard(nn.Module):
 
 
 
-def train(module,batch_size =25, n_epochs = 512, lr_scheduler_type = 'onecyclecos', l2_regularization = False):
+def train(module,device,batch_size =25, n_epochs = 512, l2_regularization = False, val_batch_size=16,number_folds=5):
     """
 
     :param module: basically the dataset to be used
@@ -699,12 +715,11 @@ def train(module,batch_size =25, n_epochs = 512, lr_scheduler_type = 'onecycleco
 
 
     #Select method for feature selection
-    module.feature_selection(method='pca')
+    module.feature_selection(method='ae')
 
     # Load Dataloaders
     trainloader = module.train_dataloader(batch_size=n_train_samples) # all training examples
     testloader =module.test_dataloader(batch_size=n_test_samples)
- #   valloader = module.validation_dataloader(batch_size=n_val_samples)
 
     # Load data and set device to cuda if possible
 
@@ -719,16 +734,6 @@ def train(module,batch_size =25, n_epochs = 512, lr_scheduler_type = 'onecycleco
     for c,_ in enumerate(train_data):
         print("Train data shape after feature selection {}".format(train_data[c].shape))
 
-    #Validation
- #   for val_data, val_duration, val_event in valloader:
- #       for view in range(len(val_data)):
- #           val_data[view] = val_data[view].to(device=device)
-
-  #      val_duration.to(device=device)
-  #      val_event.to(device=device)
-
-  #  for c,_ in enumerate(val_data):
-  #      print("Validation data shape after feature selection {}".format(val_data[c].shape))
 
     #Test
     for test_data, test_duration, test_event in testloader:
@@ -747,7 +752,6 @@ def train(module,batch_size =25, n_epochs = 512, lr_scheduler_type = 'onecycleco
     # Input dimensions (features for each view) for NN based on different data (train/validation/test)
     # Need to be the same for NN to work
     dimensions_train = [x.size(1) for x in train_data]
- #   dimensions_val = [x.size(1) for x in val_data]
     dimensions_test = [x.size(1) for x in test_data]
 
     assert (dimensions_train == dimensions_test), 'Feature mismatch between train/val/test'
@@ -757,7 +761,6 @@ def train(module,batch_size =25, n_epochs = 512, lr_scheduler_type = 'onecycleco
     # Get feature offsets for train/validation/test
     # Need to be the same for NN to work
     feature_offsets_train = [0] + np.cumsum(dimensions_train).tolist()
- #   feature_offsets_val = [0] + np.cumsum(dimensions_val).tolist()
     feature_offsets_test = [0] + np.cumsum(dimensions_test).tolist()
 
     feature_offsets = feature_offsets_train
@@ -765,14 +768,12 @@ def train(module,batch_size =25, n_epochs = 512, lr_scheduler_type = 'onecycleco
     # Number of all features (summed up) for train/validation/test
     # These need to be the same, otherwise NN won't work
     feature_sum_train = feature_offsets_train[-1]
-  #  feature_sum_val = feature_offsets_val[-1]
     feature_sum_test = feature_offsets_test[-1]
 
     feature_sum = feature_sum_train
 
     # Initialize empty tensors to store the data for train/validation/test
     train_data_pycox = torch.empty(n_train_samples, feature_sum_train).to(torch.float32)
- #   val_data_pycox = torch.empty(n_val_samples, feature_sum_val).to(torch.float32)
     test_data_pycox = torch.empty(n_test_samples, feature_sum_test).to(torch.float32)
 
     # Train
@@ -781,11 +782,6 @@ def train(module,batch_size =25, n_epochs = 512, lr_scheduler_type = 'onecycleco
             train_data_pycox[idx_sample][feature_offsets_train[idx_view]:
                                          feature_offsets_train[idx_view+1]] = sample
 
-    # Validation
-#    for idx_view,view in enumerate(val_data):
-#        for idx_sample, sample in enumerate(view):
-#            val_data_pycox[idx_sample][feature_offsets_val[idx_view]:
-#                                       feature_offsets_val[idx_view+1]] = sample
 
     # Test
     for idx_view,view in enumerate(test_data):
@@ -793,38 +789,23 @@ def train(module,batch_size =25, n_epochs = 512, lr_scheduler_type = 'onecycleco
             test_data_pycox[idx_sample][feature_offsets_test[idx_view]:
                                         feature_offsets_test[idx_view+1]] = sample
 
+    # train/test need to be numpy arrays for baseline hazard
+    train_data_pycox = train_data_pycox.numpy()
+    train_de_pycox = (train_duration.numpy(), train_event.numpy())
+    test_d_pycox = test_data_pycox.numpy()
+    test_duration = test_duration.numpy()
+    test_event = test_event.numpy()
 
-    # Turn validation (duration,event) in correct structure for pycox .fit() call
-    # dde : data duration event ; de: duration event ; d : data
-    train_duration_numpy = train_duration.detach().cpu().numpy()
-    train_event_numpy = train_event.detach().cpu().numpy()
-#    val_duration_numpy = val_duration.detach().cpu().numpy()
-#    val_event_numpy = val_event.detach().cpu().numpy()
-
-
-
-    train_de_pycox = (train_duration, train_event)
- #   val_dde_pycox = val_data_pycox, (val_duration, val_event)
- #   val_de_pycox = (val_duration, val_event)
-    test_d_pycox = test_data_pycox
-
-    train_data_pycox_numpy = train_data_pycox.detach().cpu().numpy()
- #   val_data_pycox_numpy = val_data_pycox.detach().cpu().numpy()
-    train_de_pycox_numpy = (train_duration_numpy, train_event_numpy)#event_temporary_placeholder_train_numpy)
- #   val_de_pycox_numpy = (val_duration_numpy, val_event_numpy)
     train_ded_pycox = tt.tuplefy(train_de_pycox, train_data_pycox) # TODO : Problem hier wegen (221,) und (221,20) als shapes
 
     full_train = tt.tuplefy(train_data_pycox, (train_de_pycox, train_data_pycox))
-  #  full_validation = tt.tuplefy(val_data_pycox, (val_de_pycox, val_data_pycox))
-
-
 
     all_models = nn.ModuleList()
-#    all_models.append(AE(views,dimensions,feature_offsets,[[10,5,4],[10,5,4],[10,5,4],[10,5,4]],
-#                         [['relu'],['relu','relu','relu'],['relu'],['relu','relu','relu'],['relu']], 0.2,
-#                         [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-#                         [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-#                         dropout_bool=False,batch_norm_bool=True,type='none'))
+ #   all_models.append(AE(view_names,dimensions,feature_offsets,[[10,5,4],[10,5,4],[10,5,4]],
+ #                        [['relu'],['relu','relu','relu'],['relu'],['relu']], 0.2,
+ #                        [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+ #                        [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+ #                        dropout_bool=False,batch_norm_bool=False,type='concat'))
 
     all_models.append(AE(view_names,dimensions,feature_offsets,[[10,5,2]],
                             [['relu'],['relu']], 0.5,
@@ -852,7 +833,7 @@ def train(module,batch_size =25, n_epochs = 512, lr_scheduler_type = 'onecycleco
                                        n_hidden_layers_dims= [[8, 4]],
                                        activ_funcs = [['relu'], ['relu']],dropout_prob=0.2,dropout_layers=[['yes','yes']],
                                        batch_norm = [['yes','yes']],
-                                       dropout_bool=True,batch_norm_bool=True,ae_bool=True))
+                                       dropout_bool=False,batch_norm_bool=False,ae_bool=True))
 
   #  all_models.append(NN.NN_changeable(views = views, in_features=[4,4,4,4], n_hidden_layers_dims=[[4,2], [4,2], [4,2], [4,2]],
   #                                     activ_funcs = ['relu'], dropout_prob=0.2, dropout_layers=[['yes','yes'],['yes','yes'],
@@ -879,7 +860,7 @@ def train(module,batch_size =25, n_epochs = 512, lr_scheduler_type = 'onecycleco
 
 
   #  log = model.fit(*full_train,batch_size,n_epochs,verbose=True, val_data=full_validation, callbacks=callbacks)
-    log = model.fit(train_data_pycox,train_ded_pycox,batch_size,n_epochs,verbose=True,
+    log = model.fit(train_data_pycox,train_de_pycox,batch_size,n_epochs,verbose=True,
                     callbacks=callbacks)
 
     # Plot it
@@ -1016,15 +997,6 @@ def train(module,batch_size =25, n_epochs = 512, lr_scheduler_type = 'onecycleco
 
 
     """
-
-if __name__ == '__main__':
-    cancer_data = ReadInData.readcancerdata()
-    multimodule = DataInputNew.SurvMultiOmicsDataModule(cancer_data[0][0],cancer_data[0][1],cancer_data[0][2])
-
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    train(module= multimodule, l2_regularization=True)
-
-
 
 
 

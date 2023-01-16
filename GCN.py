@@ -132,8 +132,14 @@ def normalize_by_column(data):
 
 
 
-def train(module,batch_size =128, n_epochs = 512, lr_scheduler_type = 'onecyclecos', l2_regularization = False,
-          feature_names = None, batch_size_validation=20, cross_validation_bool = False):
+def train(module,
+          device,
+          batch_size =128,
+          n_epochs = 512,
+          l2_regularization = False,
+          val_batch_size=20,
+          number_folds = 5,
+          feature_names = None):
     """
 
     :param module: basically the dataset to be used
@@ -149,7 +155,7 @@ def train(module,batch_size =128, n_epochs = 512, lr_scheduler_type = 'onecyclec
 
 
     # Setup all the data
-    n_train_samples, n_test_samples, n_val_samples, view_names = module.setup()
+    n_train_samples, n_test_samples,view_names = module.setup()
 
 
 
@@ -159,7 +165,6 @@ def train(module,batch_size =128, n_epochs = 512, lr_scheduler_type = 'onecyclec
     # Load Dataloaders
     trainloader = module.train_dataloader(batch_size=n_train_samples) # all training examples
     testloader =module.test_dataloader(batch_size=n_test_samples)
-    valloader = module.validation_dataloader(batch_size=n_val_samples)
 
     # Load data and set device to cuda if possible
 
@@ -172,15 +177,6 @@ def train(module,batch_size =128, n_epochs = 512, lr_scheduler_type = 'onecyclec
 
     print("Train data shape after feature selection {}".format(train_data.shape))
 
-    #Validation
-    for val_data, val_duration, val_event in valloader:
-
-        val_data.to(device=device)
-        val_duration.to(device=device)
-        val_event.to(device=device)
-
-
-    print("Validation data shape after feature selection {}".format(val_data.shape))
 
     #Test
     for test_data, test_duration, test_event in testloader:
@@ -202,179 +198,94 @@ def train(module,batch_size =128, n_epochs = 512, lr_scheduler_type = 'onecyclec
 
 
 
-    if cross_validation_bool == True:
-        # Cross-Validation based on censored & uncensored data
-        censored_index = []
-        uncensored_index = []
-        # We first need to concatenate all the data (train,val,test) together again
-        full_data = torch.cat(tuple([train_data,val_data,test_data]),dim=0)
-        # We do the same for the duration and event values
-        full_duration = torch.cat(tuple([train_duration,val_duration,test_duration]),dim=0)
-        full_event = torch.cat(tuple([train_event,val_event,test_event]),dim=0)
 
-        # k is the number of folds
-        k = 5
+    # Cross-Validation based on censored & uncensored data
+    censored_index = []
+    uncensored_index = []
+    # We first need to concatenate all the data (train,val,test) together again
+    full_data = torch.cat(tuple([train_data,test_data]),dim=0)
+    # We do the same for the duration and event values
+    full_duration = torch.cat(tuple([train_duration,test_duration]),dim=0)
+    full_event = torch.cat(tuple([train_event,test_event]),dim=0)
 
-        splits = KFold(n_splits=k,shuffle=True,random_state=42)
+    # k is the number of folds
+    k = number_folds
 
-
-        for fold, (train_idx,val_idx) in enumerate(splits.split(np.arange(len(full_data)))):
-
-            print('Fold {}'.format(fold + 1))
-
-            train_sampler = SubsetRandomSampler(train_idx) # np.array e.g. [0 2 4 8 18 22 ..]
-            test_sampler = SubsetRandomSampler(val_idx)
+    splits = KFold(n_splits=k,shuffle=True,random_state=42)
 
 
-            # we take a subset of our train samples for the validation set
-            # 20% of train is validation set
-            # We first need to turn the train_sampler into a np.array (else the method won't work)
-            train_sampler_array = np.empty(len(train_sampler))
+    for fold, (train_idx,val_idx) in enumerate(splits.split(np.arange(len(full_data)))):
 
-            for c,idx in enumerate(train_sampler):
-                np.put(train_sampler_array,c,idx)
+        print('Fold {}'.format(fold + 1))
 
-            val_sampler = np.random.choice(train_sampler_array, int(0.2 * len(train_sampler)))
-
-            #change dtype
-            val_sampler = val_sampler.astype('int32')
-            train_sampler_array = train_sampler_array.astype('int32')
-
-            # get indices as list
-            val_sampler_list = val_sampler.tolist()
-            # remove these from train sampler
-            train_sampler_array = np.setdiff1d(train_sampler_array, val_sampler_list)
+        train_sampler = SubsetRandomSampler(train_idx) # np.array e.g. [0 2 4 8 18 22 ..]
+        test_sampler = SubsetRandomSampler(val_idx)
 
 
-            # get training data
+        # we take a subset of our train samples for the validation set
+        # 20% of train is validation set
+        # We first need to turn the train_sampler into a np.array (else the method won't work)
+        train_sampler_array = np.empty(len(train_sampler))
 
-            train_data = []
-            train_duration = []
-            train_event = []
+        for c,idx in enumerate(train_sampler):
+            np.put(train_sampler_array,c,idx)
 
-            for idx in train_sampler_array:
-                train_data.append(full_data[idx])
-                train_duration.append(full_duration[idx])
-                train_event.append(full_event[idx])
+        val_sampler = np.random.choice(train_sampler_array, int(0.2 * len(train_sampler)))
 
-            train_data = torch.stack(tuple(train_data))
-            train_duration = torch.stack(tuple(train_duration))
-            train_event = torch.stack(tuple(train_event))
+        #change dtype
+        val_sampler = val_sampler.astype('int32')
+        train_sampler_array = train_sampler_array.astype('int32')
 
-            # get validation data
-            val_data = []
-            val_duration = []
-            val_event = []
-            for idx in val_sampler:
-                val_data.append(full_data[idx])
-                val_duration.append(full_duration[idx])
-                val_event.append(full_event[idx])
-
-            val_data = torch.stack(tuple(val_data))
-            val_duration = torch.stack(tuple(val_duration))
-            val_event = torch.stack(tuple(val_event))
+        # get indices as list
+        val_sampler_list = val_sampler.tolist()
+        # remove these from train sampler
+        train_sampler_array = np.setdiff1d(train_sampler_array, val_sampler_list)
 
 
-            # get testing data
-            test_data = []
-            test_duration = []
-            test_event = []
-            for idx in test_sampler:
-                test_data.append(full_data[idx])
-                test_duration.append(full_duration[idx])
-                test_event.append(full_event[idx])
+        # get training data
 
-            test_data = torch.stack(tuple(test_data))
-            test_duration = torch.stack(tuple(test_duration))
-            test_event = torch.stack(tuple(test_event))
+        train_data = []
+        train_duration = []
+        train_event = []
 
+        for idx in train_sampler_array:
+            train_data.append(full_data[idx])
+            train_duration.append(full_duration[idx])
+            train_event.append(full_event[idx])
 
-            # Normalize data by rows (genes)
+        train_data = torch.stack(tuple(train_data))
+        train_duration = torch.stack(tuple(train_duration))
+        train_event = torch.stack(tuple(train_event))
 
-            for i in range(num_features):
-                train_data[:,:,i] = normalize(train_data[:,:,i])
-                val_data[:,:,i] = normalize(val_data[:,:,i])
-                test_data[:,:,i] = normalize(test_data[:,:,i])
+        # get validation data
+        val_data = []
+        val_duration = []
+        val_event = []
+        for idx in val_sampler:
+            val_data.append(full_data[idx])
+            val_duration.append(full_duration[idx])
+            val_event.append(full_event[idx])
 
-
-            # reshape structure for use of GCN
-            train_data = train_data.reshape(-1, num_nodes * num_features)
-            val_data = val_data.reshape(-1, num_nodes * num_features)
-            test_data = test_data.reshape(-1, num_nodes * num_features)
-
-
-            callbacks = [tt.callbacks.EarlyStopping(patience=5)]
-
-            val_full = (val_data, (val_duration,val_event))
-            train_de_pycox = (train_duration, train_event)
+        val_data = torch.stack(tuple(val_data))
+        val_duration = torch.stack(tuple(val_duration))
+        val_event = torch.stack(tuple(val_event))
 
 
-            torch.manual_seed(0)
+        # get testing data
+        test_data = []
+        test_duration = []
+        test_event = []
+        for idx in test_sampler:
+            test_data.append(full_data[idx])
+            test_duration.append(full_duration[idx])
+            test_event.append(full_event[idx])
 
-            net = GCN(len(proteins_used), edge_index, in_features=num_features,n_hidden_layer_dims=[1024,512,256],
-                      activ_funcs=['relu','relu','relu']).to(device)
-            if l2_regularization == True:
-                optimizer = Adam(net.parameters(), lr=0.01, weight_decay=0.0001)
-            else:
-                optimizer = Adam(net.parameters(), lr=0.01)
-
-            model = CoxPH(net, optimizer)
-
-            log = model.fit(train_data,train_de_pycox, batch_size, n_epochs, callbacks, verbose=True,
-                            val_data=val_full, val_batch_size= batch_size_validation)
-
-            train = train_data, train_de_pycox
-
-            _ = model.compute_baseline_hazards(*train)
-
-            surv = model.predict_surv_df(test_data)
+        test_data = torch.stack(tuple(test_data))
+        test_duration = torch.stack(tuple(test_duration))
+        test_event = torch.stack(tuple(test_event))
 
 
-            # Plot it
-            surv.iloc[:, :5].plot()
-            plt.ylabel('S(t | x)')
-            _ = plt.xlabel('Time')
-
-            # test_dur and test_ev need to be numpy arrays for EvalSurv()
-            test_duration = test_duration.numpy()
-            test_event = test_event.numpy()
-
-            ev = EvalSurv(surv, test_duration, test_event, censor_surv='km')
-
-
-            # concordance
-            concordance_index = ev.concordance_td()
-
-            #brier score
-            time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
-            _ = ev.brier_score(time_grid).plot
-            brier_score = ev.integrated_brier_score(time_grid)
-
-            #binomial log-likelihood
-            binomial_score = ev.integrated_nbll(time_grid)
-
-            print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
-                                                                                                               brier_score,
-                                                                                                               binomial_score))
-
-
-
-
-
-
-
-
-
-
-
-
-    else:
-        # normalizing data by rows (genes)
-
-        # reshape not necessary as data already implemented in this manner
-        # features_used = features_used.reshape(-1, num_nodes, num_features)
-        # first dimensions (samples) is derived, so that 2/3 dimension we have [...], [...]
-        # where each list has num_features elements and we have num_nodes in total
+        # Normalize data by rows (genes)
 
         for i in range(num_features):
             train_data[:,:,i] = normalize(train_data[:,:,i])
@@ -387,17 +298,17 @@ def train(module,batch_size =128, n_epochs = 512, lr_scheduler_type = 'onecyclec
         val_data = val_data.reshape(-1, num_nodes * num_features)
         test_data = test_data.reshape(-1, num_nodes * num_features)
 
-        callbacks = [tt.callbacks.EarlyStopping(patience=2)]
+
+        callbacks = [tt.callbacks.EarlyStopping(patience=5)]
 
         val_full = (val_data, (val_duration,val_event))
         train_de_pycox = (train_duration, train_event)
 
 
         torch.manual_seed(0)
-        edge_index = torch.LongTensor(edge_index).to(device)
-        net = GCN(len(proteins_used), edge_index, in_features=num_features,n_hidden_layer_dims=[128,64],
-                  activ_funcs=['sigmoid','sigmoid']).to(device)
 
+        net = GCN(len(proteins_used), edge_index, in_features=num_features,n_hidden_layer_dims=[1024,512,256],
+                  activ_funcs=['relu','relu','relu']).to(device)
 
         if l2_regularization == True:
             optimizer = Adam(net.parameters(), lr=0.01, weight_decay=0.0001)
@@ -407,7 +318,7 @@ def train(module,batch_size =128, n_epochs = 512, lr_scheduler_type = 'onecyclec
         model = CoxPH(net, optimizer)
 
         log = model.fit(train_data,train_de_pycox, batch_size, n_epochs, callbacks, verbose=True,
-                        val_data=val_full, val_batch_size= batch_size_validation)
+                        val_data=val_full, val_batch_size= val_batch_size)
 
         train = train_data, train_de_pycox
 
@@ -444,17 +355,6 @@ def train(module,batch_size =128, n_epochs = 512, lr_scheduler_type = 'onecyclec
                                                                                                            binomial_score))
 
 
-
-
-
-if __name__ == '__main__':
-    cancer_data = ReadInData.readcancerdata()
-    multimodule = DataInputNew.SurvMultiOmicsDataModule(cancer_data[0][0],cancer_data[0][1],cancer_data[0][2])
-
-    feature_names = cancer_data[0][3]
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    train(module= multimodule, l2_regularization=True, feature_names=feature_names,batch_size=64,n_epochs=100,
-          batch_size_validation=16,cross_validation_bool=True)
 
 
 

@@ -18,7 +18,7 @@ def readcancerdata(cancer_name):
                     'STAD','TGCT','THCA','THYM','UCEC' ,'UCS', 'UVM']
 
     # Testing purposes :
-    cancer_names = ['STAD']
+    cancer_names = ['SKCM']
 
     # With input variant
     cancer_names = [cancer_name]
@@ -43,11 +43,11 @@ def readcancerdata(cancer_name):
         views = HF.flatten(view_names.values.tolist())
         print("Reading in " + str(_) + " feature names...")
         names = []
-        for view in views:
+        for c2,view in enumerate(views):
             feat_names = pd.read_csv(
                 os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", str(_),
                              str(view) + "FeatureNames.csv"), index_col=0)
-            names.append(HF.flatten(feat_names.values.tolist()))
+            names.append((views[c2],HF.flatten(feat_names.values.tolist())))
 
         cancer_data[c].append(data)
         cancer_data[c].append(HF.flatten(feat_offset.values.tolist()))

@@ -10,7 +10,7 @@ import HelperFunctions as HF
 
 
 
-def readcancerdata():
+def readcancerdata(cancer_name):
     # Load in cancer data, its feature offsets and views used
     # different types # TODO : removed OV
     cancer_names = ['PRAD', 'ACC', 'BLCA', 'BRCA', 'CESC', 'CHOL', 'COAD', 'DLBC', 'ESCA', 'GBM', 'HNSC', 'KICH',
@@ -18,7 +18,10 @@ def readcancerdata():
                     'STAD','TGCT','THCA','THYM','UCEC' ,'UCS', 'UVM']
 
     # Testing purposes :
-    cancer_names = ['LUAD']
+    cancer_names = ['STAD']
+
+    # With input variant
+    cancer_names = [cancer_name]
 
 
     cancer_data = [[] for x in range(len(cancer_names))]

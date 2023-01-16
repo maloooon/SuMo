@@ -1,32 +1,16 @@
 import torch
 import pandas as pd
-import os
-import DataInputNew
 from torch import nn
-from tqdm import tqdm
 import numpy as np
-import pytorch_lightning as pl
-from pytorch_lightning import Trainer
-from pytorch_lightning.core.lightning import LightningModule
-import torch.nn.functional as F
 from pycox import models
 import DataInputNew
 import torchtuples as tt
-from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 from pycox.evaluation import EvalSurv
-from torchvision import models as tmodels
-from torchsummary import summary
 import ReadInData
-import HelperFunctions as HF
-
-
-
-
-
-from pycox.datasets import metabric
-from sklearn.preprocessing import StandardScaler
-from sklearn_pandas import DataFrameMapper
+from torch.optim import Adam
+from sklearn.model_selection import KFold
+from torch.utils.data.sampler import SubsetRandomSampler
 
 #TODO : how to check whether dropout layer, batch norm actually have an impact ? --> run with same data and with dropout_prob = 0
 # TODO : didn't have wanted effect, didn't train at all (stopped at epoch 0)
@@ -263,15 +247,8 @@ class NN_changeable(nn.Module):
 
 
 
-
-
-
-
-
-
-
-
-def train(module,device, batch_size =128, n_epochs = 512, lr_scheduler_type = 'onecyclecos'): # TODO :CHANGE ÜBERALL
+def train(module,device, batch_size =128, n_epochs = 512, lr_scheduler_type = 'onecyclecos', l2_regularization='no',
+          val_batch_size = 16, number_folds = 5): # TODO :CHANGE ÜBERALL
     """
 
     :param module: basically the dataset to be used
@@ -284,17 +261,16 @@ def train(module,device, batch_size =128, n_epochs = 512, lr_scheduler_type = 'o
 
 
     # Setup all the data
-    n_train_samples, n_test_samples, n_val_samples, view_names = module.setup() # TODO : CHANGE ÜBERALL
+    n_train_samples, n_test_samples, view_names = module.setup()
 
 
 
     #Select method for feature selection
-    module.feature_selection(method='variance')
+    module.feature_selection(method='ae')
 
     # Load Dataloaders
-    trainloader = module.train_dataloader(batch_size=n_train_samples) # all training examples
+    trainloader = module.train_dataloader(batch_size=n_train_samples)
     testloader =module.test_dataloader(batch_size=n_test_samples)
-    valloader = module.validation_dataloader(batch_size=n_val_samples)
 
     # Load data and set device to cuda if possible
 
@@ -306,19 +282,9 @@ def train(module,device, batch_size =128, n_epochs = 512, lr_scheduler_type = 'o
         train_duration.to(device=device)
         train_event.to(device=device)
 
-    for c,_ in enumerate(train_data):
-        print("Train data shape after feature selection {}".format(train_data[c].shape))
 
-    #Validation
-    for val_data, val_duration, val_event in valloader:
-        for view in range(len(val_data)):
-            val_data[view] = val_data[view].to(device=device)
+    print("Train data shape after feature selection {}".format(train_data[0].shape))
 
-        val_duration.to(device=device)
-        val_event.to(device=device)
-
-    for c,_ in enumerate(val_data):
-        print("Validation data shape after feature selection {}".format(val_data[c].shape))
 
     #Test
     for test_data, test_duration, test_event in testloader:
@@ -329,47 +295,46 @@ def train(module,device, batch_size =128, n_epochs = 512, lr_scheduler_type = 'o
         test_duration.to(device=device)
         test_event.to(device=device)
 
-    for c,_ in enumerate(test_data):
-        print("Test data shape after feature selection {}".format(test_data[c].shape))
 
-    # test_dur and test_ev need to be numpy arrays for EvalSurv()
-    test_duration = test_duration.numpy()
-    test_event = test_event.numpy()
-    # Input dimensions (features for each view) for NN based on different data (train/validation/test)
+    print("Test data shape after feature selection {}".format(test_data[0].shape))
+
+
+
+
+    # Input dimensions (features for each view) for NN based on different data (train/test)
     # Need to be the same for NN to work
     dimensions_train = [x.size(1) for x in train_data]
-    dimensions_val = [x.size(1) for x in val_data]
     dimensions_test = [x.size(1) for x in test_data]
 
-    assert (dimensions_train == dimensions_val == dimensions_test), 'Feature mismatch between train/val/test'
+    assert (dimensions_train == dimensions_test), 'Feature mismatch between train/test'   # dimensions_val
 
     dimensions = dimensions_train
 
 
     # transforming data input for pycox : all views as one tensor, views accessible via feature offset
 
-    # Get feature offsets for train/validation/test
+    # Get feature offsets for train/test
     # Need to be the same for NN to work
     feature_offsets_train = [0] + np.cumsum(dimensions_train).tolist()
-    feature_offsets_val = [0] + np.cumsum(dimensions_val).tolist()
     feature_offsets_test = [0] + np.cumsum(dimensions_test).tolist()
+
+    assert (feature_offsets_train == feature_offsets_test), 'Feature offset mismatch between train/test'
 
     feature_offsets = feature_offsets_train
 
     # Number of all features (summed up) for train/validation/test
     # These need to be the same, otherwise NN won't work
     feature_sum_train = feature_offsets_train[-1]
-    feature_sum_val = feature_offsets_val[-1]
     feature_sum_test = feature_offsets_test[-1]
 
+    assert (feature_sum_train == feature_sum_test), 'Feature sum mismatch between train/test'
 
 
     feature_sum = feature_sum_train
 
     # Initialize empty tensors to store the data for train/validation/test
-    train_data_pycox = torch.empty(n_train_samples, feature_sum_train).to(torch.float32)
-    val_data_pycox = torch.empty(n_val_samples, feature_sum_val).to(torch.float32)
-    test_data_pycox = torch.empty(n_test_samples, feature_sum_test).to(torch.float32)
+    train_data_pycox = torch.empty(n_train_samples, feature_sum).to(torch.float32)
+    test_data_pycox = torch.empty(n_test_samples, feature_sum).to(torch.float32)
 
 
 
@@ -381,12 +346,6 @@ def train(module,device, batch_size =128, n_epochs = 512, lr_scheduler_type = 'o
             train_data_pycox[idx_sample][feature_offsets_train[idx_view]:
                                          feature_offsets_train[idx_view+1]] = sample
 
-    # Validation
-    for idx_view,view in enumerate(val_data):
-        for idx_sample, sample in enumerate(view):
-            val_data_pycox[idx_sample][feature_offsets_val[idx_view]:
-                                         feature_offsets_val[idx_view+1]] = sample
-
     # Test
     for idx_view,view in enumerate(test_data):
         for idx_sample, sample in enumerate(view):
@@ -394,125 +353,200 @@ def train(module,device, batch_size =128, n_epochs = 512, lr_scheduler_type = 'o
                                          feature_offsets_test[idx_view+1]] = sample
 
 
-    # Turn validation (duration,event) in correct structure for pycox .fit() call
-    # dde : data duration event ; de: duration event ; d : data
-    train_de_pycox = (train_duration, train_event)
-    val_dde_pycox = val_data_pycox, (val_duration, val_event)
-    test_d_pycox = test_data_pycox
-    #test_dde_pycox = torch.cat((test_data_pycox,
-    #                            test_duration.unsqueeze(dim=1),
-    #                            event_temporary_placeholder_test.unsqueeze(dim=1)), dim=1)
 
-    test_d_pycox_df = pd.DataFrame(test_d_pycox.numpy())
+    # Cross Validation:
+    # We first need to concatenate all the data (train,val,test) together again
+    full_data = torch.cat(tuple([train_data_pycox,test_data_pycox]), dim=0)
+    full_duration = torch.cat(tuple([train_duration,test_duration]),dim=0)
+    full_event = torch.cat(tuple([train_event,test_event]),dim=0)
 
+    # k is the number of folds
+    k = number_folds
 
-
-    # Call NN
-    net = NN_changeable(view_names,dimensions,feature_offsets,[[10,5] for i in range(len(view_names))],
-                        [['relu'],['relu'],['relu'],['none']], 0.1,
-                        [['yes','yes'],['yes','yes',],['yes', 'yes'],['yes','yes']],
-                        [['yes','yes'],['yes','yes'],['yes','yes'],['yes','yes']],
-                        dropout_bool=False,batch_norm_bool=False)
-    #TODO : Batch norm problem (see AE)
-
-#    net = NN_changeable(views, dimensions, feature_offsets_train,
-#                        n_hidden_layers_dims = [[10,5]], activ_funcs = [['relu'],['relu']],
-#                        dropout_prob= 0.2,dropout_layers = [['yes' ,'yes']],
-#                        batch_norm = [['yes','yes']], dropout_bool= True, batch_norm_bool= False)
+    splits = KFold(n_splits=k,shuffle=True,random_state=42)
 
 
+    for fold, (train_idx,val_idx) in enumerate(splits.split(np.arange(len(full_data)))):
+        # TODO : assert that we have enough non censored data in each split ?
 
-    # Set parameters for NN
-    optimizer = torch.optim.Adam(net.parameters(), lr=0.001)
-    callbacks = [tt.callbacks.EarlyStopping()]
+        print('Fold {}'.format(fold + 1))
 
-
-    # LR scheduler
-
-    #TODO : working ?
-    if lr_scheduler_type.lower() == 'lambda':
-        lambda1 = lambda epoch: 0.65 ** epoch
-        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer,lr_lambda=lambda1)
+        train_sampler = SubsetRandomSampler(train_idx) # np.array e.g. [0 2 4 8 18 22 ..]
+        test_sampler = SubsetRandomSampler(val_idx)
 
 
+        # we take a subset of our train samples for the validation set
+        # 20% of train is validation set
+        # We first need to turn the train_sampler into a np.array (else the method won't work)
+        train_sampler_array = np.empty(len(train_sampler))
 
-    if lr_scheduler_type.lower() == 'onecyclecos':
-        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.1, steps_per_epoch=10, epochs=10)
+        for c,idx in enumerate(train_sampler):
+            np.put(train_sampler_array,c,idx)
 
+        val_sampler = np.random.choice(train_sampler_array, int(0.2 * len(train_sampler)))
 
+        #change dtype
+        val_sampler = val_sampler.astype('int32')
+        train_sampler_array = train_sampler_array.astype('int32')
 
-    lrs = []
-
-    for i in range(10):
-        optimizer.step()
-        lrs.append(optimizer.param_groups[0]["lr"])
-
-        scheduler.step()
-
-
-
-
-    # Call model
-    model = models.CoxPH(net,optimizer)
-  #  model2 = models.CoxPH(net_test,optimizer)
-
-    # Set learning rate
-  #  model.optimizer.set_lr(0.01)
- #   model2.optimizer.set_lr(0.01)
+        # get indices as list
+        val_sampler_list = val_sampler.tolist()
+        # remove these from train sampler
+        train_sampler_array = np.setdiff1d(train_sampler_array, val_sampler_list)
 
 
+        # get training data
+
+        train_data = []
+        train_duration = []
+        train_event = []
+
+        for idx in train_sampler_array:
+            train_data.append(full_data[idx])
+            train_duration.append(full_duration[idx])
+            train_event.append(full_event[idx])
+
+        train_data = torch.stack(tuple(train_data))
+        train_duration = torch.stack(tuple(train_duration))
+        train_event = torch.stack(tuple(train_event))
+
+        # get validation data
+        val_data = []
+        val_duration = []
+        val_event = []
+        for idx in val_sampler:
+            val_data.append(full_data[idx])
+            val_duration.append(full_duration[idx])
+            val_event.append(full_event[idx])
+
+        val_data = torch.stack(tuple(val_data))
+        val_duration = torch.stack(tuple(val_duration))
+        val_event = torch.stack(tuple(val_event))
 
 
+        # get testing data
+        test_data = []
+        test_duration = []
+        test_event = []
+        for idx in test_sampler:
+            test_data.append(full_data[idx])
+            test_duration.append(full_duration[idx])
+            test_event.append(full_event[idx])
 
-    # Fit model
-    log = model.fit(train_data_pycox,train_de_pycox,batch_size,n_epochs,callbacks = callbacks,
-                    verbose=True,val_data=val_dde_pycox, val_batch_size=10)
-
- #   log2 = model2.fit(train_data_pycox,train_de_pycox,batch_size,n_epochs,callbacks,
- #                     verbose=True,val_data=val_dde_pycox, val_batch_size=5)
-
-
-    # Plot it
-    _ = log.plot()
-
-    # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
-    _ = model.compute_baseline_hazards()
-
-    # Predict based on test data
-    surv = model.predict_surv_df(test_d_pycox)
-
-    # Plot it
-    surv.iloc[:, :5].plot()
-    plt.ylabel('S(t | x)')
-    _ = plt.xlabel('Time')
+        test_data = torch.stack(tuple(test_data))
+        test_duration = torch.stack(tuple(test_duration))
+        test_event = torch.stack(tuple(test_event))
 
 
-    # Evaluate with concordance, brier score and binomial log-likelihood
-    ev = EvalSurv(surv, test_duration, test_event, censor_surv='km') # censor_surv : Kaplan-Meier
-
-    # concordance
-    concordance_index = ev.concordance_td()
-
-    #brier score
-    time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
-    _ = ev.brier_score(time_grid).plot
-    brier_score = ev.integrated_brier_score(time_grid)
-
-    #binomial log-likelihood
-    binomial_score = ev.integrated_nbll(time_grid)
-
-    print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
-                                                                                                       brier_score,
-                                                                                                       binomial_score))
+        val_full = (val_data, (val_duration,val_event))
+        train_surv = (train_duration, train_event)
+        # test_dur and test_ev need to be numpy arrays for EvalSurv()
+        test_duration = test_duration.numpy()
+        test_event = test_event.numpy()
 
 
 
 
+        torch.manual_seed(0)
+        # Call NN
+        net = NN_changeable(view_names,dimensions,feature_offsets,[[64,32,16] for i in range(len(view_names))],
+                            [['relu'],['relu'],['relu'],['none']], 0.1,
+                            [['yes','yes','yes'],['yes','yes','yes'],['yes', 'yes','yes'],['no','no','no']],
+                            [['yes','yes'],['yes','yes'],['yes','yes'],['yes','yes']],
+                            dropout_bool=False,batch_norm_bool=False)
 
-if __name__ == '__main__':
-    cancer_data = ReadInData.readcancerdata()
-    multimodule = DataInputNew.SurvMultiOmicsDataModule(cancer_data[0][0],cancer_data[0][1],cancer_data[0][2],onezeronorm_bool=False)
-   # views = cancer_data[0][2] # TODO: CHANGE ÜBERALL
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    train(module= multimodule, device=device, batch_size=32, n_epochs=100) # TODO : CHANGE ÜBERALL (views raus)
+        # Dropout makes performance worse !
+
+
+        #TODO : Batch norm problem (see AE)
+
+
+        # Set parameters for NN
+        # set optimizer
+        if l2_regularization == True:
+            optimizer = Adam(net.parameters(), lr=0.01, weight_decay=0.0001)
+        else:
+            optimizer = Adam(net.parameters(), lr=0.01)
+
+        callbacks = [tt.callbacks.EarlyStopping(patience=10)]
+
+
+
+
+        # LR scheduler
+        #TODO : working ?
+        if lr_scheduler_type.lower() == 'lambda':
+            lambda1 = lambda epoch: 0.65 ** epoch
+            scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer,lr_lambda=lambda1)
+
+
+
+        if lr_scheduler_type.lower() == 'onecyclecos':
+            scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.1, steps_per_epoch=10, epochs=10)
+
+        lrs = []
+
+        for i in range(10):
+            optimizer.step()
+            lrs.append(optimizer.param_groups[0]["lr"])
+
+            scheduler.step()
+
+
+
+
+
+
+        # Call model
+        model = models.CoxPH(net,optimizer)
+
+
+        # Fit model
+        log = model.fit(train_data,
+                        train_surv,
+                        batch_size,
+                        n_epochs,
+                        callbacks = callbacks,
+                        val_data=val_full,
+                        val_batch_size= val_batch_size,
+                        verbose=True)
+
+
+
+        # Plot it
+        _ = log.plot()
+
+        # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
+        _ = model.compute_baseline_hazards()
+
+
+        # Predict based on test data
+        surv = model.predict_surv_df(test_data)
+
+        # Plot it
+        surv.iloc[:, :5].plot()
+        plt.ylabel('S(t | x)')
+        _ = plt.xlabel('Time')
+
+
+
+
+        # Evaluate with concordance, brier score and binomial log-likelihood
+        ev = EvalSurv(surv, test_duration, test_event, censor_surv='km') # censor_surv : Kaplan-Meier
+
+        # concordance
+        concordance_index = ev.concordance_td()
+
+        #brier score
+        time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
+        _ = ev.brier_score(time_grid).plot
+        brier_score = ev.integrated_brier_score(time_grid)
+
+        #binomial log-likelihood
+        binomial_score = ev.integrated_nbll(time_grid)
+
+        print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
+                                                                                                           brier_score,
+                                                                                                           binomial_score))
+
 

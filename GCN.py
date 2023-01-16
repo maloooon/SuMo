@@ -21,6 +21,7 @@ from torch_geometric.nn import global_max_pool as gmp
 import math
 import matplotlib.pyplot as plt
 from sklearn.model_selection import KFold
+from torch.optim import Adam
 
 
 
@@ -131,7 +132,7 @@ def normalize_by_column(data):
 
 
 
-def train(module,views, batch_size =128, n_epochs = 512, lr_scheduler_type = 'onecyclecos', l2_regularization = False,
+def train(module,batch_size =128, n_epochs = 512, lr_scheduler_type = 'onecyclecos', l2_regularization = False,
           feature_names = None, batch_size_validation=20, cross_validation_bool = False):
     """
 
@@ -148,7 +149,7 @@ def train(module,views, batch_size =128, n_epochs = 512, lr_scheduler_type = 'on
 
 
     # Setup all the data
-    n_train_samples, n_test_samples, n_val_samples = module.setup()
+    n_train_samples, n_test_samples, n_val_samples, view_names = module.setup()
 
 
 
@@ -312,8 +313,12 @@ def train(module,views, batch_size =128, n_epochs = 512, lr_scheduler_type = 'on
 
             net = GCN(len(proteins_used), edge_index, in_features=num_features,n_hidden_layer_dims=[1024,512,256],
                       activ_funcs=['relu','relu','relu']).to(device)
+            if l2_regularization == True:
+                optimizer = Adam(net.parameters(), lr=0.01, weight_decay=0.0001)
+            else:
+                optimizer = Adam(net.parameters(), lr=0.01)
 
-            model = CoxPH(net, tt.optim.Adam(0.001))
+            model = CoxPH(net, optimizer)
 
             log = model.fit(train_data,train_de_pycox, batch_size, n_epochs, callbacks, verbose=True,
                             val_data=val_full, val_batch_size= batch_size_validation)
@@ -393,7 +398,13 @@ def train(module,views, batch_size =128, n_epochs = 512, lr_scheduler_type = 'on
         net = GCN(len(proteins_used), edge_index, in_features=num_features,n_hidden_layer_dims=[128,64],
                   activ_funcs=['sigmoid','sigmoid']).to(device)
 
-        model = CoxPH(net, tt.optim.Adam(0.0001))
+
+        if l2_regularization == True:
+            optimizer = Adam(net.parameters(), lr=0.01, weight_decay=0.0001)
+        else:
+            optimizer = Adam(net.parameters(), lr=0.01)
+
+        model = CoxPH(net, optimizer)
 
         log = model.fit(train_data,train_de_pycox, batch_size, n_epochs, callbacks, verbose=True,
                         val_data=val_full, val_batch_size= batch_size_validation)
@@ -439,10 +450,10 @@ def train(module,views, batch_size =128, n_epochs = 512, lr_scheduler_type = 'on
 if __name__ == '__main__':
     cancer_data = ReadInData.readcancerdata()
     multimodule = DataInputNew.SurvMultiOmicsDataModule(cancer_data[0][0],cancer_data[0][1],cancer_data[0][2])
-    views = cancer_data[0][2]
+
     feature_names = cancer_data[0][3]
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    train(module= multimodule,views= views, l2_regularization=True, feature_names=feature_names,batch_size=64,n_epochs=100,
+    train(module= multimodule, l2_regularization=True, feature_names=feature_names,batch_size=64,n_epochs=100,
           batch_size_validation=16,cross_validation_bool=True)
 
 

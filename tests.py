@@ -3,15 +3,9 @@ import torch
 
 
 if __name__ == '__main__':
-    x = torch.tensor(0.425)
+    x = torch.randn(4,2)
+    b = torch.randn(4,2)
 
-    y = torch.tensor(0.150)
+    c = [x,b]
 
-
-    z = [x,y]
-
-    a = torch.stack(tuple(z))
-
-
-
-
+    print(torch.cat(tuple(c), dim=0))

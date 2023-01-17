@@ -537,28 +537,3 @@ def train(module,
                                                                                                            binomial_score))
 
 
-
-
-
-
-
-
-
-
-        # LR scheduler
-#      if lr_scheduler_type.lower() == 'lambda':
-#          lambda1 = lambda epoch: 0.65 ** epoch
-#          scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer,lr_lambda=lambda1)
-
-
-
-#      if lr_scheduler_type.lower() == 'onecyclecos':
-#          scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.1, steps_per_epoch=10, epochs=10)
-
-#      lrs = []
-
-#      for i in range(10):
-#          optimizer.step()
-#          lrs.append(optimizer.param_groups[0]["lr"])
-
-#          scheduler.step()

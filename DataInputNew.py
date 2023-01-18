@@ -159,7 +159,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
     """Input is the whole dataframe : We merge all data types together, with the feature offsets we can access
        certain data types ; dataframe also contains duration and event !"""
     def __init__(
-            self, df, feature_offsets, view_names, n_durations = 10, onezeronorm_bool = False):
+            self, df, feature_offsets, view_names, n_durations = 10, onezeronorm_bool = False, cancer_name=None):
         super().__init__()
         self.df = df
         self.feature_offsets = feature_offsets # cumulative sum of features in list of features
@@ -167,6 +167,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         self.view_names = view_names
         self.n_views = len(view_names)
         self.onezeronorm_bool = onezeronorm_bool
+        self.cancer_name = cancer_name
 
     def setup(
             self,
@@ -305,7 +306,10 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
 
-    def feature_selection(self, method = None, feature_names = None): # feature_names needed for PPI network
+    def feature_selection(self, method = None,
+                          feature_names = None, # for PPI network
+                          components = None, # for PCA
+                          thresholds = None): # for Variance
 
         if method.lower() == 'eigengenes':
 
@@ -317,14 +321,16 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                                                                 view_name=self.view_names[view],
                                                                 duration=self.duration_train,
                                                                 event=self.event_train,
-                                                                stage= 'train')
+                                                                stage= 'train',
+                                                                cancer_name= self.cancer_name)
 
                 eg_view_test = FeatureSelection.F_eigengene_matrices(train=self.x_test[view],
                                                                      mask=self.x_test_mask[view],
                                                                      view_name=self.view_names[view],
                                                                      duration=self.duration_test,
                                                                      event=self.event_test,
-                                                                     stage='test')
+                                                                     stage='test',
+                                                                     cancer_name= self.cancer_name)
 
                 eg_view.preprocess()
                 eg_view_test.preprocess()
@@ -365,6 +371,20 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                        eigengene_matrices_tensors[c].size(1)))
 
 
+            # Train and test feature sizes need to be the same for each view separately for neural network
+            for c in range(self.n_views):
+                if eigengene_matrices_tensors[c].size(1) != eigengene_matrices_tensors_test[c].size(1):
+                    minimum = min(eigengene_matrices_tensors[c].size(1), eigengene_matrices_tensors_test[c].size(1))
+
+                    # change size of test set
+                    if minimum == eigengene_matrices_tensors[c].size(1):
+                        eigengene_matrices_tensors_test[c] = eigengene_matrices_tensors_test[c][:,0:minimum]
+                    # change size of train set
+                    else:
+                        eigengene_matrices_tensors[c] = eigengene_matrices_tensors[c][:,0:minimum]
+
+
+
             self.train_set = MultiOmicsDataset(eigengene_matrices_tensors,
                                                self.duration_train,
                                                self.event_train,
@@ -387,12 +407,12 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
           #  variance = [0.8,0.8,0.8,0.8] # TODO : Grid search
             # We need to choose a steady number of components for the NN later on, because otherwise we have
             # different numbers for train/val/test, which won't work with PyCox implementation
-            components = 25 # TODO: diff cancer types will need different amount of components (not every type can generate e.g. 50 pc's
+          #  components = [100,100,25,25] # TODO: diff cancer types will need different amount of components (not every type can generate e.g. 50 pc's
 
 
             for view in range(self.n_views):
-                view_train_PCA = FeatureSelection.F_PCA(self.x_train[view], components=components)
-                view_test_PCA = FeatureSelection.F_PCA(self.x_test[view], components=components)
+                view_train_PCA = FeatureSelection.F_PCA(self.x_train[view], components=components[view])
+                view_test_PCA = FeatureSelection.F_PCA(self.x_test[view], components=components[view])
              #   view_val_PCA = FeatureSelection.F_PCA(self.x_val[view], components=components)
                 pc_train_view = view_train_PCA.apply_pca()
                 pc_test_view = view_test_PCA.apply_pca()
@@ -400,6 +420,24 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                 PCA_train_tensors.append(torch.tensor(pc_train_view))
                 PCA_test_tensors.append(torch.tensor(pc_test_view))
            #     PCA_validation_tensors.append(torch.tensor(pc_val_view))
+
+
+
+            # Train and test feature sizes need to be the same for each view separately for neural network
+
+            # For PCA, we have components as an input for both train/test sets simultaneously, thus this
+            # isn't actually needed.
+            for c in range(self.n_views):
+                if PCA_train_tensors[c].size(1) != PCA_test_tensors[c].size(1):
+                    minimum = min(PCA_train_tensors[c].size(1), PCA_test_tensors[c].size(1))
+
+                    # change size of test set
+                    if minimum == PCA_train_tensors[c].size(1):
+                        PCA_test_tensors[c] = PCA_test_tensors[c][:,0:minimum]
+                    # change size of train set
+                    else:
+                        PCA_train_tensors[c] = PCA_train_tensors[c][:,0:minimum]
+
 
 
 
@@ -415,6 +453,10 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                                               type = 'processed')
 
 
+
+
+
+
         #    self.val_set = MultiOmicsDataset(PCA_validation_tensors,
         #                                     self.duration_val,
         #                                     self.event_val,
@@ -428,7 +470,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             variance_test_tensors = []
       #      variance_val_tensors = []
 
-            thresholds = [0.8,0.8,0.8,0] # TODO : Grid Search
+         #   thresholds = [0.8,0.8,0.8,0] # TODO : Grid Search
 
             for view in range(self.n_views):
 
@@ -442,27 +484,23 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
          #       variance_val_tensors.append(torch.tensor(data_val_variance))
                 variance_test_tensors.append(torch.tensor(data_test_variance))
 
-            # We need to set the amount of features for each view across train/val/test sets to the same value
-            # for the neural nets
-            minimum = 10000000
-            for c in range(len(self.view_names)):
+            for c in range(self.n_views):
+                if variance_train_tensors[c].size(1) != variance_test_tensors[c].size(1):
+                    minimum = min(variance_train_tensors[c].size(1), variance_test_tensors[c].size(1))
 
-                temp = min([variance_train_tensors[c].size(1), variance_test_tensors[c].size(1)])  # , variance_val_tensors[c].size(1)
-                if temp < minimum:
-                    minimum = temp
-
-            for c in range(len(self.view_names)):
-                variance_train_tensors[c] = variance_train_tensors[c][:,0:minimum]
-           #     variance_val_tensors[c] = variance_val_tensors[c][:,0:minimum]
-                variance_test_tensors[c] = variance_test_tensors[c][:,0:minimum]
+                    # change size of test set
+                    if minimum == variance_train_tensors[c].size(1):
+                        variance_test_tensors[c] = variance_test_tensors[c][:,0:minimum]
+                    # change size of train set
+                    else:
+                        variance_train_tensors[c] = variance_train_tensors[c][:,0:minimum]
 
 
 
-
-            for c,view in enumerate(self.view_names):
-          #      print("Reduction {} data with variance :".format(view), 1 - (len(variance_selected_features[c]) / len(DataInputNew.features[c])))
-                print("{} variance feature selection : {} of size : {} (samples, latent features)".format(view, variance_train_tensors[c],
-                                                                                                          variance_train_tensors[c].shape))
+  #          for c,view in enumerate(self.view_names):
+  #              print("Reduction {} data with variance :".format(view), 1 - (len(variance_selected_features[c]) / len(DataInputNew.features[c])))
+#                print("{} variance feature selection : {} of size : {} (samples, latent features)".format(view, variance_train_tensors[c],
+#                                                                                                          variance_train_tensors[c].shape))
 
 
 

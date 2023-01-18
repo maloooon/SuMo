@@ -12,7 +12,7 @@ import HelperFunctions as HF
 
 def readcancerdata(cancer_name):
     # Load in cancer data, its feature offsets and views used
-    # different types # TODO : removed OV
+    # different types
     cancer_names = ['PRAD', 'ACC', 'BLCA', 'BRCA', 'CESC', 'CHOL', 'COAD', 'DLBC', 'ESCA', 'GBM', 'HNSC', 'KICH',
                     'KIRC','KIRP','LAML','LGG','LIHC','LUAD','LUSC','MESO','PAAD','PCPG','READ','SARC','SKCM',
                     'STAD','TGCT','THCA','THYM','UCEC' ,'UCS', 'UVM']
@@ -53,6 +53,7 @@ def readcancerdata(cancer_name):
         cancer_data[c].append(HF.flatten(feat_offset.values.tolist()))
         cancer_data[c].append(views)
         cancer_data[c].append(names)
+        cancer_data[c].append(cancer_names)
 
 
     return cancer_data

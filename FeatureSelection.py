@@ -322,14 +322,14 @@ class F_eigengene_matrices():
        https://github.com/huangzhii/lmQCM
     """
 
-    def __init__(self,train,mask,view_name,duration,event,stage = 'train'):
+    def __init__(self,train,mask,view_name,duration,event,stage = 'train', cancer_name = None):
         self.train = train
         self.stage = stage # test or train stage
         self.mask = mask
         self.view_name = view_name
         self.duration = duration
         self.event = event
-
+        self.cancer_name = cancer_name
 
     def preprocess(self):
         """For the eigengene matrices computation, we need to remove rows (samples) which had all NaN values
@@ -376,9 +376,9 @@ class F_eigengene_matrices():
         print("Index dropped : ", to_drop_index)
 
         if self.stage == 'train':
-            train_df.to_csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/{}_for_r.csv".format(self.view_name))
+            train_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/{}/{}_for_r.csv".format(self.cancer_name,self.view_name))
         else: # self.stage == 'test'
-            train_df.to_csv("/Users/marlon/DataspellProjects/MuVAEProject/MuVAE/TCGAData/{}_test_for_r.csv".format(self.view_name))
+            train_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/{}/{}_test_for_r.csv".format(self.cancer_name,self.view_name))
 
 
         # return these so we can add them to according samples ; save dropped columns
@@ -390,10 +390,13 @@ class F_eigengene_matrices():
         need to set rights first so Python can read it : chmod a+rwx 'PATHTOFILE'
         """
 
-        path = r"/Users/marlon/DataSpellProjectsForSAMO/SAMO/eigengene_matrices.R"
+        path = ["Rscript /Users/marlon/DataSpellProjectsForSAMO/SAMO/eigengene_matrices.R"]
 
+        rscript = ["/usr/local/bin/Rscript"]
 
-        subprocess.call("Rscript /Users/marlon/DataSpellProjectsForSAMO/SAMO/eigengene_matrices.R", shell=True)
+        commands = path + rscript
+        cancer_R = [self.cancer_name]
+        subprocess.call(commands + cancer_R, shell=True)
 
 
 
@@ -407,10 +410,13 @@ class F_eigengene_matrices():
     #            time.sleep(1)
 
 
-            eigengene_matrix = pd.read_csv(os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
-                                                         "{}_eigengene_matrix.csv".format(view)), index_col=0)
-            eigengene_test_matrix = pd.read_csv(os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
-                                                             "{}_test_eigengene_matrix.csv".format(view)), index_col=0)
+            eigengene_matrix = pd.read_csv(os.path.join("/Users", "marlon", "Desktop", "Project","TCGAData", "{}/"
+                                                         "{}_eigengene_matrix.csv".format(self.cancer_name,view)),
+                                           index_col=0)
+    # /Users/marlon/Desktop/Project/TCGAData/READ/microRNA_eigengene_matrix.csv
+            eigengene_test_matrix = pd.read_csv(os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", "{}/"
+                                                             "{}_test_eigengene_matrix.csv".format(self.cancer_name,view)),
+                                                index_col=0)
 
             # reset index bc R saves starting at index 1
             eigengene_matrix.reset_index()
@@ -430,6 +436,9 @@ class F_AE(nn.Module):
 # TODO : Modell konvergiert ?
 # TODO : test : variance-explained : wv varianz explained die approximation (encoder_output_layer) vs original daten
 # TODO : preprocessing AE centering & standardizing
+
+
+#TODO : AE implementation ersetzen mit der aus AE Modul (nur einfache Variante, aber einstellbar wv. Layer etc...)
 # normalize ? was genau gemeint ?
     def __init__(self, train, **kwargs):
         super().__init__()

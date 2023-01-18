@@ -5,42 +5,62 @@ import ReadInData
 import DataInputNew
 import torch
 
-# GOOD RESULTS : Feature Selection AE, First AE cross, second AE concat
+
 
 if __name__ == '__main__':
-    cancer_data = ReadInData.readcancerdata('LUAD')
+    cancer_data = ReadInData.readcancerdata('PRAD')
     data = cancer_data[0][0]
     feature_offsets = cancer_data[0][1]
     view_names = cancer_data[0][2]
     feature_names = cancer_data[0][3]
-    multimodule = DataInputNew.SurvMultiOmicsDataModule(data, feature_offsets, view_names,onezeronorm_bool=False)
+    cancer_name = cancer_data[0][4][0]
+
+    # needed for R, cant read in cancer name directly for some weird reason...
+    with open('/Users/marlon/Desktop/Project/TCGAData/currentcancer.txt', 'w') as f:
+        f.write(cancer_name)
+
+
+    multimodule = DataInputNew.SurvMultiOmicsDataModule(data, feature_offsets, view_names,onezeronorm_bool=False, cancer_name= cancer_name)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-    NN.train(module= multimodule,
-          device=device,
-          batch_size=256,
-          n_epochs=100,
-          l2_regularization=False,
-          val_batch_size=64,
-          number_folds= 3)
+ #   NN.train(module= multimodule,
+ #         device=device,
+ #         feature_select_method= 'pca',
+ #         components = [15,15,15,15],
+ #         thresholds= [0.8],
+ #         feature_names= None,
+ #         batch_size=32,
+ #         n_epochs=100,
+ #         l2_regularization=False,
+ #         val_batch_size=16,
+ #         number_folds= 3,
+ #         dropout=False,
+ #         dropout_rate=0.1,
+ #         activation_functions_per_view = [['relu'],['none']], #doesnt work here, needs to be in net call itself to work ?
+ #         dropout_per_view = [['yes','no']])
 
 
-    GCN.train(module= multimodule,
-              device=device,
-              batch_size=256,
-              n_epochs=100,
-              l2_regularization=False,
-              val_batch_size=64,
-              number_folds=3,
-              feature_names=feature_names)
+#    GCN.train(module= multimodule,
+#              device=device,
+#              batch_size=256,
+#              n_epochs=100,
+#              l2_regularization=False,
+#              val_batch_size=64,
+#              number_folds=3,
+#              feature_names=feature_names)
 
 
     AE.train(module=multimodule,
              device=device,
+             feature_select_method= 'pca',
+             components = [15,15,5,5],
+             thresholds= [0.8],
+             feature_names= None,
              batch_size=256,
              n_epochs=100,
              l2_regularization=False,
              val_batch_size=64,
              number_folds=3)
+
 

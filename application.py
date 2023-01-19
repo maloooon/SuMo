@@ -8,7 +8,7 @@ import torch
 
 
 if __name__ == '__main__':
-    cancer_data = ReadInData.readcancerdata('PRAD')
+    cancer_data = ReadInData.readcancerdata('LUAD')
     data = cancer_data[0][0]
     feature_offsets = cancer_data[0][1]
     view_names = cancer_data[0][2]
@@ -28,18 +28,19 @@ if __name__ == '__main__':
     NN.train(module= multimodule,
           device=device,
           feature_select_method= 'pca',
-          components = [15,15,15,15],
-          thresholds= [0.8],
+          components = [15,15,5],
+          thresholds= [0.9,0.9,0.9],
           feature_names= None,
-          batch_size=32,
+          batch_size=128,
           n_epochs=100,
           l2_regularization=False,
-          val_batch_size=16,
+          val_batch_size=32,
           number_folds= 3,
           dropout=False,
           dropout_rate=0.1,
           activation_functions_per_view = [['relu'],['none']], #doesnt work here, needs to be in net call itself to work ?
-          dropout_per_view = [['yes','no']])
+          dropout_per_view = [['yes','no']],
+          select_setting= 'split')
 
 
     print("######################## FULLY CONNECTED NEURAL NET FINISHED ####################################")
@@ -63,17 +64,17 @@ if __name__ == '__main__':
     print("######################## RUNNING AUTOENCODER ####################################")
 
 
-    AE.train(module=multimodule,
-             device=device,
-             feature_select_method= 'pca',
-             components = [15,15,5,5],
-             thresholds= [0.8],
-             feature_names= None,
-             batch_size=256,
-             n_epochs=100,
-             l2_regularization=False,
-             val_batch_size=64,
-             number_folds=3)
+ #   AE.train(module=multimodule,
+ #            device=device,
+ #            feature_select_method= 'pca',
+ #            components = [15,15,5],
+ #            thresholds= [0.8,0.8,0.8,0.8],
+ #            feature_names= None,
+ #            batch_size=128,
+ #            n_epochs=100,
+ #            l2_regularization=False,
+ #            val_batch_size=32,
+ #            number_folds=3)
 
 
 

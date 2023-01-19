@@ -28,27 +28,32 @@ class F_PCA():
     input : List[torch.Tensor]
     components : int
 
-    def __init__(self, train, components = 80, keep_variance = 0.3):
+    def __init__(self, data, components = 10):
         """
-
-        :param train:
+        :param data: dataset
         :param components: choose number of components one wants to use
-        :param keep_variance: choose minimal number of PC components such that x % variance is retained
         """
         self.components = components
-        self.train = train #training input
-        self.keep_variance = keep_variance
-
+        self.data = data
 
     def apply_pca(self):
-        self.pca = PCA(n_components= self.components)
+        pca = PCA(n_components= self.components)
+
+        return pca
 
 
-        #As we already standardized & transformed the data with StandardScaler(), we can apply PCA directly
-        self.pca.fit(self.train)
-        pca_train_data = self.pca.transform(self.train)
+    def fit_transform_pca(self,pca):
+        """ Fit and transform our training data"""
+        train_data = pca.fit_transform(self.data)
 
-        return pca_train_data
+        return train_data
+
+
+    def transform_pca(self,pca):
+        """Just transform the test data based on learnt train representation"""
+        test_data = pca.transform(self.data)
+
+        return test_data
 
 
 

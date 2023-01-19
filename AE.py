@@ -51,7 +51,8 @@ class AE_Hierarichal(nn.Module):
             else:
                 integrated, final_out_2, input_data_2 = self.ae_2(element_wise_avg)
                 hazard = self.nn(integrated)
-                return final_out_1, final_out_2, final_out_1_cross, hazard, element_wise_avg, input_data_1
+                return final_out_1, final_out_2, final_out_1_cross, hazard, input_data_2, input_data_1
+
         else:
             view_data, final_out_1, input_data_1 = self.ae_1(*x)
             if self.types[1] == 'cross':
@@ -61,19 +62,25 @@ class AE_Hierarichal(nn.Module):
                                     "works if we set the type of the first AE to none")
 
                 else:
-                    integrated, final_out_2, final_out_2_cross, input_data_2 = self.ae_2(*view_data)
+                    integrated, final_out_2, final_out_2_cross, input_data_2 = self.ae_2(*tuple(view_data))
                     hazard = self.nn(integrated)
-                    return final_out_1, final_out_2, final_out_2_cross, hazard, view_data, input_data_1
+                    return final_out_1, final_out_2, final_out_2_cross, hazard, input_data_2, input_data_1
+
 
             else:
                 if self.types[0] != 'none':
                     integrated, final_out_2, input_data_2 = self.ae_2(view_data)
                     hazard = self.nn(integrated)
-                    return final_out_1, final_out_2, hazard, tuple(view_data), input_data_1
+
+
+                    return final_out_1, final_out_2, hazard, input_data_2, input_data_1
+
                 else:
                     integrated, final_out_2, input_data_2 = self.ae_2(*tuple(view_data))
                     hazard = self.nn(integrated)
-                    return final_out_1, final_out_2, hazard, tuple(view_data), input_data_1
+
+
+                    return final_out_1, final_out_2, hazard, input_data_2 , input_data_1
 
 
 
@@ -108,7 +115,7 @@ class AE_Hierarichal(nn.Module):
                     integrated, final_out_2, input_data_2 = self.ae_2(view_data)
                     hazard = self.nn(integrated)
                 else:
-                    integrated, final_out_2, input_data_2 = self.ae_2(*view_data) # ?
+                    integrated, final_out_2, input_data_2 = self.ae_2(*tuple(view_data)) # ?
                     hazard = self.nn(integrated)
 
 
@@ -680,30 +687,62 @@ class LossHierarichcalAESingleCross(nn.Module):
         :return:
         """
         loss_surv = self.loss_surv(hazard, duration, event)
+        views_1 = len(final_out_1)
+        loss_ae_1_full = 0
+
         if self.cross_position == 1:
-            loss_ae_1 = self.loss_ae(final_out_1, input_data_1) + self.loss_ae(final_out_cross, input_data_1)
+            for i in range(views_1):
+                loss_ae_1 = self.loss_ae(final_out_1[i],input_data_1[i])
+                loss_ae_cross_1 = self.loss_ae(final_out_cross[i], input_data_1[i])
+                loss_ae_1_full += (loss_ae_1)
+                loss_ae_1_full += (loss_ae_cross_1)
+
         else:
-            loss_ae_1 = self.loss_ae(final_out_1, input_data_1)
+            for i in range(views_1):
+                loss_ae_1 = self.loss_ae(final_out_1[i],input_data_1[i])
+                loss_ae_1_full += (loss_ae_1)
+
+
+     #   loss_ae_1_full = sum(loss_ae_1_full)
 
         # check if we have list of tensors for each view or tensor as output of first AE
         # as final_out_2 has structure of just one tensor, we
         # need to change structure accordingly
-        if type(element_wise_avg) is list:
-            view_data = torch.cat(tuple(element_wise_avg), dim=1)
-        else:
-            view_data = element_wise_avg
-        if self.decoding_bool == True:
-            if self.cross_position == 2:
-                loss_ae_2 = self.loss_ae(final_out_2, view_data) + self.loss_ae(final_out_cross, view_data)
-            else:
-                loss_ae_2 = self.loss_ae(final_out_2, view_data)
 
-            return self.alpha[0] * loss_surv + self.alpha[1] * loss_ae_1 + self.alpha[2] * loss_ae_2
+
+      #  if type(element_wise_avg) is list:
+      #      view_data = torch.cat(tuple(element_wise_avg), dim=1)
+      #  else:
+      #      view_data = element_wise_avg
+        view_data = element_wise_avg
+
+
+
+        if self.decoding_bool == True:
+
+
+
+            if self.cross_position == 2:
+                # Check not needed, because cross on second AE will only work if first AE was of type none and thus
+                # data still has different view structure
+                loss_ae_2_full = 0
+                for i in range(len(view_data)):
+                    loss_ae_2 = self.loss_ae(final_out_2[i], view_data[i])
+                    loss_ae_cross_2 = self.loss_ae(final_out_cross[i], view_data[i])
+                    loss_ae_2_full += (loss_ae_2)
+                    loss_ae_2_full += (loss_ae_cross_2)
+              #  loss_ae_2_full = sum(loss_ae_2_full)
+            else:
+                # Here we also need no check because if we didnt have a cross in the second AE, we surely had one
+                # in the first, thus our data is not of multiple view structure anymore
+                loss_ae_2_full = self.loss_ae(final_out_2[0], view_data[0])
+
+            return self.alpha[0] * loss_surv + self.alpha[1] * loss_ae_1_full + self.alpha[2] * loss_ae_2_full
         else:
             if len(self.alpha) != 2:
                 raise Exception("Since the second AE has no decoder, alpha only contains 2 elements, not 3!")
             else:
-                return self.alpha[0] * loss_surv + self.alpha[1] * loss_ae_1
+                return self.alpha[0] * loss_surv + self.alpha[1] * loss_ae_1_full
 
 
 class LossHierarichcalAE(nn.Module):
@@ -732,7 +771,8 @@ class LossHierarichcalAE(nn.Module):
         :return:
         """
         loss_surv = self.loss_surv(hazard, duration, event)
-
+        # final_out_1 will always have multiple view structure as it is the decoder of the first AE, which takes
+        # multiple views as input // TODO : check for one view ob richtig übergeben wird oder len(...) dann falsch liest
         views_1 = len(final_out_1)
         loss_ae_1_full = 0
         # AE loss for each view
@@ -747,10 +787,17 @@ class LossHierarichcalAE(nn.Module):
        # view_data = torch.cat(tuple(view_data), dim=1)
         if self.decoding_bool == True:
             loss_ae_2_full = 0
-            views_2 = len(view_data)
-            for i in range(views_2):
-                loss_ae_2 = self.loss_ae(final_out_2[i], view_data[i])
-                loss_ae_2_full += loss_ae_2
+            # Second AE might not have multiple views as input, so we need to check that first
+            # Diff view structure
+            if len(view_data) > 1:
+                views_2 = len(view_data)
+                for i in range(views_2):
+                    loss_ae_2 = self.loss_ae(final_out_2[i], view_data[i])
+                    loss_ae_2_full += loss_ae_2
+            # No diff view structrue
+            else:
+                # final_out_2[0] as it is a tuple tree
+                loss_ae_2_full = self.loss_ae(final_out_2[0], view_data[0])
 #            loss_ae_2 = self.loss_ae(final_out_2, view_data)
             return self.alpha[0] * loss_surv + self.alpha[1] * loss_ae_1_full + self.alpha[2] * loss_ae_2_full
         else:
@@ -1115,68 +1162,42 @@ def train(module,
         all_models = nn.ModuleList()
 
 
-        if fold == 0: # print model structure for first fold
-            # AE's
-            all_models.append(AE(view_names,dimensions,[[10,5,4],[10,5,4],[10,5,4], [10,5,4]],
-                                 [['relu'],['relu','relu','relu'],['relu'],['relu'], ['none']], 0.2,
-                                 [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-                                 [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-                                 dropout_bool=False,batch_norm_bool=False,type='none', cross_mutation=[1,0,3,2],print_bool=True))
+        model_types = ['cross','elementwisemax']
+
+        print("MODEL TYPES : ", model_types)
 
 
-            all_models.append(AE(views = view_names,in_features=[4,4,4,4], n_hidden_layers_dims= [[10,5,4],[10,5,4],[10,5,4], [10,5,4]],
-                                 activ_funcs = [['relu'],['relu','relu','relu'],['relu'],['relu'], ['none']],
-                                 dropout_prob= 0.2,
-                                 dropout_layers =[['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-                                 batch_norm = [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-                                 dropout_bool=False,batch_norm_bool=False,type='concat', cross_mutation=None, ae_hierarichcal_bool= True,print_bool=True))
+        # AE's
+        all_models.append(AE(view_names,dimensions,[[8,4] for i in range(len(view_names))],
+                             [['relu'],['relu'], ['relu'], ['none']], 0.2,
+                             [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+                             [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+                             dropout_bool=False,batch_norm_bool=False,type=model_types[0], cross_mutation=[1,0,2],print_bool=False))
 
 
-            # NN
-
-            # Note : For Concat, the in_feats for NN need to be the sum of all last output layer dimensions.
-            #        For Cross, the in_feats for NN need to be the size of the largest output layer dim, as we take the
-            #                    element wise avg
-            #        For overall(mean/max/min), the in_feats for NN is 1 (as we take the overall average)
-            #        For elementwise(mean/max/min), the in_feats for NN must be size of the largest output layer dim
-
-            all_models.append(NN.NN_changeable(views = ['AE'],in_features = [16],
-                                               n_hidden_layers_dims= [[4, 2]],
-                                               activ_funcs = [['relu'], ['relu']],dropout_prob=0.2,dropout_layers=[['yes','yes']],
-                                               batch_norm = [['yes','yes']],
-                                               dropout_bool=False,batch_norm_bool=False,print_bool=True))
-
-        else:
-            # AE's
-            # AE's
-            all_models.append(AE(view_names,dimensions,[[10,5,4],[10,5,4],[10,5,4], [10,5,4]],
-                                 [['relu'],['relu','relu','relu'],['relu'],['relu'], ['none']], 0.2,
-                                 [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-                                 [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-                                 dropout_bool=False,batch_norm_bool=False,type='none', cross_mutation=[1,0,3,2],print_bool=False))
+    #    all_models.append(AE(views = ['AE'],in_features=[4], n_hidden_layers_dims= [[10,5,4]],
+    #                         activ_funcs = [['relu'],['none']],
+    #                         dropout_prob= 0.2,
+    #                         dropout_layers =[['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+    #                         batch_norm = [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+    #                         dropout_bool=False,batch_norm_bool=False,type=model_types[1], cross_mutation=[1,0,3,2], ae_hierarichcal_bool= True,print_bool=False))
 
 
-            all_models.append(AE(views = view_names,in_features=[4,4,4,4], n_hidden_layers_dims= [[10,5,4],[10,5,4],[10,5,4], [10,5,4]],
-                                 activ_funcs = [['relu'],['relu','relu','relu'],['relu'],['relu'], ['none']],
-                                 dropout_prob= 0.2,
-                                 dropout_layers =[['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-                                 batch_norm = [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-                                 dropout_bool=False,batch_norm_bool=False,type='concat', cross_mutation=None, ae_hierarichcal_bool= True,print_bool=False))
+        # NN
+
+        # Note : For Concat, the in_feats for NN need to be the sum of all last output layer dimensions.
+        #        For Cross, the in_feats for NN need to be the size of the largest output layer dim, as we take the
+        #                    element wise avg
+        #        For overall(mean/max/min), the in_feats for NN is 1 (as we take the overall average)
+        #        For elementwise(mean/max/min), the in_feats for NN must be size of the largest output layer dim
+
+        all_models.append(NN.NN_changeable(views = ['AE'],in_features = [4],
+                                           n_hidden_layers_dims= [[4, 2]],
+                                           activ_funcs = [['relu'], ['none']],dropout_prob=0.2,dropout_layers=[['yes','yes']],
+                                           batch_norm = [['yes','yes']],
+                                           dropout_bool=False,batch_norm_bool=False,print_bool=False))
 
 
-            # NN
-
-            # Note : For Concat, the in_feats for NN need to be the sum of all last output layer dimensions.
-            #        For Cross, the in_feats for NN need to be the size of the largest output layer dim, as we take the
-            #                    element wise avg
-            #        For overall(mean/max/min), the in_feats for NN is 1 (as we take the overall average)
-            #        For elementwise(mean/max/min), the in_feats for NN must be size of the largest output layer dim
-
-            all_models.append(NN.NN_changeable(views = ['AE'],in_features = [16],
-                                               n_hidden_layers_dims= [[4, 2]],
-                                               activ_funcs = [['relu'], ['relu']],dropout_prob=0.2,dropout_layers=[['yes','yes']],
-                                               batch_norm = [['yes','yes']],
-                                               dropout_bool=False,batch_norm_bool=False,print_bool=False))
 
 
             #############
@@ -1189,26 +1210,24 @@ def train(module,
 
 
 
-        full_net = AE_Hierarichal(all_models, types=['none','concat'])
+    #    full_net = AE_Hierarichal(all_models, types=model_types)
 
-     #   full_net = AE_NN(all_models, type='cross')
+        full_net = AE_NN(all_models, type=model_types[0])
 
 
         # set optimizer
         if l2_regularization == True:
-            optimizer = Adam(full_net.parameters(), lr=0.01, weight_decay=0.0001)
+            optimizer = Adam(full_net.parameters(), lr=0.001, weight_decay=0.0001)
         else:
-            optimizer = Adam(full_net.parameters(), lr=0.01)
+            optimizer = Adam(full_net.parameters(), lr=0.001)
 
         callbacks = [tt.callbacks.EarlyStopping()]
+     #   cross_pos = model_types.index("cross") + 1
+     #   model = models.CoxPH(full_net,optimizer, loss=LossHierarichcalAESingleCross(alpha=[0.4,0.4,0.2], decoding_bool=True, cross_position=cross_pos)) # Change Loss here
 
-        model = models.CoxPH(full_net,optimizer, loss=LossHierarichcalAE(alpha=[0.4,0.4,0.2], decoding_bool=True)) # Change Loss here
-
-     #   model = models.CoxPH(full_net,
-     #                        optimizer,
-     #                        loss=LossHierarichcalAESingleCross(alpha= [0.5,0.5],
-     #                                                           decoding_bool= False,
-     #                                                           cross_position= 1))
+        model = models.CoxPH(full_net,
+                             optimizer,
+                             loss=LossAECrossHazard(0.5))
 
 
         log = model.fit(train_data_full,

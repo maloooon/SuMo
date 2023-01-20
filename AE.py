@@ -1,10 +1,7 @@
 import torch
 import numpy as np
 from torch import nn
-import ReadInData
-import DataInputNew
 from torch.optim import Adam
-import statistics
 from pycox import models
 import torchtuples as tt
 import NN
@@ -219,10 +216,10 @@ class AE(nn.Module):
         if len(activ_funcs) == 1:
 
             func = activ_funcs[0]
-            activ_funcs = [[func] for x in range(len(views) + 1)]
+            activ_funcs = [[func] for x in range(len(views))] # + 1)]
 
 
-        if len(activ_funcs) == len(views) + 1:
+        if len(activ_funcs) == len(views): #  + 1:
 
             for c,view in enumerate(activ_funcs):
                 # if only one activ function given in sublist, use this for each layer
@@ -916,7 +913,7 @@ def train(module,
 
 
     # Setup all the data
-    n_train_samples, n_test_samples, view_names = module.setup()
+    n_train_samples, n_test_samples,view_names = module.setup()
 
 
 
@@ -1166,17 +1163,19 @@ def train(module,
 
         print("MODEL TYPES : ", model_types)
 
+        # TODO : weird problem with variables for models, bc models change variables outside model itself
+        # TODO : could be that we create way more layers than we want --> debug!
 
         # AE's
         all_models.append(AE(view_names,dimensions,[[8,4] for i in range(len(view_names))],
-                             [['relu'],['relu'], ['relu'], ['none']], 0.2,
+                             [['relu'],['relu'], ['relu']], 0.2,
                              [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
                              [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
                              dropout_bool=False,batch_norm_bool=False,type=model_types[0], cross_mutation=[1,0,2],print_bool=False))
 
 
     #    all_models.append(AE(views = ['AE'],in_features=[4], n_hidden_layers_dims= [[10,5,4]],
-    #                         activ_funcs = [['relu'],['none']],
+    #                         activ_funcs = [['relu']],
     #                         dropout_prob= 0.2,
     #                         dropout_layers =[['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
     #                         batch_norm = [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],

@@ -1,13 +1,10 @@
 import torch
-import pandas as pd
 from torch import nn
 import numpy as np
 from pycox import models
-import DataInputNew
 import torchtuples as tt
 import matplotlib.pyplot as plt
 from pycox.evaluation import EvalSurv
-import ReadInData
 from torch.optim import Adam
 from sklearn.model_selection import KFold
 from torch.utils.data.sampler import SubsetRandomSampler
@@ -279,7 +276,7 @@ def train(module,
 
     if select_setting == 'split':
         # Setup all the data
-        n_train_samples, n_test_samples, n_all_samples, view_names = module.setup()
+        n_train_samples, n_test_samples,view_names = module.setup()
 
 
 
@@ -628,7 +625,7 @@ def train(module,
 
 
 
-
+    """
     if select_setting == 'all':
         # Setup all the data
         n_train_samples, n_test_samples, n_all_samples, view_names = module.setup()
@@ -928,6 +925,7 @@ def train(module,
                                                                                                                brier_score,
                                                                                                                binomial_score))
 
+            """
 
 
 

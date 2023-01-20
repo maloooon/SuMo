@@ -27,7 +27,7 @@ if __name__ == '__main__':
 
     NN.train(module= multimodule,
           device=device,
-          feature_select_method= 'pca',
+          feature_select_method= 'ae',
           components = [15,15,5],
           thresholds= [0.9,0.9,0.9],
           feature_names= None,
@@ -64,17 +64,17 @@ if __name__ == '__main__':
     print("######################## RUNNING AUTOENCODER ####################################")
 
 
- #   AE.train(module=multimodule,
- #            device=device,
- #            feature_select_method= 'pca',
- #            components = [15,15,5],
- #            thresholds= [0.8,0.8,0.8,0.8],
- #            feature_names= None,
- #            batch_size=128,
- #            n_epochs=100,
- #            l2_regularization=False,
- #            val_batch_size=32,
- #            number_folds=3)
+#    AE.train(module=multimodule,
+#             device=device,
+#             feature_select_method= 'pca',
+#             components = [15,15,5],
+#             thresholds= [0.8,0.8,0.8,0.8],
+#             feature_names= None,
+#             batch_size=128,
+#             n_epochs=100,
+#             l2_regularization=False,
+#             val_batch_size=32,
+#             number_folds=3)
 
 
 

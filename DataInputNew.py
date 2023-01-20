@@ -1,25 +1,18 @@
 from typing import Dict, List, Tuple
-import os
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import torch
-from pycox.datasets import metabric
-from pycox.models import logistic_hazard
 from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn_pandas import DataFrameMapper
 from torch.utils.data import DataLoader, Dataset
-import math
-import copy
-from itertools import chain
-import CancerDataLoading
 import FeatureSelection
 from torch.optim import Adam
 from torch import nn
 from pycox import models
-import ReadInData
+import AE as featAE
 
 
 
@@ -96,7 +89,7 @@ class MultiOmicsDataset(Dataset):
 def preprocess_features(
         df_train: pd.DataFrame, # train dataset
         df_test: pd.DataFrame, # test dataset
-        df_all: pd.DataFrame, # all data
+    #    df_all: pd.DataFrame, # all data
       #  df_val: pd.DataFrame, # validation dataset
         cols_std: List[str], # feature names, numeric variables
         cols_leave: List[str], # feature names, binary variables
@@ -116,17 +109,17 @@ def preprocess_features(
         mapper = DataFrameMapper(standardize + leave)
         x_train = mapper.fit_transform(df_train).astype(np.float32)
         x_test = mapper.transform(df_test).astype(np.float32)
-        x_all = mapper.fit_transform(df_all).astype(np.float32) # TODO : we standardize over all data ! --> test data leakage into train data
+     #   x_all = mapper.fit_transform(df_all).astype(np.float32) # TODO : we standardize over all data ! --> test data leakage into train data
      #   x_val = mapper.transform(df_val).astype(np.float32)
         x_train_df = pd.DataFrame(x_train)
         x_test_df = pd.DataFrame(x_test)
-        x_all_df = pd.DataFrame(x_all)
+     #   x_all_df = pd.DataFrame(x_all)
      #   x_val_df = pd.DataFrame(x_val)
 
         # Order by view so it works with Dataset class
         x_train_ordered_by_view = []
         x_test_ordered_by_view = []
-        x_all_ordered_by_view = []
+    #    x_all_ordered_by_view = []
      #   x_val_ordered_by_view = []
 
         for x in range(len(feature_offset) - 3): # -3 bc we don't have duration/event in training tensor
@@ -135,8 +128,8 @@ def preprocess_features(
             x_test_ordered_by_view.append(torch.tensor((x_test_df.iloc[:, feature_offset[x]:
                                                                            feature_offset[x + 1]]).values))
 
-            x_all_ordered_by_view.append(torch.tensor((x_all_df.iloc[:, feature_offset[x]:
-                                                                          feature_offset[x + 1]]).values))
+    #        x_all_ordered_by_view.append(torch.tensor((x_all_df.iloc[:, feature_offset[x]:
+    #                                                                      feature_offset[x + 1]]).values))
        #     x_val_ordered_by_view.append(torch.tensor((x_val_df.iloc[:, feature_offset[x]:
        #                                                                  feature_offset[x + 1]]).values))
 
@@ -147,22 +140,22 @@ def preprocess_features(
         # Order by view so it works with Dataset class
         x_train_ordered_by_view = []
         x_test_ordered_by_view = []
-        x_all_ordered_by_view = []
+    #    x_all_ordered_by_view = []
    #     x_val_ordered_by_view = []
         for x in range(len(feature_offset) - 3): # -3 bc we don't have duration/event in training tensor
             x_train_ordered_by_view.append(torch.tensor((df_train.iloc[:, feature_offset[x]:
                                                                           feature_offset[x + 1]]).values))
             x_test_ordered_by_view.append(torch.tensor((df_test.iloc[:, feature_offset[x]:
                                                                          feature_offset[x + 1]]).values))
-            x_all_ordered_by_view.append(torch.tensor((df_all.iloc[:, feature_offset[x]:
-                                                                        feature_offset[x + 1]]).values))
+      #      x_all_ordered_by_view.append(torch.tensor((df_all.iloc[:, feature_offset[x]:
+      #                                                                  feature_offset[x + 1]]).values))
      #       x_val_ordered_by_view.append(torch.tensor((df_val.iloc[:, feature_offset[x]:
      #                                                                   feature_offset[x + 1]]).values))
 
 
 
 
-    return x_train_ordered_by_view, x_test_ordered_by_view, x_all_ordered_by_view #, x_val_ordered_by_view
+    return x_train_ordered_by_view, x_test_ordered_by_view #, x_all_ordered_by_view #, x_val_ordered_by_view
 
 
 class SurvMultiOmicsDataModule(pl.LightningDataModule):
@@ -203,12 +196,12 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
            , preprocess this data with preprocess_features."""
         df_train_temp, df_test = train_test_split(self.df, test_size=test_size) # all --> train  , test
 
-        # Also use a non splitted version to see how the performance increases/decreases (so we can do feature selection
-        # on the dataset as a whole)
+   #     # Also use a non splitted version to see how the performance increases/decreases (so we can do feature selection
+   #     # on the dataset as a whole)
 
-        n_samples = self.df.shape[0]
-        self.duration = self.df[col_duration].values
-        self.event = self.df[col_event].values
+   #     n_samples = self.df.shape[0]
+   #     self.duration = self.df[col_duration].values
+   #     self.event = self.df[col_event].values
 
 
    #     n_train_samples = df_train.shape[0]
@@ -247,10 +240,10 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
         # Preprocess train and test data with programmed function #  ,self.x_val, df_val=df_val.drop(cols_drop, axis = 1)
-        self.x_train, self.x_test, self.x_all = preprocess_features(
+        self.x_train, self.x_test= preprocess_features(
             df_train=df_train_temp.drop(cols_drop, axis = 1), # drop duration/event from df, as we don't want these
             df_test=df_test.drop(cols_drop, axis = 1),
-            df_all= self.df.drop(cols_drop, axis = 1),# for training and testing sets
+          #  df_all= self.df.drop(cols_drop, axis = 1),# for training and testing sets
             cols_std=cols_std,
             cols_leave=cols_leave,
             feature_offset= self.feature_offsets
@@ -263,8 +256,8 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         self.x_test = [torch.nan_to_num(x_view) for x_view in self.x_test]
         self.x_test_mask = [torch.isnan(x_view) for x_view in self.x_test]
 
-        self.x_all = [torch.nan_to_num(x_view) for x_view in self.x_all]
-        self.x_all_mask = [torch.isnan(x_view) for x_view in self.x_all]
+  #      self.x_all = [torch.nan_to_num(x_view) for x_view in self.x_all]
+  #      self.x_all_mask = [torch.isnan(x_view) for x_view in self.x_all]
 
     #    self.x_val = [torch.nan_to_num(x_view) for x_view in self.x_val]
     #    self.x_val_mask = [torch.isnan(x_view) for x_view in self.x_val]
@@ -301,7 +294,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             del self.x_train[index]
             del self.x_test[index]
     #        del self.x_val[index]
-            del self.x_all[index]
+    #        del self.x_all[index]
             del self.view_names[index]
             diff = self.feature_offsets[index + 1] - self.feature_offsets[index]
             for c,_ in enumerate(self.feature_offsets):
@@ -312,7 +305,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         self.n_views = self.n_views - len(removed_views_index)
 
 
-        return n_train_samples, n_test_samples, n_samples, self.view_names   #  n_val_samples,
+        return n_train_samples, n_test_samples, self.view_names   #  n_val_samples,
 
 
     def label_transform(self, num_durations):
@@ -512,10 +505,36 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             variance_test_tensors = []
             variance_all_tensors = []
 
+            thresholds = [0.8,0.8,0.8,0.8]
 
-         #   thresholds = [0.8,0.8,0.8,0] # TODO : Grid Search
+            for view in range(self.n_views):
+                # Initialize variance objects for both train and test with same components
+                view_train_variance = FeatureSelection.F_VARIANCE(self.x_train[view], threshold=thresholds[view])
+                view_test_variance = FeatureSelection.F_VARIANCE(self.x_test[view], threshold=thresholds[view])
+                # Apply variance threshold just to the train set
+                obj_variance = view_train_variance.apply_variance()
+                # Fit & Transform the train set
+                train_data = view_train_variance.fit_transform_variance(obj_variance)
+                # Only transform the test set with the given PCA object of train
+                test_data = view_test_variance.transform_variance(obj_variance)
+
+                variance_train_tensors.append(torch.tensor(train_data))
+                variance_test_tensors.append(torch.tensor(test_data))
 
 
+            self.train_set = MultiOmicsDataset(variance_train_tensors,
+                                               self.duration_train,
+                                               self.event_train,
+                                               type = 'processed')
+
+            self.test_set = MultiOmicsDataset(variance_test_tensors,
+                                              self.duration_test,
+                                              self.event_test,
+                                              type = 'processed')
+
+
+
+            """
             if select_setting == 'split':
 
                 for view in range(self.n_views):
@@ -558,9 +577,192 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                                              self.duration,
                                              self.event,
                                              type = 'processed')
+            """
 
 
         if method.lower() == 'ae':
+
+            AE_train_selected_features = []
+            AE_test_selected_features = []
+
+            # We get the feature size dimensions of each view (input dims for AE)
+            # As they are the same in training and test set, we only iterate over the train set
+            dimensions_train = []
+            dimensions_test = []
+            for view in self.x_train:
+                dim = view.size(1)
+                dimensions_train.append(dim)
+                dimensions_test.append(dim)
+
+            # layers in AE for each view
+           # layers = [[] for x in range(self.n_views)]
+            layers_train = [[512,256,128] for x in range(self.n_views)]
+            layers_test = [[512,256,128] for x in range(self.n_views)]
+         #   for c,d in enumerate(dimensions):
+         #       dim_reduct = d
+         #       # Reduce input feature dim to 1/10 of feature dim
+         #       while int(d/10) < dim_reduct:
+         #           dim_reduct //= 2
+         #           layers[c].append(dim_reduct)
+
+            # Activation functions in AE for each layer of each view
+
+            # Need two since structure is changed in AE call to actual activ. functions # TODO : fix, auch in AE Klasse --> dann kann man das auch über application direkt einstellen
+            activation_functions_train = [['relu'] for i in range(self.n_views)]
+            activation_functions_test = [['relu'] for i in range(self.n_views)]
+
+            batch_normalization_train = [[] for i in range(self.n_views)]
+            batch_normalization_test = [[] for i in range(self.n_views)]
+
+            dropout_layers_train = [[] for i in range(self.n_views)]
+            dropout_layers_test = [[] for i in range(self.n_views)]
+
+            for c,dim in enumerate(layers_train):
+                for i in range(len(dim)):
+                    batch_normalization_train[c].append('no')
+                    batch_normalization_test[c].append('no')
+                    dropout_layers_train[c].append('no')
+                    dropout_layers_test[c].append('no')
+
+
+
+            # Define learning rate
+            learning_rate_train = 0.0001
+            learning_rate_test = 0.0001
+
+            # Define Loss
+            criterion = nn.MSELoss()
+
+            # Define device
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+            #Define number of epochs
+            n_epochs = 50
+
+
+            # Get amount samples
+            n_train_samples  = self.x_train[0].size(0)
+            n_test_samples = self.x_test[0].size(0)
+
+            batch_size_train = 32
+            batch_size_test = 16
+
+
+            # Lists to save selected features
+            selected_train_features = []
+            selected_test_features = []
+
+
+
+            # Call train net
+            net_train = featAE.AE(self.view_names,
+                            dimensions_train,layers_train,
+                            activ_funcs= activation_functions_train,
+                            batch_norm= batch_normalization_train,
+                            dropout_layers= dropout_layers_train,
+                            dropout_prob= 0.1,
+                            dropout_bool=False,
+                            batch_norm_bool=False,
+                            type='none',
+                            print_bool=False)
+
+            # Call test net (same structure)
+            net_test = featAE.AE(self.view_names,
+                                 dimensions_test,layers_test,
+                                 activ_funcs= activation_functions_test,
+                                 batch_norm= batch_normalization_test,
+                                 dropout_layers= dropout_layers_test,
+                                 dropout_prob= 0.1,
+                                 dropout_bool=False,
+                                 batch_norm_bool=False,
+                                 type='none',
+                                 print_bool=False)
+
+            optimizer_train = Adam(net_train.parameters(), lr= learning_rate_train)
+            optimizer_test = Adam(net_test.parameters(), lr= learning_rate_test)
+
+
+            # Load Data with Dataloaders for batching structure
+            self.train_set = MultiOmicsDataset(self.x_train, self.duration_train, self.event_train, type = 'new')
+
+            self.test_set = MultiOmicsDataset(self.x_test, self.duration_test, self.event_test, type = 'new')
+
+            ae_trainloader = DataLoader(self.train_set,batch_size=batch_size_train,shuffle=True,drop_last=True)
+
+            ae_testloader = DataLoader(self.test_set,batch_size=batch_size_test,shuffle=True,drop_last=True)
+
+
+
+            for epoch in range(n_epochs):
+                loss_train = 0
+                loss_test = 0
+                ############################# TRAIN SET ##################################
+                for train_batch, train_mask, train_duration, train_event in ae_trainloader:
+                    # Send data to device if possible
+                    for view in range(len(train_batch)):
+                        train_batch[view] = train_batch[view].to(device=device)
+
+                    # Structure must be a tuple
+                    train_batch = tuple(train_batch)
+
+                    optimizer_train.zero_grad()
+
+                    data_middle, final_out, input_data_raw = net_train(*train_batch)
+
+                    # If we're in the last epoch, we save our data in the middle (our selected features)
+                    if epoch == n_epochs - 1:
+                        selected_train_features.append(data_middle)
+
+                    train_loss = 0
+                    for view in range(len(train_batch)):
+                        train_loss += criterion(input_data_raw[view], final_out[view])
+
+                    train_loss.backward()
+
+                    optimizer_train.step()
+
+                    loss_train += train_loss.item()
+
+
+                loss_train = loss_train / len(ae_trainloader)
+
+                print("epoch : {}/{}, loss = {:.6f} for training data".format(epoch + 1, n_epochs, loss_train))
+
+                ######################### TEST SET ##########################
+                for test_batch, test_mask, test_duration, test_event in ae_testloader:
+                    # Send data to device if possible
+                    for view in range(len(test_batch)):
+                        test_batch[view] = test_batch[view].to(device=device)
+
+                    # Structure must be a tuple
+                    test_batch = tuple(test_batch)
+
+                    optimizer_test.zero_grad()
+
+                    data_middle, final_out, input_data_raw = net_test(*test_batch)
+
+                    if epoch == n_epochs - 1:
+                        selected_test_features.append(data_middle)
+
+                    test_loss = 0
+                    for view in range(len(test_batch)):
+                        test_loss += criterion(input_data_raw[view], final_out[view])
+
+                    test_loss.backward()
+
+                    optimizer_test.step()
+
+                    loss_test = test_loss.item()
+
+
+                loss_test = loss_test / len(ae_testloader)
+
+                print("epoch : {}/{}, loss = {:.6f} for test data".format(epoch + 1, n_epochs, loss_test))
+
+
+
+            """
+
 
 
             AE_all_compressed_train_features = []
@@ -725,6 +927,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                                               self.event_test,
                                               type = 'processed')
 
+            """
 
 
         if method.lower() == 'ppi':
@@ -792,14 +995,14 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
 
-    def all_dataloader(self,batch_size):
+  #  def all_dataloader(self,batch_size):
 
-        all_loader = DataLoader(dataset= self.all_set,
-                                batch_size=batch_size,
-                                shuffle=True,
-                                drop_last=True,
-                                num_workers=10)
-        return all_loader
+  #      all_loader = DataLoader(dataset= self.all_set,
+  #                              batch_size=batch_size,
+  #                              shuffle=True,
+  #                              drop_last=True,
+  #                              num_workers=10)
+  #      return all_loader
 
 
 

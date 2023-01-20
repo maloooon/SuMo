@@ -58,7 +58,7 @@ class F_PCA():
 
 
 
-# TODO : Variance probelmatic : can't choose best 100 features for each view! only via threshold
+
 class F_VARIANCE():
     """Removing features with low variance
        https://scikit-learn.org/stable/modules/feature_selection.html
@@ -66,38 +66,47 @@ class F_VARIANCE():
        Unsupervised variance-based feature selection
     """
 
-    def __init__(self, train, features = None, test = None, threshold = 0.5):
-        self.train = train
-        self.features = features
-        self.test = test
+    def __init__(self, data, threshold = 0.5):
+        self.data = data
         self.threshold = threshold
 
 
 
     def apply_variance(self):
-        # Get rid of features with 0 variance
+        """Apply variance threshold"""
+
+
         vt = VarianceThreshold(self.threshold)
-        data_selected = vt.fit_transform(self.train)
+        return vt
+
+    def fit_transform_variance(self, vt):
+        """ Fit and transform our training data"""
+
+        train_data = vt.fit_transform(self.data)
+        return train_data
+
+
+    def transform_variance(self,vt):
+        """Just transform the test data based on learnt train representation"""
+
+        test_data = vt.transform(self.data)
+        return test_data
+
+
 
 
         # get mask showing the features that were selected/not selected
         # True : selected, False : not selected (variance 0)
-        mask = vt.get_support()
+    #  mask = vt.get_support()
 
-        # Find features that were selected
-        index_list = []
+    # Find features that were selected
+    #   index_list = []
 
-        index = 0
-        for x in mask:
-            if x == True:
-                index_list.append(index)
-            index += 1
-
-
-
-
-
-        return data_selected, index_list
+    #   index = 0
+    #   for x in mask:
+    #       if x == True:
+    #           index_list.append(index)
+    #       index += 1
 
 
 

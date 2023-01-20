@@ -1,23 +1,13 @@
 import numpy as np
 import torch
-import os
-import DataInputNew
-import ReadInData
 import torchtuples as tt
-import pandas as pd
-import time
-from tqdm import tqdm
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
-from torch.optim import lr_scheduler
 from torch.utils.data.sampler import SubsetRandomSampler
-from sklearn.preprocessing import MinMaxScaler
 from pycox.models import CoxPH
 from pycox.evaluation import EvalSurv
 from torch_geometric.data import Data, DataLoader, Batch
 from torch_geometric.nn import GCNConv, SAGEConv, GraphConv, SAGPooling
-from torch_geometric.nn import global_max_pool as gmp
 import math
 import matplotlib.pyplot as plt
 from sklearn.model_selection import KFold

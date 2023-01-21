@@ -20,27 +20,33 @@ if __name__ == '__main__':
         f.write(cancer_name)
 
 
-    multimodule = DataInputNew.SurvMultiOmicsDataModule(data, feature_offsets, view_names,onezeronorm_bool=False, cancer_name= cancer_name)
+    # Possible Cancers : 'DNA', 'microRNA' , 'mRNA', 'RPPA'
+    # Leaving which_views empty will take all views into consideration
+    multimodule = DataInputNew.SurvMultiOmicsDataModule(data,
+                                                        feature_offsets,
+                                                        view_names,
+                                                        onezeronorm_bool=False,
+                                                        cancer_name= cancer_name,
+                                                        which_views = ['microRNA'])
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     print("######################## RUNNING FULLY CONNECTED NEURAL NET ####################################")
 
-    NN.train(module= multimodule,
-          device=device,
-          feature_select_method= 'ae',
-          components = [15,15,5],
-          thresholds= [0.9,0.9,0.9],
-          feature_names= None,
-          batch_size=128,
-          n_epochs=100,
-          l2_regularization=False,
-          val_batch_size=32,
-          number_folds= 3,
-          dropout=False,
-          dropout_rate=0.1,
-          activation_functions_per_view = [['relu'],['none']], #doesnt work here, needs to be in net call itself to work ?
-          dropout_per_view = [['yes','no']],
-          select_setting= 'split')
+ #   NN.train(module= multimodule,
+ #         device=device,
+ #         feature_select_method= 'eigengenes',
+ #         components = [15,15,5],
+ #         thresholds= [0.9,0.9,0.9],
+ #         feature_names= None,
+ #         batch_size=128,
+ #         n_epochs=100,
+ #         l2_regularization=False,
+ #         val_batch_size=32,
+ #         number_folds= 3,
+ #         dropout=False,
+ #         dropout_rate=0.1,
+ #         activation_functions_per_view = [['relu'],['none']], #doesnt work here, needs to be in net call itself to work ?
+ #         dropout_per_view = [['yes','no']])
 
 
     print("######################## FULLY CONNECTED NEURAL NET FINISHED ####################################")
@@ -64,17 +70,17 @@ if __name__ == '__main__':
     print("######################## RUNNING AUTOENCODER ####################################")
 
 
-#    AE.train(module=multimodule,
-#             device=device,
-#             feature_select_method= 'pca',
-#             components = [15,15,5],
-#             thresholds= [0.8,0.8,0.8,0.8],
-#             feature_names= None,
-#             batch_size=128,
-#             n_epochs=100,
-#             l2_regularization=False,
-#             val_batch_size=32,
-#             number_folds=3)
+    AE.train(module=multimodule,
+             device=device,
+             feature_select_method= 'pca',
+             components = [100],
+             thresholds= [0.8,0.8,0.8,0.8],
+             feature_names= None,
+             batch_size=128,
+             n_epochs=100,
+             l2_regularization=False,
+             val_batch_size=32,
+             number_folds=3)
 
 
 

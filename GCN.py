@@ -301,9 +301,9 @@ def train(module,
                   activ_funcs=['relu','relu','relu']).to(device)
 
         if l2_regularization == True:
-            optimizer = Adam(net.parameters(), lr=0.01, weight_decay=0.0001)
+            optimizer = Adam(net.parameters(), lr=0.001, weight_decay=0.0001)
         else:
-            optimizer = Adam(net.parameters(), lr=0.01)
+            optimizer = Adam(net.parameters(), lr=0.001)
 
         model = CoxPH(net, optimizer)
 

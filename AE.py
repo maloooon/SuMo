@@ -161,8 +161,8 @@ class AE_NN(nn.Module):
 class AE(nn.Module):
     """AE module, input is each view itself (AE for each view)"""
     def __init__(self, views, in_features, n_hidden_layers_dims = None,
-                 activ_funcs = None,dropout_prob = None, dropout_layers= None, batch_norm = None,
-                 dropout_bool = False, batch_norm_bool= False, type = None,cross_mutation = None,
+                 activ_funcs = None, dropout_prob = None, dropout_layers= None, batch_norm = None,
+                 dropout_bool = False, batch_norm_bool= False, type_ae = None, cross_mutation = None,
                  ae_hierarichcal_bool = False, ae_hierarichcal_decoding_bool = False, print_bool = False):
         """
         :param views: list of views (strings)
@@ -182,7 +182,7 @@ class AE(nn.Module):
         :param batch_norm : layers in n_hidden_layers_dims where batch normalization is to be applied ; str ('yes'/'no')
         :param dropout_bool : Decide wether dropout is applied or not ; bool (True/False)
         :param batch_norm_bool : Decide wether batch normalization is applied or not ; bool (True/False)
-        :param type : concat, cross or both (concross)
+        :param type_ae : concat, cross or both (concross)
         :param cross_mutation : list of integers of length views, deciding which crosses should be applied,
                                 e.g [1,3,0,2] will cross hidden feats of view 1 with decoder of view 2,
                                 hidden of 4 with dec of view 2 etc..
@@ -201,7 +201,7 @@ class AE(nn.Module):
         self.batch_norm = batch_norm
         self.dropout_bool = dropout_bool
         self.batch_norm_bool = batch_norm_bool
-        self.type = type
+        self.type_ae = type_ae
         # Create list of lists which will store each hidden layer call for each view (encoding & decoding stage)
         self.hidden_layers = nn.ParameterList([nn.ParameterList([]) for x in range(len(in_features))])
         self.middle_dims = []
@@ -213,7 +213,8 @@ class AE(nn.Module):
 
         # Produce activation functions list of lists
 
-        if len(activ_funcs) == 1:
+
+        if len(activ_funcs) == 1 and type(activ_funcs[0]) is not list:
 
             func = activ_funcs[0]
             activ_funcs = [[func] for x in range(len(views))] # + 1)]
@@ -329,7 +330,7 @@ class AE(nn.Module):
 
 
 
-        if type.lower() == 'concat':
+        if type_ae.lower() == 'concat':
             # Concatenate the output, which will then be passed to a NN for survival analysis
             # the final output we're interested in (middle between encoder and decoder) was therefore already
             # saved in middle_dims list
@@ -337,7 +338,7 @@ class AE(nn.Module):
             concatenated_features = sum([dim for dim in self.middle_dims])
 
 
-        if type.lower() == 'cross':
+        if type_ae.lower() == 'cross':
             # For the crossAE implementation, we now need to cross middle hidden features and encoders.
             # for n views there are n! possible mutations (each view has n-1 possible encoder it can take for crossAE)
             # To have the strongest learning effect, the user can choose which mutation he wants in the beginning
@@ -391,42 +392,42 @@ class AE(nn.Module):
                     print("dropout in layers : {}".format(dropout_layers[c]))
 
 
-            if type.lower() == 'none':
+            if type_ae.lower() == 'none':
                 print("The output of each view between encoder and decoder will be passed to a NN for survival analysis"
                       "or another AE before that. Note that the Input Dimensions need to be the same size for each view.")
 
-            if type.lower() == 'concat':
+            if type_ae.lower() == 'concat':
                 print("Finally, for ConcatAE, the output of each view between encoder and decoder  is concatenated  ({} features) "
                       "and will be passed to a NN for survival analysis".format(concatenated_features))
 
-            if type.lower() == 'cross':
+            if type_ae.lower() == 'cross':
                 for c, _ in enumerate(self.helping_layer):
                     print( "For CrossAE implementation we have the following helping layers : {} for view {}"
                        .format(self.helping_layer[c], self.views[c]))
                 print("Finally, for CrossAE, the output of each view between encoder and decoder  is averaged element-wise"
                       ", thus {} elements  will be passed to a NN for survival analysis".format(mmm_output_dimension))
 
-            if type.lower() == 'elementwisemean' or type.lower() == 'elementwiseavg':
+            if type_ae.lower() == 'elementwisemean' or type_ae.lower() == 'elementwiseavg':
                 print("Finally, for EMeanAE (EAvgAE), the output of each view between encoder and decoder is averaged ({} features)"
                       "and will be passed to a NN for survival analysis".format(mmm_output_dimension))
 
-            if type.lower() == 'overallmean' or type.lower() == 'overallavg':
+            if type_ae.lower() == 'overallmean' or type_ae.lower() == 'overallavg':
                 print("Finally, for OMeanAE (OAvgAE), the mean of the output of each view between encoder and decoder is calculated"
                       "(1 feature) and then passed to a NN for survival analysis")
 
-            if type.lower() == 'overallmax':
+            if type_ae.lower() == 'overallmax':
                 print("Finally, for OMaxAE, the max of the output of each view between encoder and decoder is calculated"
                       "(1 feature) and then passed to a NN for survival analysis")
 
-            if type.lower() == 'elementwisemax':
+            if type_ae.lower() == 'elementwisemax':
                 print("Finally, for EMaxAE, the output of each view between encoder and decoder is averaged ({} features)"
                       "and will be passed to a NN for survival analysis".format(mmm_output_dimension))
 
-            if type.lower() == 'overallmin':
+            if type_ae.lower() == 'overallmin':
                 print("Finally, for OMinAE, the min of the output of each view between encoder and decoder is calculated"
                       "(1 feature) and then passed to a NN for survival analysis")
 
-            if type.lower() == 'elementwisemin':
+            if type_ae.lower() == 'elementwisemin':
                 print("Finally, for EMinAE, the output of each view between encoder and decoder is averaged ({} features)"
                       "and will be passed to a NN for survival analysis".format(mmm_output_dimension))
 
@@ -523,14 +524,14 @@ class AE(nn.Module):
 
 
 
-        if self.type.lower() == 'overallmean' or self.type.lower() == 'overallavg':
+        if self.type_ae.lower() == 'overallmean' or self.type_ae.lower() == 'overallavg':
             overall_mean = torch.mean(concatenated_features,1,True)
 
-        if self.type.lower() == 'overallmax':
+        if self.type_ae.lower() == 'overallmax':
             overall_max = torch.amax(concatenated_features,1,True)
 
 
-        if self.type.lower() == 'overallmin':
+        if self.type_ae.lower() == 'overallmin':
             overall_min = torch.amin(concatenated_features,1,True)
 
 
@@ -560,18 +561,18 @@ class AE(nn.Module):
                     # element for averaging exists :
                     if _.size(1) - 1 >= x: # -1 due to indexing
                         temp.append(_[i][x])
-                if self.type.lower() == 'cross' or self.type.lower() == 'elementwisemean' or self.type.lower() == 'elementwiseavg':
+                if self.type_ae.lower() == 'cross' or self.type_ae.lower() == 'elementwisemean' or self.type_ae.lower() == 'elementwiseavg':
                     mean = torch.mean(torch.stack(temp))
                     element_wise_avg[i][x] = mean
-                if self.type.lower() == 'elementwisemax':
+                if self.type_ae.lower() == 'elementwisemax':
                     max = torch.amax(torch.stack(temp))
                     element_wise_max[i][x] = max
-                if self.type.lower() == 'elementwisemin':
+                if self.type_ae.lower() == 'elementwisemin':
                     min = torch.amin(torch.stack(temp))
                     element_wise_min[i][x] = min
 
 
-        if self.type.lower() == 'cross':
+        if self.type_ae.lower() == 'cross':
             for c,view in enumerate(self.hidden_layers):
                 # If we need to apply the helping layer ...
                 if self.needs_help_bool[c] == True:
@@ -613,7 +614,7 @@ class AE(nn.Module):
         final_out = tuple([dim[-1] for dim in encoded_features])                                                                           # X
 
 
-        if self.type.lower() == 'concat':
+        if self.type_ae.lower() == 'concat':
             # Finally, we will pass the concatenated features to a NN to get the hazard ratio.
             # The final output (final_out) will be used to train the AE.
             # x : input_data
@@ -621,37 +622,37 @@ class AE(nn.Module):
 
             return concatenated_features, final_out, input_data_raw
 
-        if self.type.lower() == 'cross':
+        if self.type_ae.lower() == 'cross':
             # element_wise_avg will be passed to a NN to get the hazard ratio
             # final_out_cross will be used to train the AE
             return element_wise_avg, final_out_cross, final_out, input_data_raw
 
 
-        if self.type.lower() == 'none':
+        if self.type_ae.lower() == 'none':
             # Change structure of data so it can fit
             return data_middle, final_out, input_data_raw
 
-        if self.type.lower() == 'elementwiseavg' or self.type.lower() == 'elementwisemean':
+        if self.type_ae.lower() == 'elementwiseavg' or self.type_ae.lower() == 'elementwisemean':
 
             return element_wise_avg, final_out, input_data_raw
 
-        if self.type.lower() == 'overallavg' or self.type.lower() == 'overallmean':
+        if self.type_ae.lower() == 'overallavg' or self.type_ae.lower() == 'overallmean':
 
             return overall_mean, final_out, input_data_raw
 
-        if self.type.lower() == 'elementwisemax':
+        if self.type_ae.lower() == 'elementwisemax':
 
             return element_wise_max, final_out, input_data_raw
 
-        if self.type.lower() == 'overallmax':
+        if self.type_ae.lower() == 'overallmax':
 
             return overall_max, final_out, input_data_raw
 
-        if self.type.lower() == 'elementwisemin':
+        if self.type_ae.lower() == 'elementwisemin':
 
             return element_wise_min, final_out, input_data_raw
 
-        if self.type.lower() == 'overallmin':
+        if self.type_ae.lower() == 'overallmin':
 
             return overall_min, final_out, input_data_raw
 
@@ -913,17 +914,199 @@ def train(module,
 
 
     # Setup all the data
-    n_train_samples, n_test_samples,view_names = module.setup()
+    n_train_samples, n_test_samples,n_val_samples, view_names = module.setup()
 
 
 
     #Select method for feature selection
-    module.feature_selection(method=feature_select_method,
-                             components= components,
-                             thresholds= thresholds,
-                             feature_names= feature_names)
+    train_data, val_data, test_data, train_duration, train_event, val_duration, val_event, test_duration, test_event = module.feature_selection(method=feature_select_method, components= components,thresholds= thresholds,feature_names= feature_names)
+
+
+
+
+    for c,fold in enumerate(train_data):
+        train_duration[c] = train_duration[c].numpy()
+        train_event[c] = train_event[c].numpy()
+        val_duration[c] = val_duration[c].numpy()
+        val_event[c] = val_event[c].numpy()
+        for c2,view in enumerate(fold):
+            train_data[c][c2] = (train_data[c][c2]).numpy()
+            val_data[c][c2] = (val_data[c][c2]).numpy()
+            test_data[c][c2] = (test_data[c][c2]).numpy()
+
+
+        # Need tuple structure for PyCox
+        train_data[c] = tuple(train_data[c])
+        val_data[c] = tuple(val_data[c])
+        test_data[c] = tuple(test_data[c])
+
+
+
+    for c_fold,fold in enumerate(train_data):
+        for c2,view in enumerate(fold):
+            print("Split {} : ".format(c_fold))
+            print("Train data has shape : {} for view {}".format(train_data[c_fold][c2].shape, view_names[c2]))
+            print("Validation data has shape : {} for view {}".format(val_data[c_fold][c2].shape, view_names[c2]))
+            print("Test data has shape : {} for view {}".format(test_data[c_fold][c2].shape, view_names[c2]))
+
+
+        dimensions_train = [x.shape[1] for x in train_data[c_fold]]
+        dimensions_val = [x.shape[1] for x in val_data[c_fold]]
+        dimensions_test = [x.shape[1] for x in test_data[c_fold]]
+
+        assert (dimensions_train == dimensions_val == dimensions_test), 'Feature mismatch between train/test'
+
+        dimensions = dimensions_train
+
+
+        # Transforms for PyCox
+        train_surv = (train_duration[c_fold], train_event[c_fold])
+        val_data_full = (val_data[c_fold], (val_duration[c_fold], val_event[c_fold]))
+
+
+        # Create List of models to be used
+        all_models = nn.ModuleList()
+
+
+        model_types = ['concat','elementwisemax']
+
+        print("MODEL TYPES : ", model_types)
+
+        # TODO : weird problem with variables for models, bc models change variables outside model itself
+        # TODO : could be that we create way more layers than we want --> debug!
+
+        # AE's
+        all_models.append(AE(view_names, dimensions, [[128,64] for i in range(len(view_names))],
+                             [['relu'] for i in range(len(view_names))], 0.2,
+                             [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+                             [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+                             dropout_bool=False, batch_norm_bool=False, type_ae=model_types[0], cross_mutation=[1,0], print_bool=False))
+
+
+        #    all_models.append(AE(views = ['AE'],in_features=[4], n_hidden_layers_dims= [[10,5,4]],
+        #                         activ_funcs = [['relu']],
+        #                         dropout_prob= 0.2,
+        #                         dropout_layers =[['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+        #                         batch_norm = [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+        #                         dropout_bool=False,batch_norm_bool=False,type=model_types[1], cross_mutation=[1,0,3,2], ae_hierarichcal_bool= True,print_bool=False))
+
+
+        # NN
+
+        # Note : For Concat, the in_feats for NN need to be the sum of all last output layer dimensions.
+        #        For Cross, the in_feats for NN need to be the size of the largest output layer dim, as we take the
+        #                    element wise avg
+        #        For overall(mean/max/min), the in_feats for NN is 1 (as we take the overall average)
+        #        For elementwise(mean/max/min), the in_feats for NN must be size of the largest output layer dim
+
+        all_models.append(NN.NN_changeable(views = ['AE'],in_features = [64],
+                                           n_hidden_layers_dims= [[128,64]],
+                                           activ_funcs = [['relu'],['none']],dropout_prob=0.2,dropout_layers=[['yes','yes']],
+                                           batch_norm = [['yes','yes']],
+                                           dropout_bool=False,batch_norm_bool=False,print_bool=False))
+
+
+
+
+        #############
+        # Note that for the Cross Method, the cross_mutation must be set in a way so that the input view x and
+        # "crossed" view y have the same feature size : Otherwise, the MSELoss() cant be calculated
+        # e.g. 4 views having feature sizes [15,15,5,5] --> cross mutations between first two and last two work,
+        # but not e.g. between first and third/fourth
+
+
+
+
+
+        #    full_net = AE_Hierarichal(all_models, types=model_types)
+
+        full_net = AE_NN(all_models, type=model_types[0])
+
+
+        # set optimizer
+        if l2_regularization == True:
+            optimizer = Adam(full_net.parameters(), lr=0.001, weight_decay=0.0001)
+        else:
+            optimizer = Adam(full_net.parameters(), lr=0.001)
+
+        callbacks = [tt.callbacks.EarlyStopping()]
+        #   cross_pos = model_types.index("cross") + 1
+        #   model = models.CoxPH(full_net,optimizer, loss=LossHierarichcalAESingleCross(alpha=[0.4,0.4,0.2], decoding_bool=True, cross_position=cross_pos)) # Change Loss here
+
+
+        # loss : alpha * surv_loss + (1-alpha) * ae_loss
+        model = models.CoxPH(full_net,
+                             optimizer,
+                             loss=LossAEConcatHazard(0.7))
+
+
+        log = model.fit(train_data[c_fold],
+                        train_surv,
+                        batch_size,
+                        n_epochs,
+                        verbose=True,
+                        val_data= val_data_full,
+                        val_batch_size= val_batch_size,
+                        callbacks=callbacks)
+
+        # Plot it
+        _ = log.plot()
+
+        # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
+        _ = model.compute_baseline_hazards()
+
+        # Predict based on test data
+        surv = model.predict_surv_df(test_data[c_fold])
+
+        # Plot it
+        surv.iloc[:, :5].plot()
+        plt.ylabel('S(t | x)')
+        _ = plt.xlabel('Time')
+
+
+        # Evaluate with concordance, brier score and binomial log-likelihood
+        ev = EvalSurv(surv, test_duration[c_fold], test_event[c_fold], censor_surv='km') # censor_surv : Kaplan-Meier
+
+        # concordance
+        concordance_index = ev.concordance_td()
+
+        #brier score
+        time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
+        _ = ev.brier_score(time_grid).plot
+        brier_score = ev.integrated_brier_score(time_grid)
+
+        #binomial log-likelihood
+        binomial_score = ev.integrated_nbll(time_grid)
+
+        print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
+                                                                                                           brier_score,
+                                                                                                           binomial_score))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     # Load Dataloaders
+    trainloader = module.train_dataloader(batch_size=n_train_samples[0])
+
+    #Train
+    for train_data, train_duration, train_event in trainloader:
+        for c,fold in enumerate(train_data):
+            for c2,view in enumerate(fold):
+                train_data[c][c2] = train_data[c][c2].to(device=device)
+
     trainloader = module.train_dataloader(batch_size=n_train_samples) # all training examples
     testloader =module.test_dataloader(batch_size=n_test_samples)
 
@@ -971,6 +1154,7 @@ def train(module,
 
     dimensions = dimensions_train
 
+    print("Views :", view_names)
 
     # Cross Validation:
     # We first need to concatenate all the data (train,test) together.
@@ -1167,11 +1351,11 @@ def train(module,
         # TODO : could be that we create way more layers than we want --> debug!
 
         # AE's
-        all_models.append(AE(view_names,dimensions,[[8,4] for i in range(len(view_names))],
-                             [['relu'],['relu'], ['relu']], 0.2,
+        all_models.append(AE(view_names, dimensions, [[128,64] for i in range(len(view_names))],
+                             [['relu'] for i in range(len(view_names))], 0.2,
                              [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
                              [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-                             dropout_bool=False,batch_norm_bool=False,type=model_types[0], cross_mutation=[1,0,2],print_bool=False))
+                             dropout_bool=False, batch_norm_bool=False, type_ae=model_types[0], cross_mutation=[1,0], print_bool=False))
 
 
     #    all_models.append(AE(views = ['AE'],in_features=[4], n_hidden_layers_dims= [[10,5,4]],
@@ -1190,9 +1374,9 @@ def train(module,
         #        For overall(mean/max/min), the in_feats for NN is 1 (as we take the overall average)
         #        For elementwise(mean/max/min), the in_feats for NN must be size of the largest output layer dim
 
-        all_models.append(NN.NN_changeable(views = ['AE'],in_features = [4],
-                                           n_hidden_layers_dims= [[4, 2]],
-                                           activ_funcs = [['relu'], ['none']],dropout_prob=0.2,dropout_layers=[['yes','yes']],
+        all_models.append(NN.NN_changeable(views = ['AE'],in_features = [64],
+                                           n_hidden_layers_dims= [[128,64]],
+                                           activ_funcs = [['relu'],['none']],dropout_prob=0.2,dropout_layers=[['yes','yes']],
                                            batch_norm = [['yes','yes']],
                                            dropout_bool=False,batch_norm_bool=False,print_bool=False))
 
@@ -1224,9 +1408,11 @@ def train(module,
      #   cross_pos = model_types.index("cross") + 1
      #   model = models.CoxPH(full_net,optimizer, loss=LossHierarichcalAESingleCross(alpha=[0.4,0.4,0.2], decoding_bool=True, cross_position=cross_pos)) # Change Loss here
 
+
+        # loss : alpha * surv_loss + (1-alpha) * ae_loss
         model = models.CoxPH(full_net,
                              optimizer,
-                             loss=LossAECrossHazard(0.5))
+                             loss=LossAECrossHazard(0.7))
 
 
         log = model.fit(train_data_full,

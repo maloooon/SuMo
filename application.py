@@ -72,7 +72,7 @@ if __name__ == '__main__':
 
     AE.train(module=multimodule,
              device=device,
-             feature_select_method= 'pca',
+             feature_select_method= 'ae',
              components = [100],
              thresholds= [0.8,0.8,0.8,0.8],
              feature_names= None,

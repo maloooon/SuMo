@@ -25,11 +25,16 @@ class MultiOmicsDataset(Dataset):
     def __init__(self, X, duration, event, type= 'new'):
         self.type = type
 
-        # Change dtypes of tensors for usage of NN later on
         self.duration = duration
         self.event = event
 
-        if self.type == 'processed2':
+        if self.type == 'temp':
+            self.n_views = len(X) # number views (mRNA, DNA, microRNA, RPPA)
+            self.X = X
+            self.n_samples = X[0].size(0)
+
+
+        elif self.type == 'processed2':
             self.n_folds = len(X)
             self.n_views = len(X[0])
             self.X = X
@@ -92,6 +97,12 @@ class MultiOmicsDataset(Dataset):
             return [self.X[m][index, :] for m in range(self.n_views)], \
                    [self.mask[m][index, :] for m in range(self.n_views)], \
                    self.duration[index], self.event[index]
+
+
+        elif self.type == 'temp':
+            return [self.X[m][index, :] for m in range(self.n_views)], \
+                   self.duration[index], self.event[index]
+
 
 
         elif self.type == 'processed2':
@@ -196,7 +207,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
     """Input is the whole dataframe : We merge all data types together, with the feature offsets we can access
        certain data types ; dataframe also contains duration and event !"""
     def __init__(
-            self, df, feature_offsets, view_names, n_durations = 10, onezeronorm_bool = False, cancer_name=None, which_views = []):
+            self, df, feature_offsets, view_names, n_durations = 10, onezeronorm_bool = False, cancer_name=None, which_views = [], n_folds = 2):
         super().__init__()
         self.df = df
         self.feature_offsets = feature_offsets # cumulative sum of features in list of features
@@ -206,6 +217,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         self.onezeronorm_bool = onezeronorm_bool
         self.cancer_name = cancer_name
         self.which_views = [x.upper() for x in which_views] # Decide which views to use for survival analysis
+        self.n_folds = n_folds
 
     def setup(
             self,
@@ -329,7 +341,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             ]
 
 
-        data_folds, data_folds_targets, data_folds_durations, k_folds = self.cross_validation(df_train_temp, self.event_train_df, self.duration_train_df, 2)
+        data_folds, data_folds_targets, data_folds_durations, k_folds = self.cross_validation(df_train_temp, self.event_train_df, self.duration_train_df, self.n_folds)
 
 
         n_train_fold_samples = []
@@ -450,7 +462,17 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
         self.n_views = self.n_views - len(removed_views_index)
 
+        ############################ CASTING NEEDED FOR NEURAL NETS ##########################################
+        for c in range(self.n_folds):
+            # Cast all elements to torch.float32
+            self.train_folds_durations[c] = torch.from_numpy(self.train_folds_durations[c]).to(torch.float32)
+            self.train_folds_events[c] = torch.from_numpy(self.train_folds_events[c]).to(torch.float32)
+            self.val_folds_durations[c] = torch.from_numpy(self.val_folds_durations[c]).to(torch.float32)
+            self.val_folds_events[c] = torch.from_numpy(self.val_folds_events[c]).to(torch.float32)
 
+        # Also cast train duration & events
+        self.duration_test = torch.from_numpy(self.duration_test).to(torch.float32)
+        self.event_test = torch.from_numpy(self.event_test).to(torch.float32)
 
 
 
@@ -513,24 +535,14 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
     def feature_selection(self, method = None,
                           feature_names = None, # for PPI network
                           components = None, # for PCA
                           thresholds = None):
 
-        """Feature selection is done on the whole dataset for the purpose of not throwing any data away due to feature
-           size mismatches between the test and train set."""
+
+
+
 
         if method.lower() == 'eigengenes':
 
@@ -657,12 +669,6 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                     PCA_train_tensors[c][c2] = PCA_train_tensors[c][c2].to(torch.float32)
                     PCA_val_tensors[c][c2] =PCA_val_tensors[c][c2].to(torch.float32)
                     PCA_test_tensors[c][c2] =PCA_test_tensors[c][c2].to(torch.float32)
-                self.train_folds_durations[c] = torch.from_numpy(self.train_folds_durations[c]).to(torch.float32)
-                self.train_folds_events[c] = torch.from_numpy(self.train_folds_events[c]).to(torch.float32)
-                self.val_folds_durations[c] = torch.from_numpy(self.val_folds_durations[c]).to(torch.float32)
-                self.val_folds_events[c] = torch.from_numpy(self.val_folds_events[c]).to(torch.float32)
-
-                # TODO : test auch in folds splitten --> da wir hier versch. test folds haben uns sonst duration/event nicht zuordnen können
 
 
 
@@ -672,7 +678,13 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
 
-            return PCA_train_tensors,PCA_val_tensors,PCA_test_tensors,self.train_folds_durations,self.train_folds_events,self.val_folds_durations,self.val_folds_events,self.duration_test,self.event_test
+
+
+
+            return PCA_train_tensors,PCA_val_tensors,PCA_test_tensors,\
+                   self.train_folds_durations,self.train_folds_events,\
+                   self.val_folds_durations,self.val_folds_events,\
+                   self.duration_test,self.event_test
 
 
 
@@ -752,6 +764,51 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
         if method.lower() == 'variance':
+            variance_train_tensors = [[] for i in range(len(self.train_folds))]
+            variance_val_tensors = [[] for i in range(len(self.train_folds))]
+            variance_test_tensors = [[] for i in range(len(self.train_folds))]
+
+
+
+
+            for c,fold in enumerate(self.train_folds):
+                for view in range(self.n_views):
+                    # Initialize Variance objects for both train and test with same components
+                    view_train_variance = FeatureSelection.F_VARIANCE(self.train_folds[c][view], threshold=thresholds[view])
+                    view_val_variance = FeatureSelection.F_VARIANCE(self.val_folds[c][view], threshold=thresholds[view])
+                    view_test_variance = FeatureSelection.F_VARIANCE(self.x_test[view], threshold=thresholds[view])
+                    # Apply Variance just to the train set
+                    obj_variance = view_train_variance.apply_variance()
+                    # Fit & Transform the train set
+                    train_data = view_train_variance.fit_transform_variance(obj_variance)
+                    # Only transform the test and val set with the given Variance object of train
+                    test_data = view_test_variance.transform_variance(obj_variance)
+                    val_data = view_val_variance.transform_variance(obj_variance)
+
+
+                    variance_train_tensors[c].append(torch.tensor(train_data))
+                    variance_val_tensors[c].append(torch.tensor(val_data))
+                    variance_test_tensors[c].append(torch.tensor(test_data))
+
+
+            # Before returning, we cast all elements to torch.float32
+            for c,fold in enumerate(variance_train_tensors):
+                for c2, view in enumerate(fold):
+                    variance_train_tensors[c][c2] = variance_train_tensors[c][c2].to(torch.float32)
+                    variance_val_tensors[c][c2] =variance_val_tensors[c][c2].to(torch.float32)
+                    variance_test_tensors[c][c2] =variance_test_tensors[c][c2].to(torch.float32)
+
+
+            return variance_train_tensors,variance_val_tensors,variance_test_tensors, \
+                   self.train_folds_durations,self.train_folds_events, \
+                   self.val_folds_durations,self.val_folds_events, \
+                   self.duration_test,self.event_test
+
+
+
+
+            """
+
             variance_train_tensors = []
             variance_test_tensors = []
             variance_all_tensors = []
@@ -784,7 +841,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                                               type = 'processed')
 
 
-
+            """
             """
             if select_setting == 'split':
 
@@ -834,7 +891,282 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         if method.lower() == 'ae':
 
 
+            # Define learning rate
+            learning_rate_train = 0.0001
+            learning_rate_val = 0.0001
+            learning_rate_test = 0.0001
 
+            # Define Loss
+            criterion = nn.MSELoss()
+
+            # Define device
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+            #Define number of epochs
+            n_epochs = 5
+
+
+            # Get amount samples
+
+            batch_size_train = 64
+            batch_size_val = 64
+            batch_size_test = 16
+
+
+            # List of lists to save output for each fold
+            selected_train_features = [[] for _ in range(self.n_folds)]
+            selected_val_features = [[] for _ in range(self.n_folds)]
+            selected_test_features = [[] for _ in range(self.n_folds)]
+
+
+
+            for c_fold in range(self.n_folds):
+                dimensions_train = [x.shape[1] for x in self.train_folds[c_fold]]
+                dimensions_val = [x.shape[1] for x in self.val_folds[c_fold]]
+                dimensions_test = [x.shape[1] for x in self.x_test]
+
+
+                # TODO : need to be resetted for each fold bc class is somehow overwriting them after each fold ??
+                layers_train = [[512,256,128] for x in range(self.n_views)]
+                layers_val = [[512,256,128] for x in range(self.n_views)]
+                layers_test = [[256,128] for x in range(self.n_views)]
+
+                activation_functions_train = [['relu'] for i in range(self.n_views)]
+                activation_functions_val = [['relu'] for i in range(self.n_views)]
+                activation_functions_test = [['relu'] for i in range(self.n_views)]
+
+                batch_normalization_train = [[] for i in range(self.n_views)]
+                batch_normalization_val = [[] for i in range(self.n_views)]
+                batch_normalization_test = [[] for i in range(self.n_views)]
+
+                dropout_layers_train = [[] for i in range(self.n_views)]
+                dropout_layers_val = [[] for i in range(self.n_views)]
+                dropout_layers_test = [[] for i in range(self.n_views)]
+
+                for c,dim in enumerate(layers_train):
+                    for i in range(len(dim)):
+                        batch_normalization_train[c].append('no')
+                        batch_normalization_val[c].append('no')
+                        batch_normalization_test[c].append('no')
+                        dropout_layers_train[c].append('no')
+                        dropout_layers_val[c].append('no')
+                        dropout_layers_test[c].append('no')
+
+
+                # Call train net
+                net_train = featAE.AE(self.view_names,
+                                      dimensions_train, layers_train,
+                                      activ_funcs= activation_functions_train,
+                                      batch_norm= batch_normalization_train,
+                                      dropout_layers= dropout_layers_train,
+                                      dropout_prob= 0.1,
+                                      dropout_bool=False,
+                                      batch_norm_bool=False,
+                                      type_ae='none',
+                                      print_bool=False)
+
+                # Call val net (same structure)
+                net_val = featAE.AE(self.view_names,
+                                    dimensions_val, layers_val,
+                                    activ_funcs= activation_functions_val,
+                                    batch_norm= batch_normalization_val,
+                                    dropout_layers= dropout_layers_val,
+                                    dropout_prob= 0.1,
+                                    dropout_bool=False,
+                                    batch_norm_bool=False,
+                                    type_ae='none',
+                                    print_bool=False)
+
+
+                # Call test net (same structure)
+                net_test = featAE.AE(self.view_names,
+                                     dimensions_test, layers_test,
+                                     activ_funcs= activation_functions_test,
+                                     batch_norm= batch_normalization_test,
+                                     dropout_layers= dropout_layers_test,
+                                     dropout_prob= 0.1,
+                                     dropout_bool=False,
+                                     batch_norm_bool=False,
+                                     type_ae='none',
+                                     print_bool=False)
+
+                # optimizers
+                optimizer_train = Adam(net_train.parameters(), lr= learning_rate_train)
+                optimizer_val = Adam(net_val.parameters(), lr= learning_rate_val)
+                optimizer_test = Adam(net_test.parameters(), lr= learning_rate_test)
+
+
+
+                # Load Data for current fold with Dataloaders for batching structure
+                self.train_set = MultiOmicsDataset(self.train_folds[c_fold], self.train_folds_durations[c_fold], self.train_folds_events[c_fold], type = 'temp')
+                self.val_set = MultiOmicsDataset(self.val_folds[c_fold], self.val_folds_durations[c_fold], self.val_folds_events[c_fold], type = 'temp')
+                self.test_set = MultiOmicsDataset(self.x_test, self.duration_test, self.event_test, type = 'temp')
+
+                # drop last false since we are in feature selection and don't want to lose data here
+                ae_trainloader = DataLoader(self.train_set,batch_size=batch_size_train,shuffle=True,drop_last=False)
+                ae_valloader = DataLoader(self.val_set, batch_size=batch_size_val, shuffle=True,drop_last=False)
+                ae_testloader = DataLoader(self.test_set,batch_size=batch_size_test,shuffle=True,drop_last=False)
+
+
+                # Train for current epoch
+                for epoch in range(n_epochs):
+                    loss_train = 0
+                    loss_val = 0
+                    loss_test = 0
+                    ############################# TRAIN SET ##################################
+                    for train_batch, train_duration, train_event in ae_trainloader:
+                        # Send data to device if possible
+                        for view in range(len(train_batch)):
+                            train_batch[view] = train_batch[view].to(device=device)
+
+                        # Structure must be a tuple
+                        train_batch = tuple(train_batch)
+
+                        optimizer_train.zero_grad()
+
+                        data_middle, final_out, input_data_raw = net_train(*train_batch)
+
+                        # If we're in the last epoch, we save our data in the middle (our selected features)
+                        if epoch == n_epochs - 1:
+                            selected_train_features[c_fold].append(data_middle)
+
+                        train_loss = 0
+                        for view in range(len(train_batch)):
+                            train_loss += criterion(input_data_raw[view], final_out[view])
+
+                        train_loss.backward()
+
+                        optimizer_train.step()
+
+                        loss_train += train_loss.item()
+
+
+                    loss_train = loss_train / len(ae_trainloader)
+
+                    print("epoch : {}/{}, loss = {:.6f} for training data".format(epoch + 1, n_epochs, loss_train))
+
+
+                    ###################### VALIDATION SET ##########################
+                    for val_batch, val_duration, val_event in ae_valloader:
+
+                        # Send data to device if possible
+                        for view in range(len(train_batch)):
+                            val_batch[view] = val_batch[view].to(device=device)
+
+                        # Structure must be a tuple
+                        val_batch = tuple(val_batch)
+
+                        optimizer_val.zero_grad()
+
+                        data_middle, final_out, input_data_raw = net_val(*val_batch)
+
+                        # If we're in the last epoch, we save our data in the middle (our selected features)
+                        if epoch == n_epochs - 1:
+                            selected_val_features[c_fold].append(data_middle)
+
+                        val_loss = 0
+                        for view in range(len(val_batch)):
+                            val_loss += criterion(input_data_raw[view], final_out[view])
+
+                        val_loss.backward()
+
+                        optimizer_train.step()
+
+                        loss_val += val_loss.item()
+
+
+                    loss_val = loss_val / len(ae_valloader)
+
+                    print("epoch : {}/{}, loss = {:.6f} for validation data".format(epoch + 1, n_epochs, loss_val))
+
+
+
+                    ######################### TEST SET ##########################
+                    for test_batch, test_duration, test_event in ae_testloader:
+                        # Send data to device if possible
+                        for view in range(len(test_batch)):
+                            test_batch[view] = test_batch[view].to(device=device)
+
+                        # Structure must be a tuple
+                        test_batch = tuple(test_batch)
+
+                        optimizer_test.zero_grad()
+
+                        data_middle, final_out, input_data_raw = net_test(*test_batch)
+
+                        if epoch == n_epochs - 1:
+                            selected_test_features[c_fold].append(data_middle)
+
+                        test_loss = 0
+                        for view in range(len(test_batch)):
+                            test_loss += criterion(input_data_raw[view], final_out[view])
+
+                        test_loss.backward()
+
+                        optimizer_test.step()
+
+                        loss_test = test_loss.item()
+
+
+                    loss_test = loss_test / len(ae_testloader)
+
+                    print("epoch : {}/{}, loss = {:.6f} for test data".format(epoch + 1, n_epochs, loss_test))
+
+
+
+            # We need to concatenate the output data of each batch for each fold for each view respectively
+            # so we can pass all of it to our neural survival nets
+
+            ae_train_tensors = [[] for  _ in range(self.n_folds)]
+            ae_val_tensors = [[] for _ in range(self.n_folds)]
+            ae_test_tensors = [[] for _ in range(self.n_folds)]
+
+            for c_fold, fold in enumerate(selected_train_features):
+                view_counter = 0
+                while view_counter < self.n_views:
+                    curr_view_values_train = []
+                    for c_batch,batch in enumerate(fold):
+                        curr_view_values_train.append(selected_train_features[c_fold][c_batch][view_counter].detach())
+                    view_counter += 1
+                    view_values_cat_train = torch.cat(tuple(curr_view_values_train), dim=0)
+                    ae_train_tensors[c_fold].append(view_values_cat_train)
+
+
+
+            for c_fold, fold in enumerate(selected_val_features):
+                view_counter = 0
+                while view_counter < self.n_views:
+                    curr_view_values_val = []
+                    for c_batch,batch in enumerate(fold):
+                        curr_view_values_val.append(selected_val_features[c_fold][c_batch][view_counter].detach())
+                    view_counter += 1
+                    view_values_cat_val = torch.cat(tuple(curr_view_values_val), dim=0)
+                    ae_val_tensors[c_fold].append(view_values_cat_val)
+
+            for c_fold, fold in enumerate(selected_test_features):
+                view_counter = 0
+                while view_counter < self.n_views:
+                    curr_view_values_test = []
+                    for c_batch,batch in enumerate(fold):
+                        curr_view_values_test.append(selected_test_features[c_fold][c_batch][view_counter].detach())
+                    view_counter += 1
+                    view_values_cat_test = torch.cat(tuple(curr_view_values_test), dim=0)
+                    ae_test_tensors[c_fold].append(view_values_cat_test)
+
+
+
+
+            return ae_train_tensors,ae_val_tensors,ae_test_tensors, \
+                   self.train_folds_durations,self.train_folds_events, \
+                   self.val_folds_durations,self.val_folds_events, \
+                   self.duration_test,self.event_test
+
+
+
+
+
+
+            """
             # We get the feature size dimensions of each view (input dims for AE)
             # As they are the same in training and test set, we only iterate over the train set
             dimensions_train = []
@@ -1008,7 +1340,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                 loss_test = loss_test / len(ae_testloader)
 
                 print("epoch : {}/{}, loss = {:.6f} for test data".format(epoch + 1, n_epochs, loss_test))
-
+                """
 
 
             """

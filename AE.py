@@ -919,9 +919,19 @@ def train(module,
 
 
     #Select method for feature selection
-    train_data, val_data, test_data, train_duration, train_event, val_duration, val_event, test_duration, test_event = module.feature_selection(method=feature_select_method, components= components,thresholds= thresholds,feature_names= feature_names)
+    train_data, val_data, test_data, \
+    train_duration, train_event,\
+    val_duration, val_event,\
+    test_duration, test_event = module.feature_selection(method=feature_select_method,
+                                                         components= components,
+                                                         thresholds= thresholds,
+                                                         feature_names= feature_names)
 
 
+
+    # Cast to numpy arrays
+    test_duration = test_duration.numpy()
+    test_event = test_event.numpy()
 
 
     for c,fold in enumerate(train_data):
@@ -929,6 +939,9 @@ def train(module,
         train_event[c] = train_event[c].numpy()
         val_duration[c] = val_duration[c].numpy()
         val_event[c] = val_event[c].numpy()
+
+
+
         for c2,view in enumerate(fold):
             train_data[c][c2] = (train_data[c][c2]).numpy()
             val_data[c][c2] = (val_data[c][c2]).numpy()
@@ -1025,9 +1038,9 @@ def train(module,
 
         # set optimizer
         if l2_regularization == True:
-            optimizer = Adam(full_net.parameters(), lr=0.001, weight_decay=0.0001)
+            optimizer = Adam(full_net.parameters(), lr=0.0001, weight_decay=0.0001)
         else:
-            optimizer = Adam(full_net.parameters(), lr=0.001)
+            optimizer = Adam(full_net.parameters(), lr=0.0001)
 
         callbacks = [tt.callbacks.EarlyStopping()]
         #   cross_pos = model_types.index("cross") + 1
@@ -1065,7 +1078,7 @@ def train(module,
 
 
         # Evaluate with concordance, brier score and binomial log-likelihood
-        ev = EvalSurv(surv, test_duration[c_fold], test_event[c_fold], censor_surv='km') # censor_surv : Kaplan-Meier
+        ev = EvalSurv(surv, test_duration, test_event, censor_surv='km') # censor_surv : Kaplan-Meier
 
         # concordance
         concordance_index = ev.concordance_td()
@@ -1098,6 +1111,10 @@ def train(module,
 
 
 
+
+
+
+    """
     # Load Dataloaders
     trainloader = module.train_dataloader(batch_size=n_train_samples[0])
 
@@ -1456,7 +1473,7 @@ def train(module,
         print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
                                                                                                            brier_score,
                                                                                                            binomial_score))
-
+        """
 
 
 """

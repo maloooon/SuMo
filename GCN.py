@@ -43,7 +43,6 @@ class GCN(nn.Module):
 
         self.conv1 = GraphConv(in_features, in_features)
         self.params_for_print.append(self.conv1)
-        self.params_for_print.append(nn.ReLU) # TODO : not tested
         self.pool1 = SAGPooling(in_features, ratio=ratio, GNN=GraphConv) # in channel same as out of conv1
         self.params_for_print.append(self.pool1)
 
@@ -129,7 +128,11 @@ def train(module,
           l2_regularization = False,
           val_batch_size=20,
           number_folds = 5,
-          feature_names = None):
+          feature_names = None,
+          n_train_samples = 0,
+          n_test_samples = 0,
+          n_val_samples = 0,
+          view_names = None):
     """
 
     :param module: basically the dataset to be used
@@ -143,14 +146,172 @@ def train(module,
 
 
 
-
-    # Setup all the data
-    n_train_samples, n_test_samples,view_names = module.setup()
-
-
-
     #Select method for feature selection
-    edge_index, proteins_used = module.feature_selection('ppi', feature_names)
+    edge_index, proteins_used, train_data, val_data, test_data, \
+    train_duration, train_event, \
+    val_duration, val_event, \
+    test_duration, test_event = module.feature_selection('ppi', feature_names)
+
+
+
+    # As we use PPI feature selection in GCN, we don't have multiple views structure : we don't need numpy transforms
+    """
+    # Cast to numpy arrays if necessary(if we get an error, we already have numpy arrays --> no need to cast)
+    try:
+        test_duration = test_duration.numpy()
+        test_event = test_event.numpy()
+    except AttributeError:
+        pass
+
+
+    for c,fold in enumerate(train_data):
+        try:
+            train_duration[c] = train_duration[c].numpy()
+            train_event[c] = train_event[c].numpy()
+            val_duration[c] = val_duration[c].numpy()
+            val_event[c] = val_event[c].numpy()
+        except AttributeError: # in this case already numpy arrays
+            pass
+
+
+
+        for c2,view in enumerate(fold):
+            try:
+                train_data[c][c2] = (train_data[c][c2]).numpy()
+                val_data[c][c2] = (val_data[c][c2]).numpy()
+                test_data[c][c2] = (test_data[c][c2]).numpy()
+            except AttributeError:
+                pass
+
+
+        # Need tuple structure for PyCox
+        train_data[c] = tuple(train_data[c])
+        val_data[c] = tuple(val_data[c])
+        test_data[c] = tuple(test_data[c])
+    """
+
+
+
+
+
+    ############################# FOLD X ###################################
+    for c_fold,fold in enumerate(train_data):
+
+        print("Split {} : ".format(c_fold))
+        print("Train data has shape : {} ".format(train_data[c_fold].shape))
+        print("Validation data has shape : {} ".format(val_data[c_fold].shape))
+        print("Test data has shape : {} ".format(test_data[c_fold].shape))
+
+
+        dimensions_train = [x.size(1) for x in train_data]
+        dimensions_val = [x.size(1) for x in val_data]
+        dimensions_test = [x.size(1) for x in test_data]
+
+        assert (dimensions_train == dimensions_val == dimensions_test), 'Feature mismatch between train/test'
+
+        dimensions = dimensions_train
+
+
+        views_with_proteins = train_data[c_fold].size(2)
+
+        # Needed for GCN
+        num_features = views_with_proteins
+        num_nodes = len(proteins_used)
+        edge_index = torch.LongTensor(edge_index).to(device)
+
+
+
+
+
+
+        # Normalize data by rows (genes)
+
+        for i in range(num_features):
+            train_data[c_fold][:,:,i] = normalize(train_data[c_fold][:,:,i])
+            val_data[c_fold][:,:,i] = normalize(val_data[c_fold][:,:,i])
+            test_data[c_fold][:,:,i] = normalize(test_data[c_fold][:,:,i])
+
+
+        # Transforms for PyCox
+        train_surv = (train_duration[c_fold], train_event[c_fold])
+        val_data_full = (val_data[c_fold], (val_duration[c_fold], val_event[c_fold]))
+
+
+        # reshape structure for use of GCN
+        train_data[c_fold] = train_data[c_fold].reshape(-1, num_nodes * num_features)
+        val_data[c_fold] = val_data[c_fold].reshape(-1, num_nodes * num_features)
+        test_data[c_fold] = test_data[c_fold].reshape(-1, num_nodes * num_features)
+
+
+        callbacks = [tt.callbacks.EarlyStopping(patience=5)]
+
+
+        torch.manual_seed(0)
+
+        net = GCN(len(proteins_used), edge_index, in_features=num_features,n_hidden_layer_dims=[1024,512,256],
+                  activ_funcs=['relu','relu','relu']).to(device)
+
+        if l2_regularization == True:
+            optimizer = Adam(net.parameters(), lr=0.001, weight_decay=0.0001)
+        else:
+            optimizer = Adam(net.parameters(), lr=0.001)
+
+        model = CoxPH(net, optimizer)
+
+        log = model.fit(train_data[c_fold],train_surv, batch_size, n_epochs, callbacks, verbose=True,
+                        val_data=val_data_full, val_batch_size= val_batch_size)
+
+        train = train_data[c_fold] , train_surv
+
+        _ = model.compute_baseline_hazards(*train)
+
+        surv = model.predict_surv_df(test_data[c_fold])
+
+        # Needed for PyCox (if already in numpy, no need to transform --> try/except for error handling)
+
+        try:
+            test_duration = test_duration.numpy()
+            test_event = test_event.numpy()
+        except AttributeError:
+            pass
+
+
+        # Plot it
+        surv.iloc[:, :5].plot()
+        plt.ylabel('S(t | x)')
+        _ = plt.xlabel('Time')
+
+
+        ev = EvalSurv(surv, test_duration, test_event, censor_surv='km')
+
+
+        # concordance
+        concordance_index = ev.concordance_td()
+
+        #brier score
+        time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
+        _ = ev.brier_score(time_grid).plot
+        brier_score = ev.integrated_brier_score(time_grid)
+
+        #binomial log-likelihood
+        binomial_score = ev.integrated_nbll(time_grid)
+
+        print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
+                                                                                                           brier_score,
+                                                                                                           binomial_score))
+
+
+
+
+
+
+    """
+    # Setup all the data
+    #   n_train_samples, n_test_samples,view_names = module.setup()
+
+
+
+
 
     # Load Dataloaders
     trainloader = module.train_dataloader(batch_size=n_train_samples) # all training examples
@@ -343,6 +504,7 @@ def train(module,
         print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
                                                                                                            brier_score,
                                                                                                            binomial_score))
+        """
 
 
 

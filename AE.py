@@ -900,7 +900,11 @@ def train(module,
           n_epochs = 512,
           l2_regularization = False,
           val_batch_size=16,
-          number_folds=5):
+          number_folds=5,
+          n_train_samples = 0,
+          n_test_samples = 0,
+          n_val_samples = 0,
+          view_names = None):
     """
 
     :param module: basically the dataset to be used
@@ -913,8 +917,8 @@ def train(module,
 
 
 
-    # Setup all the data
-    n_train_samples, n_test_samples,n_val_samples, view_names = module.setup()
+  #  # Setup all the data
+  #  n_train_samples, n_test_samples,n_val_samples, view_names = module.setup()
 
 
 
@@ -929,23 +933,33 @@ def train(module,
 
 
 
-    # Cast to numpy arrays
-    test_duration = test_duration.numpy()
-    test_event = test_event.numpy()
+    # Cast to numpy arrays if necessary(if we get an error, we already have numpy arrays --> no need to cast)
+    try:
+        test_duration = test_duration.numpy()
+        test_event = test_event.numpy()
+    except AttributeError:
+        pass
 
 
     for c,fold in enumerate(train_data):
-        train_duration[c] = train_duration[c].numpy()
-        train_event[c] = train_event[c].numpy()
-        val_duration[c] = val_duration[c].numpy()
-        val_event[c] = val_event[c].numpy()
+        try:
+            train_duration[c] = train_duration[c].numpy()
+            train_event[c] = train_event[c].numpy()
+            val_duration[c] = val_duration[c].numpy()
+            val_event[c] = val_event[c].numpy()
+        except AttributeError: # in this case already numpy arrays
+            pass
 
 
 
         for c2,view in enumerate(fold):
-            train_data[c][c2] = (train_data[c][c2]).numpy()
-            val_data[c][c2] = (val_data[c][c2]).numpy()
-            test_data[c][c2] = (test_data[c][c2]).numpy()
+            try:
+                train_data[c][c2] = (train_data[c][c2]).numpy()
+                val_data[c][c2] = (val_data[c][c2]).numpy()
+                test_data[c][c2] = (test_data[c][c2]).numpy()
+            except AttributeError:
+                pass
+
 
 
         # Need tuple structure for PyCox
@@ -954,7 +968,7 @@ def train(module,
         test_data[c] = tuple(test_data[c])
 
 
-
+    ############################# FOLD X ###################################
     for c_fold,fold in enumerate(train_data):
         for c2,view in enumerate(fold):
             print("Split {} : ".format(c_fold))
@@ -1012,7 +1026,7 @@ def train(module,
         #        For overall(mean/max/min), the in_feats for NN is 1 (as we take the overall average)
         #        For elementwise(mean/max/min), the in_feats for NN must be size of the largest output layer dim
 
-        all_models.append(NN.NN_changeable(views = ['AE'],in_features = [64],
+        all_models.append(NN.NN_changeable(views = ['AE'],in_features = [192],
                                            n_hidden_layers_dims= [[128,64]],
                                            activ_funcs = [['relu'],['none']],dropout_prob=0.2,dropout_layers=[['yes','yes']],
                                            batch_norm = [['yes','yes']],

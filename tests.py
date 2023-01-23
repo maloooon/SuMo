@@ -5,18 +5,6 @@ import pickle
 
 if __name__ == '__main__':
 
+    x  = torch.randn(4,2,1)
+    print(x.size(1))
 
-    # SALMON
-    objects = []
-    with (open("/Users/marlon/Desktop/Project/datasets_5folds.pickle", "rb")) as openfile:
-        while True:
-            try:
-                objects.append(pickle.load(openfile))
-            except EOFError:
-                break
-
-
-    print(objects[0]['1']['train']['x'].shape)
-    print(objects[0]['1']['test']['x'].shape)
-
-    # Train/Test direkt gleiche Größe ?? Feature Selection auf allen Daten durchgeführt und dann erst gesplittet ?

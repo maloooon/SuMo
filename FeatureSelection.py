@@ -126,7 +126,7 @@ class PPI():
 
         self.view_names = [x.upper() for x in view_names]
 
-        if 'DNA' not in self.view_names or 'MRNA' not in self.view_names:
+        if 'DNA' not in self.view_names and 'MRNA' not in self.view_names:
             raise Exception("neither DNA nor mRNA data in input : no protein data.")
 
 
@@ -145,7 +145,9 @@ class PPI():
 
 
     def get_matrices(self):
+
         # Read in protein data
+        print("Reading in protein data...")
         prot_to_feat = pd.read_csv(
             os.path.join("/Users", "marlon", "Desktop", "Project", "ProteinToFeature.csv"),index_col=0)
 
@@ -195,6 +197,7 @@ class PPI():
         # also store indices just for the current cancer, as we need that to access the correct values in self.train
         cancer_features_mapped_indices = [[] for _ in range(len(self.feature_names))] # len is amount views
 
+        print("Mapping features to proteins ...")
         # Store proteins with indices
         proteins_used = {}
 
@@ -270,7 +273,7 @@ class PPI():
 
 
         # store feature values as themselves, as we can now access their respective protein via index of proteins_used
-
+        print("Mapping feature values to proteins...")
         features_used = [[] for _ in range(samples)]
         for c,mapping in enumerate(all_mappings):
             for c2,protein_idx in enumerate(mapping):
@@ -391,6 +394,9 @@ class F_eigengene_matrices():
 
         if self.stage == 'train':
             train_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/{}/{}_for_r.csv".format(self.cancer_name,self.view_name))
+        elif self.stage == 'val':
+            train_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/{}/{}_val_for_r.csv".format(self.cancer_name,self.view_name))
+
         else: # self.stage == 'test'
             train_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/{}/{}_test_for_r.csv".format(self.cancer_name,self.view_name))
 
@@ -417,6 +423,7 @@ class F_eigengene_matrices():
     def get_eigengene_matrices(self,views):
         """Loading the eigengene matrix for a sample as a panda Dataframe created from R."""
         eigengene_matrices = []
+        eigengene_val_matrices = []
         eigengene_test_matrices =[]
         for view in views:
     #        while not os.path.exists(os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
@@ -427,6 +434,10 @@ class F_eigengene_matrices():
             eigengene_matrix = pd.read_csv(os.path.join("/Users", "marlon", "Desktop", "Project","TCGAData", "{}/"
                                                          "{}_eigengene_matrix.csv".format(self.cancer_name,view)),
                                            index_col=0)
+
+            eigengene_val_matrix = pd.read_csv(os.path.join("/Users", "marlon", "Desktop", "Project","TCGAData", "{}/"
+                                                            "{}_val_eigengene_matrix.csv".format(self.cancer_name,view)),
+                                               index_col=0)
     # /Users/marlon/Desktop/Project/TCGAData/READ/microRNA_eigengene_matrix.csv
             eigengene_test_matrix = pd.read_csv(os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", "{}/"
                                                              "{}_test_eigengene_matrix.csv".format(self.cancer_name,view)),
@@ -434,11 +445,13 @@ class F_eigengene_matrices():
 
             # reset index bc R saves starting at index 1
             eigengene_matrix.reset_index()
+            eigengene_val_matrix.reset_index()
             eigengene_test_matrix.reset_index()
 
             eigengene_matrices.append(eigengene_matrix)
+            eigengene_val_matrices.append(eigengene_val_matrix)
             eigengene_test_matrices.append(eigengene_test_matrix)
-        return eigengene_matrices, eigengene_test_matrices
+        return eigengene_matrices, eigengene_val_matrices, eigengene_test_matrices
 
 
 

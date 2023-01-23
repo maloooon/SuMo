@@ -546,8 +546,146 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
         if method.lower() == 'eigengenes':
 
+         #   eigengene_train_tensors = [[] for i in range(len(self.train_folds))]
+         #   eigengene_val_tensors = [[] for i in range(len(self.train_folds))]
+         #   eigengene_test_tensors = [[] for i in range(len(self.train_folds))]
+            eigengene_train_tensors = []
+            eigengene_val_tensors = []
+            eigengene_test_tensors = []
 
+
+            # Train/Val for each fold
+            for c_fold,fold in enumerate(self.train_folds):
+                for view in range(self.n_views):
+
+
+
+
+
+
+                    eg_view = FeatureSelection.F_eigengene_matrices(train=self.train_folds[c_fold][view],
+                                                                    mask=self.train_mask_folds[c_fold][view],
+                                                                    view_name=self.view_names[view],
+                                                                    duration=self.train_folds_durations[c_fold],
+                                                                    event=self.train_folds_events[c_fold],
+                                                                    stage= 'train',
+                                                                    cancer_name= self.cancer_name)
+
+                    eg_view_val = FeatureSelection.F_eigengene_matrices(train=self.val_folds[c_fold][view],
+                                                                        mask=self.val_mask_folds[c_fold][view],
+                                                                        view_name=self.view_names[view],
+                                                                        duration=self.val_folds_durations[c_fold],
+                                                                        event=self.val_folds_events[c_fold],
+                                                                        stage= 'val',
+                                                                        cancer_name= self.cancer_name)
+
+                    if c_fold == 0: # as our training data has no multiple folds, we just do the eigengene matrix calculation for the first fold
+                        eg_view_test = FeatureSelection.F_eigengene_matrices(train=self.x_test[view],
+                                                                             mask=self.x_test_mask[view],
+                                                                             view_name=self.view_names[view],
+                                                                             duration=self.duration_test,
+                                                                             event=self.event_test,
+                                                                             stage='test',
+                                                                             cancer_name= self.cancer_name)
+
+
+                    eg_view.preprocess()
+                    eg_view_val.preprocess()
+                    if c_fold == 0:
+                        eg_view_test.preprocess()
+
+
+                if c_fold == 0: # We also need to tell the R program to only calculate the test eigengenes in the first fold
+                    mode = "all"
+                    with open('/Users/marlon/Desktop/Project/TCGAData/eigengene_mode.txt', 'w') as f:
+                        f.write(mode)
+                else:
+                    mode = "folds"
+                    with open('/Users/marlon/Desktop/Project/TCGAData/eigengene_mode.txt', 'w') as f:
+                        f.write(mode)
+
+
+                eg_view.eigengene_multiplication()
+                # If the mode is just folds, we'll return an empty list for the test matrices
+                eigengene_matrices,eigengene_matrices_val, eigengene_matrices_test = eg_view.get_eigengene_matrices(self.view_names)
+
+                # as list as each eigengene matrix is of a different size
+                eigengene_matrices_tensors = []
+                eigengene_matrices_tensors_val = []
+                eigengene_matrices_tensors_test = []
+                for x in range(self.n_views):
+                    eigengene_matrices_tensors.append([])
+                    eigengene_matrices_tensors_val.append([])
+                    eigengene_matrices_tensors_test.append([])
+
+                #Dataframe to tensor structure
+                for c, view in enumerate(eigengene_matrices):
+                    for x in range(len(view.index)):
+                        temp = view.iloc[x, :].values.tolist()
+                        eigengene_matrices_tensors[c].append(temp)
+                    eigengene_matrices_tensors[c] = torch.tensor(eigengene_matrices_tensors[c])
+
+
+                for c, view in enumerate(eigengene_matrices_val):
+                    for x in range(len(view.index)):
+                        temp = view.iloc[x, :].values.tolist()
+                        eigengene_matrices_tensors_val[c].append(temp)
+                    eigengene_matrices_tensors_val[c] = torch.tensor(eigengene_matrices_tensors_val[c])
+
+
+                if c_fold == 0:
+                    for c, view in enumerate(eigengene_matrices_test):
+                        for x in range(len(view.index)):
+                            temp = view.iloc[x, :].values.tolist()
+                            eigengene_matrices_tensors_test[c].append(temp)
+                        eigengene_matrices_tensors_test[c] = torch.tensor(eigengene_matrices_tensors_test[c])
+                else:
+                    # Already add the tensor from the first fold to our list of lists for each fold, so we
+                    # dont get indexing problems in the next part
+                    eigengene_matrices_tensors_test = eigengene_test_tensors[0].copy()
+                    
+                # save values : We still need to find the minimum number of eigengenes across
+                # all folds for each view respectively and set all feature sizes to the minimum so we have the same
+                # structural input for neural nets
+                eigengene_train_tensors.append(eigengene_matrices_tensors)
+                eigengene_val_tensors.append(eigengene_matrices_tensors_val)
+                eigengene_test_tensors.append(eigengene_matrices_tensors_test)
+            
+            # Now find minimum
+
+            for c_view in range(self.n_views):
+                min_holder = []
+                for c_fold in range(self.n_folds):
+                    # Minimum over current fold and view
+                    minimum = min(eigengene_train_tensors[c_fold][c_view].size(1),
+                                  eigengene_val_tensors[c_fold][c_view].size(1),
+                                  eigengene_test_tensors[c_fold][c_view].size(1))
+                    min_holder.append(minimum)
+                # Now we can access the minimum eigengene feature size for the current view across all folds
+                actual_minimum = min(min_holder)
+                # and resize
+
+                for c_fold in range(self.n_folds):
+                    eigengene_train_tensors[c_fold][c_view] = eigengene_train_tensors[c_fold][c_view][:,0:actual_minimum]
+                    eigengene_val_tensors[c_fold][c_view] = eigengene_val_tensors[c_fold][c_view][:,0:actual_minimum]
+                    eigengene_test_tensors[c_fold][c_view] = eigengene_test_tensors[c_fold][c_view][:,0:actual_minimum]
+
+
+            return eigengene_train_tensors,eigengene_val_tensors,eigengene_test_tensors, \
+                   self.train_folds_durations,self.train_folds_events, \
+                   self.val_folds_durations,self.val_folds_events, \
+                   self.duration_test,self.event_test
+
+
+
+
+
+
+
+
+            """
             for view in range(self.n_views):
+
 
                 eg_view = FeatureSelection.F_eigengene_matrices(train=self.x_train[view],
                                                                 mask=self.x_train_mask[view],
@@ -556,6 +694,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                                                                 event=self.event_train,
                                                                 stage= 'train',
                                                                 cancer_name= self.cancer_name)
+
 
                 eg_view_test = FeatureSelection.F_eigengene_matrices(train=self.x_test[view],
                                                                      mask=self.x_test_mask[view],
@@ -627,6 +766,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                                               self.duration_test,
                                               self.event_test,
                                               type = 'processed')
+            """
 
 
 
@@ -1513,12 +1653,54 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
         if method.lower() == 'ppi':
+
+            # simpler structure, bc we just have folds, but no different views anymore
+            ppi_train_tensors = []
+            ppi_val_tensors = []
+            ppi_test_tensors = []
+
+
+
+
+            for c_fold in range(self.n_folds):
+                ppi_train = FeatureSelection.PPI(self.train_folds[c_fold], feature_names, self.view_names)
+                ppi_val = FeatureSelection.PPI(self.val_folds[c_fold], feature_names, self.view_names)
+
+                print("Getting PPI train matrices for fold : {}".format(c_fold + 1))
+                data_train,edge_index_train, proteins_used_train = ppi_train.get_matrices()
+                print("Getting PPI validation matrices for fold : {}".format(c_fold + 1))
+                data_val, edge_index_val, proteins_used_val = ppi_val.get_matrices()
+
+                if c_fold == 0: # only need to get test set once
+                    print("Getting PPI test matrices")
+                    ppi_test = FeatureSelection.PPI(self.x_test, feature_names, self.view_names)
+                    data_test, edge_index_test, proteins_used_test = ppi_test.get_matrices()
+
+
+                # edge indexes and used proteins are to be the same amongst train/val/test
+                edge_index = edge_index_train
+                proteins_used = proteins_used_train
+
+                ppi_train_tensors.append(data_train)
+                ppi_val_tensors.append(data_val)
+                ppi_test_tensors.append(data_test)
+
+
+            return edge_index, proteins_used, ppi_train_tensors,ppi_val_tensors,ppi_test_tensors, \
+                   self.train_folds_durations,self.train_folds_events, \
+                   self.val_folds_durations,self.val_folds_events, \
+                   self.duration_test,self.event_test
+
+
+
+            """
+
             ppi_train = FeatureSelection.PPI(self.x_train, feature_names, self.view_names)
        #     ppi_val = FeatureSelection.PPI(self.x_val, feature_names, self.view_names)
             ppi_test = FeatureSelection.PPI(self.x_test, feature_names, self.view_names)
 
             data_train,edge_index_train, proteins_used_train = ppi_train.get_matrices()
-      #      data_val, edge_index_val, proteins_used_val = ppi_val.get_matrices()
+         #   data_val, edge_index_val, proteins_used_val = ppi_val.get_matrices()
             data_test, edge_index_test, proteins_used_test = ppi_test.get_matrices()
 
 
@@ -1545,6 +1727,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
             return edge_index, proteins_used
+        """
 
 
 

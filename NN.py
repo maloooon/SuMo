@@ -262,7 +262,11 @@ def train(module,
           dropout_rate = 0.1,
           dropout = False,
           activation_functions_per_view = None,
-          dropout_per_view = None):
+          dropout_per_view = None,
+          n_train_samples = 0,
+          n_test_samples = 0,
+          n_val_samples = 0,
+          view_names = None):
     """
 
     :param module: basically the dataset to be used
@@ -272,7 +276,168 @@ def train(module,
     """
 
 
+  #  # Setup all the data
+  #  n_train_samples, n_test_samples,n_val_samples, view_names = module.setup()
 
+
+
+    #Select method for feature selection
+    train_data, val_data, test_data, \
+    train_duration, train_event, \
+    val_duration, val_event, \
+    test_duration, test_event = module.feature_selection(method=feature_select_method,
+                                                         components= components,
+                                                         thresholds= thresholds,
+                                                         feature_names= feature_names)
+
+
+
+    # Cast to numpy arrays if necessary(if we get an error, we already have numpy arrays --> no need to cast)
+    try:
+        test_duration = test_duration.numpy()
+        test_event = test_event.numpy()
+    except AttributeError:
+        pass
+
+
+    for c,fold in enumerate(train_data):
+        try:
+            train_duration[c] = train_duration[c].numpy()
+            train_event[c] = train_event[c].numpy()
+            val_duration[c] = val_duration[c].numpy()
+            val_event[c] = val_event[c].numpy()
+        except AttributeError: # in this case already numpy arrays
+            pass
+
+
+
+        for c2,view in enumerate(fold):
+            try:
+                train_data[c][c2] = (train_data[c][c2]).numpy()
+                val_data[c][c2] = (val_data[c][c2]).numpy()
+                test_data[c][c2] = (test_data[c][c2]).numpy()
+            except AttributeError:
+                pass
+
+
+        # Need tuple structure for PyCox
+        train_data[c] = tuple(train_data[c])
+        val_data[c] = tuple(val_data[c])
+        test_data[c] = tuple(test_data[c])
+
+
+    ############################# FOLD X ###################################
+    for c_fold,fold in enumerate(train_data):
+        for c2,view in enumerate(fold):
+            print("Split {} : ".format(c_fold))
+            print("Train data has shape : {} for view {}".format(train_data[c_fold][c2].shape, view_names[c2]))
+            print("Validation data has shape : {} for view {}".format(val_data[c_fold][c2].shape, view_names[c2]))
+            print("Test data has shape : {} for view {}".format(test_data[c_fold][c2].shape, view_names[c2]))
+
+
+        dimensions_train = [x.shape[1] for x in train_data[c_fold]]
+        dimensions_val = [x.shape[1] for x in val_data[c_fold]]
+        dimensions_test = [x.shape[1] for x in test_data[c_fold]]
+
+        assert (dimensions_train == dimensions_val == dimensions_test), 'Feature mismatch between train/test'
+
+        dimensions = dimensions_train
+
+
+        # Transforms for PyCox
+        train_surv = (train_duration[c_fold], train_event[c_fold])
+        val_data_full = (val_data[c_fold], (val_duration[c_fold], val_event[c_fold]))
+
+
+        # Call NN
+        if fold == 0:
+            net = NN_changeable(view_names,dimensions,[[64,32] for i in range(len(view_names))],
+                                [['relu'],['relu'],['relu'],['none']], dropout_rate,
+                                dropout_per_view,
+                                [['yes','yes'],['yes','yes'],['yes','yes'],['yes','yes']],
+                                dropout,batch_norm_bool=False,print_bool=True)
+        else:
+            net = NN_changeable(view_names,dimensions, [[64,32] for i in range(len(view_names))],
+                                [['relu'],['relu'],['relu'],['none']], dropout_rate,
+                                dropout_per_view,
+                                [['yes','yes'],['yes','yes'],['yes','yes'],['yes','yes']],
+                                dropout,batch_norm_bool=False,print_bool=False)
+
+        # Set parameters for NN
+        # set optimizer
+        if l2_regularization == True:
+            optimizer = Adam(net.parameters(), lr=0.001, weight_decay=0.0001)
+        else:
+            optimizer = Adam(net.parameters(), lr=0.001)
+
+        callbacks = [tt.callbacks.EarlyStopping(patience=10)]
+
+
+
+        # Call model
+        model = models.CoxPH(net,optimizer)
+
+
+        # Fit model
+        log = model.fit(train_data[c_fold],
+                        train_surv,
+                        batch_size,
+                        n_epochs,
+                        callbacks = callbacks,
+                        val_data=val_data_full,
+                        val_batch_size= val_batch_size,
+                        verbose=True)
+
+
+
+        # Plot it
+        _ = log.plot()
+
+        # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
+        _ = model.compute_baseline_hazards()
+
+
+        # Predict based on test data
+        surv = model.predict_surv_df(test_data[c_fold])
+
+        # Plot it
+        surv.iloc[:, :5].plot()
+        plt.ylabel('S(t | x)')
+        _ = plt.xlabel('Time')
+
+
+
+
+        # Evaluate with concordance, brier score and binomial log-likelihood
+        ev = EvalSurv(surv, test_duration, test_event, censor_surv='km') # censor_surv : Kaplan-Meier
+
+        # concordance
+        concordance_index = ev.concordance_td()
+
+        #brier score
+        time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
+        _ = ev.brier_score(time_grid).plot
+        brier_score = ev.integrated_brier_score(time_grid)
+
+        #binomial log-likelihood
+        binomial_score = ev.integrated_nbll(time_grid)
+
+        print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
+                                                                                                           brier_score,
+                                                                                                           binomial_score))
+
+
+
+
+
+
+
+
+
+
+
+
+    """
 
     # Setup all the data
     n_train_samples, n_test_samples,view_names = module.setup()
@@ -612,7 +777,8 @@ def train(module,
 
         print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
                                                                                                            brier_score,
-                                                                                                           binomial_score))
+                                                                                                     binomial_score))
+    """
 
 
 

@@ -1097,6 +1097,9 @@ def train(module,
         # concordance
         concordance_index = ev.concordance_td()
 
+        if concordance_index < 0.5:
+            concordance_index = 1 - concordance_index
+
         #brier score
         time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
         _ = ev.brier_score(time_grid).plot

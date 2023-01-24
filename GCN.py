@@ -46,10 +46,10 @@ class GCN(nn.Module):
         self.pool1 = SAGPooling(in_features, ratio=ratio, GNN=GraphConv) # in channel same as out of conv1
         self.params_for_print.append(self.pool1)
 
-        first_in = math.ceil(ratio * (in_features * num_nodes))
+        self.first_in = math.ceil(ratio * (in_features * num_nodes))
         for c in range(len(n_hidden_layer_dims) +1):
             if c == 0: # first layer
-                self.hidden_layers.append(nn.Sequential(nn.Linear(first_in, n_hidden_layer_dims[0]),
+                self.hidden_layers.append(nn.Sequential(nn.Linear(self.first_in, n_hidden_layer_dims[0]),
                                                         nn.BatchNorm1d(n_hidden_layer_dims[0]),
                                                         activ_funcs[0]))
                 self.params_for_print.append(self.hidden_layers[-1])
@@ -95,8 +95,9 @@ class GCN(nn.Module):
 
         for layer in self.hidden_layers:
             x = layer(x)
+           # x = self.dropout(x)
 
-        return x
+        return x # all return values have the same value --> error in net
 
 
 # https://github.com/bio-ontology-research-group/DeepMOCCA/blob/master/step-by-step/deepmocca_training.ipynb
@@ -132,7 +133,8 @@ def train(module,
           n_train_samples = 0,
           n_test_samples = 0,
           n_val_samples = 0,
-          view_names = None):
+          view_names = None,
+          processing_bool = False):
     """
 
     :param module: basically the dataset to be used
@@ -224,12 +226,13 @@ def train(module,
 
 
 
-        # Normalize data by rows (genes)
 
-        for i in range(num_features):
-            train_data[c_fold][:,:,i] = normalize(train_data[c_fold][:,:,i])
-            val_data[c_fold][:,:,i] = normalize(val_data[c_fold][:,:,i])
-            test_data[c_fold][:,:,i] = normalize(test_data[c_fold][:,:,i])
+
+        if processing_bool == True: # only normalize when we dont do preprocessing on data before feature selection
+            for i in range(num_features):
+                train_data[c_fold][:,:,i] = normalize(train_data[c_fold][:,:,i])
+                val_data[c_fold][:,:,i] = normalize(val_data[c_fold][:,:,i])
+                test_data[c_fold][:,:,i] = normalize(test_data[c_fold][:,:,i])
 
 
         # Transforms for PyCox
@@ -243,23 +246,26 @@ def train(module,
         test_data[c_fold] = test_data[c_fold].reshape(-1, num_nodes * num_features)
 
 
-        callbacks = [tt.callbacks.EarlyStopping(patience=5)]
+        callbacks = [tt.callbacks.EarlyStopping(patience=10)]
 
 
         torch.manual_seed(0)
 
-        net = GCN(len(proteins_used), edge_index, in_features=num_features,n_hidden_layer_dims=[1024,512,256],
-                  activ_funcs=['relu','relu','relu']).to(device)
+        net = GCN(len(proteins_used), edge_index, in_features=num_features,n_hidden_layer_dims=[512,256],
+                  activ_funcs=['relu','relu']).to(device)
 
         if l2_regularization == True:
-            optimizer = Adam(net.parameters(), lr=0.001, weight_decay=0.0001)
+            optimizer = Adam(net.parameters(), lr=0.0005, weight_decay=0.000001)
         else:
-            optimizer = Adam(net.parameters(), lr=0.001)
+            optimizer = Adam(net.parameters(), lr=0.0005)
 
         model = CoxPH(net, optimizer)
 
         log = model.fit(train_data[c_fold],train_surv, batch_size, n_epochs, callbacks, verbose=True,
                         val_data=val_data_full, val_batch_size= val_batch_size)
+
+        # Plot it
+        _ = log.plot()
 
         train = train_data[c_fold] , train_surv
 
@@ -287,6 +293,9 @@ def train(module,
 
         # concordance
         concordance_index = ev.concordance_td()
+
+        if concordance_index < 0.5:
+            concordance_index = 1 - concordance_index
 
         #brier score
         time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)

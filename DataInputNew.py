@@ -137,7 +137,8 @@ def preprocess_features(
         cols_std: List[str], # feature names, numeric variables
         cols_leave: List[str], # feature names, binary variables
         feature_offset : List[int],
-        mode # set mode to 0 for first fold, then 1 so we don't preprocess test values each time
+        mode,
+        preprocess_bool# set mode to 0 for first fold, then 1 so we don't preprocess test values each time
 ) -> Tuple[torch.Tensor]:
     """Preprocess different data
     #Numeric variables: Standardize
@@ -146,7 +147,7 @@ def preprocess_features(
     see pycox tutorial  : https://nbviewer.org/github/havakv/pycox/blob/master/examples/01_introduction.ipynb
     or https://towardsdatascience.com/how-to-implement-deep-neural-networks-for-time-to-event-analyses-9aa0aeac4717
     """
-    if cols_std is not None:
+    if cols_std is not None and preprocess_bool == True:
         standardize = [([col], StandardScaler()) for col in cols_std]
         leave = [(col, None) for col in cols_leave]
         # map together so we have all features present again
@@ -207,7 +208,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
     """Input is the whole dataframe : We merge all data types together, with the feature offsets we can access
        certain data types ; dataframe also contains duration and event !"""
     def __init__(
-            self, df, feature_offsets, view_names, n_durations = 10, onezeronorm_bool = False, cancer_name=None, which_views = [], n_folds = 2):
+            self, df, feature_offsets, view_names, n_durations = 10, onezeronorm_bool = False, cancer_name=None, which_views = [], n_folds = 2, preprocess_bool = True):
         super().__init__()
         self.df = df
         self.feature_offsets = feature_offsets # cumulative sum of features in list of features
@@ -218,6 +219,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         self.cancer_name = cancer_name
         self.which_views = [x.upper() for x in which_views] # Decide which views to use for survival analysis
         self.n_folds = n_folds
+        self.preprocess_bool = preprocess_bool
 
     def setup(
             self,
@@ -366,6 +368,8 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         self.train_folds = []
         self.val_folds = []
         # Preprocess train and test data with programmed function
+        if self.preprocess_bool == True:
+            print("Preprocessing data....")
         for fold in range(k_folds):
             self.x_train, self.x_test_actual, self.x_val = preprocess_features(
                 df_train=data_folds[fold][0].drop(cols_drop, axis = 1), # drop duration/event from df, as we don't want these
@@ -374,7 +378,8 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                 cols_std=cols_std,
                 cols_leave=cols_leave,
                 feature_offset= self.feature_offsets,
-                mode= fold
+                mode= fold,
+                preprocess_bool= self.preprocess_bool
             )
             self.train_folds.append(self.x_train)
             self.val_folds.append(self.x_val)
@@ -415,7 +420,8 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             cols_std=cols_std,
             cols_leave=cols_leave,
             feature_offset= self.feature_offsets,
-            mode= 1
+            mode= 1,
+            preprocess_bool= True
         )
 
         self.x_train_complete = [torch.nan_to_num(x_view) for x_view in self.x_train_complete]
@@ -506,8 +512,11 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         :param duration_df : duration indicators for data in dataframe (targets for stratification) ; as pandas dataframe
         :return: list of k_folds many train/val splits
         """
+        if k_folds == 1:  # KFold doesn't work with 1 Split, so we need a workaround
+            skfold = StratifiedKFold(n_splits=2,shuffle=True,random_state=42)
+        else:
+            skfold = StratifiedKFold(n_splits=k_folds,shuffle=True,random_state=42)
 
-        skfold = StratifiedKFold(n_splits=k_folds,shuffle=True,random_state=42)
 
         # save all folds in here, each sublist of type [train_fold_df, val_fold_df]
         folds = [[] for i in range(k_folds)]
@@ -518,14 +527,17 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
         c = 0
         for train_idx, val_idx in skfold.split(data_df, event_df):
-            folds[c].append(data_df.iloc[train_idx])
-            folds[c].append(data_df.iloc[val_idx])
+            if k_folds == 1 and c > 0:
+                pass
+            else:
+                folds[c].append(data_df.iloc[train_idx])
+                folds[c].append(data_df.iloc[val_idx])
 
-            folds_targets[c].append(event_df.iloc[train_idx].values)
-            folds_targets[c].append(event_df.iloc[val_idx].values)
+                folds_targets[c].append(event_df.iloc[train_idx].values)
+                folds_targets[c].append(event_df.iloc[val_idx].values)
 
-            folds_durations[c].append(duration_df.iloc[train_idx].values)
-            folds_durations[c].append(duration_df.iloc[val_idx].values)
+                folds_durations[c].append(duration_df.iloc[train_idx].values)
+                folds_durations[c].append(duration_df.iloc[val_idx].values)
 
             c += 1
 

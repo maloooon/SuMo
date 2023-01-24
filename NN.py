@@ -1,3 +1,5 @@
+import copy
+
 import torch
 from torch import nn
 import numpy as np
@@ -249,23 +251,23 @@ class NN_changeable(nn.Module):
 
 
 def train(module,
-          device,
           feature_select_method = 'eigengenes',
           components = None,
           thresholds = None,
           feature_names = None,
+          learning_rate = 0.0001,
           batch_size =128,
           n_epochs = 512,
           l2_regularization = False,
+          l2_regularization_rate = 0.000001,
+          batchnorm = False,
+          batchnorm_layers = None,
+          dropout_layers = None,
           val_batch_size = 16,
-          number_folds = 5,
           dropout_rate = 0.1,
           dropout = False,
-          activation_functions_per_view = None,
-          dropout_per_view = None,
-          n_train_samples = 0,
-          n_test_samples = 0,
-          n_val_samples = 0,
+          activation_layers = None,
+          layers = None,
           view_names = None):
     """
 
@@ -329,7 +331,7 @@ def train(module,
     ############################# FOLD X ###################################
     for c_fold,fold in enumerate(train_data):
         for c2,view in enumerate(fold):
-            print("Split {} : ".format(c_fold))
+
             print("Train data has shape : {} for view {}".format(train_data[c_fold][c2].shape, view_names[c2]))
             print("Validation data has shape : {} for view {}".format(val_data[c_fold][c2].shape, view_names[c2]))
             print("Test data has shape : {} for view {}".format(test_data[c_fold][c2].shape, view_names[c2]))
@@ -350,25 +352,45 @@ def train(module,
 
 
         # Call NN
-        if fold == 0:
-            net = NN_changeable(view_names,dimensions,[[64,32] for i in range(len(view_names))],
-                                [['relu'],['relu'],['relu'],['none']], dropout_rate,
-                                dropout_per_view,
-                                [['yes','yes'],['yes','yes'],['yes','yes'],['yes','yes']],
-                                dropout,batch_norm_bool=False,print_bool=True)
+
+        if c_fold == 0:
+            layers_u = copy.deepcopy(layers)
+            activation_layers_u = copy.deepcopy(activation_layers)
+            dropout_layers_u = copy.deepcopy(dropout_layers)
+            batchnorm_layers_u = copy.deepcopy(batchnorm_layers)
+            net = NN_changeable(views=view_names,
+                                in_features=dimensions,
+                                n_hidden_layers_dims=layers_u,
+                                activ_funcs=activation_layers_u,
+                                dropout_bool= dropout,
+                                dropout_prob= dropout_rate,
+                                dropout_layers= dropout_layers_u,
+                                batch_norm_bool= batchnorm,
+                                batch_norm= batchnorm_layers_u,
+                                print_bool=True)
         else:
-            net = NN_changeable(view_names,dimensions, [[64,32] for i in range(len(view_names))],
-                                [['relu'],['relu'],['relu'],['none']], dropout_rate,
-                                dropout_per_view,
-                                [['yes','yes'],['yes','yes'],['yes','yes'],['yes','yes']],
-                                dropout,batch_norm_bool=False,print_bool=False)
+            layers_u = copy.deepcopy(layers)
+            activation_layers_u = copy.deepcopy(activation_layers)
+            dropout_layers_u = copy.deepcopy(dropout_layers)
+            batchnorm_layers_u = copy.deepcopy(batchnorm_layers)
+            net = NN_changeable(views=view_names,
+                                in_features=dimensions,
+                                n_hidden_layers_dims=layers_u,
+                                activ_funcs=activation_layers_u,
+                                dropout_bool= dropout,
+                                dropout_prob= dropout_rate,
+                                dropout_layers= dropout_layers_u,
+                                batch_norm_bool= batchnorm,
+                                batch_norm= batchnorm_layers_u,
+                                print_bool=False)
+
 
         # Set parameters for NN
         # set optimizer
         if l2_regularization == True:
-            optimizer = Adam(net.parameters(), lr=0.001, weight_decay=0.0001)
+            optimizer = Adam(net.parameters(), lr=learning_rate, weight_decay=l2_regularization_rate)
         else:
-            optimizer = Adam(net.parameters(), lr=0.001)
+            optimizer = Adam(net.parameters(), lr=learning_rate)
 
         callbacks = [tt.callbacks.EarlyStopping(patience=10)]
 
@@ -377,7 +399,7 @@ def train(module,
         # Call model
         model = models.CoxPH(net,optimizer)
 
-
+        print("Split {} : ".format(c_fold + 1))
         # Fit model
         log = model.fit(train_data[c_fold],
                         train_surv,
@@ -387,7 +409,6 @@ def train(module,
                         val_data=val_data_full,
                         val_batch_size= val_batch_size,
                         verbose=True)
-
 
 
         # Plot it
@@ -413,6 +434,9 @@ def train(module,
 
         # concordance
         concordance_index = ev.concordance_td()
+
+        if concordance_index < 0.5:
+            concordance_index = 1 - concordance_index
 
         #brier score
         time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)

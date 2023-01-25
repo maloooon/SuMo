@@ -9,13 +9,13 @@ import torch
 
 
 if __name__ == '__main__':
-    cancer_data = ReadInData.readcancerdata('LAML')
+    cancer_data = ReadInData.readcancerdata('LUAD')
     data = cancer_data[0][0]
     feature_offsets = cancer_data[0][1]
     view_names = cancer_data[0][2]
     feature_names = cancer_data[0][3]
     cancer_name = cancer_data[0][4][0]
-    which_views = [] # no input to use all the given views
+    which_views = ['DNA','microRNA'] # no input to use all the given views
     n_folds = 3
 
     # needed for R, cant read in cancer name directly for some weird reason...
@@ -59,15 +59,30 @@ if __name__ == '__main__':
     # Grid search config
 
     config = {
-        "Layers_mRNA" : [[1024,512,256], [256, 128, 64], [64,32,16]],
-        "Layers_DNA" : [[1024,512,256], [256, 128, 64], [64,32,16]],
-        "Layers_microRNA" : [[1024,512,256], [256, 128, 64], [64,32,16]],
+        "Layers_mRNA" : [[64,32,16], [32,16,8], [16,8,4,2]],
+        "Layers_DNA" : [[64,32,16], [32,16,8], [16,8,4,2]],
+        "Layers_microRNA" : [[64,32,16], [32,16,8], [16,8,4,2]],
+        "Layers_RPPA" : [[64,32,16], [32,16,8], [16,8,4,2]],
+        "BatchSize" : [150,128,100,75,64,50],
+        "BatchSizeVal" : [100,75,64,50,40,32],
+        "LearningRate" : [0.001,0.0008,0.0006,0.0004,0.0001,0.00005,0.00001],
+        "DropoutBool" : ['no'], # trying without dropout
+        "BatchNormBool" : ['no'], # trying without batch norm
+        "NNLayersConcat" : [[64,32,16], [16,8,4,2]],
+        "ConcatAELoss" : [0.4,0.5,0.6]
+
+    }
+
+    LUAD_PCA_FCNN_config = {
+        "Layers_mRNA" : [[1024], [64], [16]],
+        "Layers_DNA" : [[512], [128], [32]],
+        "Layers_microRNA" : [[1024], [256], [16]],
         "Layers_RPPA" : [[1024,512,256], [256, 128, 64], [64,32,16]],
-        "BatchSize" : [200,150,128,100,75,64,50,32,16],
-        "BatchSizeVal" : [100,75,64,50,40,32,20,16,8,4],
-        "LearningRate" : [0.01,0.001,0.0008,0.0006,0.0004,0.0001,0.00005,0.00001],
-        "DropoutBool" : ['yes','no'],
-        "BatchNormBool" : ['yes','no'],
+        "BatchSize" : [75],
+        "BatchSizeVal" : [32],
+        "LearningRate" : [0.0006],
+        "DropoutBool" : ['no'], # trying without dropout
+        "BatchNormBool" : ['no'], # trying without batch norm
         "NNLayersConcat" : [[256,128,64], [64,32,16], [16,8,4,2]],
         "ConcatAELoss" : [0.2,0.3,0.4,0.5,0.6,0.7,0.8]
 
@@ -171,7 +186,8 @@ if __name__ == '__main__':
 #          dropout_layers = dropout_layers_NN,
 #          view_names = view_names_fix,
 #          config=config,
-#          n_grid_search_iterations= 100)
+#          n_grid_search_iterations= 50,
+#          testing_config = LUAD_PCA_FCNN_config)
 
 
     print("######################## FULLY CONNECTED NEURAL NET FINISHED ####################################")
@@ -240,7 +256,7 @@ if __name__ == '__main__':
       dropout_layers = dropout_layers_AE,
       view_names = view_names_fix,
       config=config,
-      n_grid_search_iterations= 100)
+      n_grid_search_iterations= 10)
 
 
 

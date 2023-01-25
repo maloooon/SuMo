@@ -1039,7 +1039,7 @@ def train(module,
 
 
             # Set layers to views we currently look at
-            layers = [mRNA_layers, DNA_layers]
+            layers = [DNA_layers, microRNA_layers]
 
             batch_size = random.choice(config["BatchSize"])
             val_batch_size = random.choice(config["BatchSizeVal"])
@@ -1209,7 +1209,7 @@ def train(module,
 
             all_concordances[c_fold].append(curr_concordance)
 
-        best_concordance_folds.append(curr_concordance)
+        best_concordance_folds.append(concordance_index)
         best_config_folds.append(best_config)
 
 

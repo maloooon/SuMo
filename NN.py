@@ -284,7 +284,8 @@ def train(module,
           activation_layers = None,
           view_names = None,
           config = None,
-          n_grid_search_iterations = 100):
+          n_grid_search_iterations = 100,
+          testing_config = None):
     """
 
     :param module: basically the dataset to be used
@@ -382,27 +383,27 @@ def train(module,
             DNA_layers = []
             microRNA_layers = []
             RPPA_layers = []
-            for i in config["Layers_mRNA"]:
+            for i in testing_config["Layers_mRNA"]:
                 curr_layer_size = random.choice(i)
                 mRNA_layers.append(curr_layer_size)
-            for i in config["Layers_DNA"]:
+            for i in testing_config["Layers_DNA"]:
                 curr_layer_size = random.choice(i)
                 DNA_layers.append(curr_layer_size)
-            for i in config["Layers_microRNA"]:
+            for i in testing_config["Layers_microRNA"]:
                 curr_layer_size = random.choice(i)
                 microRNA_layers.append(curr_layer_size)
-            for i in config["Layers_RPPA"]:
+            for i in testing_config["Layers_RPPA"]:
                 curr_layer_size = random.choice(i)
                 RPPA_layers.append(curr_layer_size)
 
             # Set layers to views we currently look at
-            layers = [mRNA_layers, DNA_layers]
+            layers = [mRNA_layers, DNA_layers, microRNA_layers]
 
-            batch_size = random.choice(config["BatchSize"])
-            val_batch_size = random.choice(config["BatchSizeVal"])
-            learning_rate = random.choice(config["LearningRate"])
-            dropout = random.choice(config["DropoutBool"])
-            batchnorm = random.choice(config["BatchNormBool"])
+            batch_size = random.choice(testing_config["BatchSize"])
+            val_batch_size = random.choice(testing_config["BatchSizeVal"])
+            learning_rate = random.choice(testing_config["LearningRate"])
+            dropout = random.choice(testing_config["DropoutBool"])
+            batchnorm = random.choice(testing_config["BatchNormBool"])
 
             curr_config = [layers, batch_size, val_batch_size, learning_rate, dropout, batchnorm]
 
@@ -420,6 +421,8 @@ def train(module,
             activation_layers_u = copy.deepcopy(activation_layers)
             dropout_layers_u = copy.deepcopy(dropout_layers)
             batchnorm_layers_u = copy.deepcopy(batchnorm_layers)
+
+
             net = NN_changeable(views=view_names,
                                 in_features=dimensions,
                                 n_hidden_layers_dims= layers_u,
@@ -515,7 +518,7 @@ def train(module,
                 best_config = curr_config
                 curr_concordance = concordance_index
 
-            all_concordances[c_fold].append(curr_concordance)
+            all_concordances[c_fold].append(concordance_index)
 
         best_concordance_folds.append(curr_concordance)
         best_config_folds.append(best_config)
@@ -528,7 +531,11 @@ def train(module,
         print("Average concordance across fold for all grid search iterations",
               str(c_fold + 1), ": ", sum(all_concordances[c_fold])/len(all_concordances[c_fold]))
         print("Configs with concordances over 0.6 for current fold : ", len(configs_for_good_concordances[c_fold]))
-        print("Respective Config : ", configs_for_good_concordances[c_fold])
+    #    print("Respective Config : ", configs_for_good_concordances[c_fold])
+
+
+
+
 
 
 

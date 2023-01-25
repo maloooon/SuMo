@@ -909,7 +909,6 @@ def train(module,
           dropout_rate = 0.1,
           dropout = False,
           activation_layers = None,
-          layers = None,
           view_names = None,
           config = None,
           n_grid_search_iterations = 100):
@@ -1039,7 +1038,6 @@ def train(module,
                 concat_layers.append(curr_layer_size)
 
 
-            # TODO : nochmal neu schreiben , irgendwo bug
             # Set layers to views we currently look at
             layers = [mRNA_layers, DNA_layers]
 
@@ -1048,9 +1046,10 @@ def train(module,
             learning_rate = random.choice(config["LearningRate"])
             dropout = random.choice(config["DropoutBool"])
             batchnorm = random.choice(config["BatchNormBool"])
+            loss_concatAE = random.choice(config["ConcatAELoss"])
 
 
-            curr_config = [layers, batch_size, val_batch_size, learning_rate, dropout, batchnorm, concat_layers]
+            curr_config = [layers, batch_size, val_batch_size, learning_rate, dropout, batchnorm, concat_layers, loss_concatAE]
 
             out_sizes = []
             for c_layer in range(len(layers)):
@@ -1128,7 +1127,7 @@ def train(module,
 
             # set optimizer
             if l2_regularization == True:
-                optimizer = Adam(full_net.parameters(), lr=learning_rate, weight_decay=0.0001)
+                optimizer = Adam(full_net.parameters(), lr=learning_rate, weight_decay=l2_regularization_rate)
             else:
                 optimizer = Adam(full_net.parameters(), lr=learning_rate)
 
@@ -1140,7 +1139,7 @@ def train(module,
             # loss : alpha * surv_loss + (1-alpha) * ae_loss
             model = models.CoxPH(full_net,
                                  optimizer,
-                                 loss=LossAEConcatHazard(0.5))
+                                 loss=LossAEConcatHazard(loss_concatAE))
             print_loss = False
             print("Split {} : ".format(c_fold + 1))
             log = model.fit(train_data[c_fold],
@@ -1196,6 +1195,8 @@ def train(module,
             print("Learning Rate : ", curr_config[3])
             print("Dropout Bool : ", curr_config[4])
             print("BatchNorm Bool : ", curr_config[5])
+            print("Concat Layers :", curr_config[6])
+            print("Survival loss {} and AE MSE loss {}".format(curr_config[7], 1 - curr_config[7]))
 
 
             if concordance_index >= 0.6:
@@ -1218,7 +1219,8 @@ def train(module,
         print("Average concordance across fold for all grid search iterations",
               str(c_fold + 1), ": ", sum(all_concordances[c_fold])/len(all_concordances[c_fold]))
         print("Configs with concordances over 0.6 for current fold : ", len(configs_for_good_concordances[c_fold]))
-        print("Respective Config : ", configs_for_good_concordances[c_fold])
+    #    print("Respective Config : ", configs_for_good_concordances[c_fold])
+
 
 
 

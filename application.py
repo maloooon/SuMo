@@ -16,7 +16,7 @@ if __name__ == '__main__':
     feature_names = cancer_data[0][3]
     cancer_name = cancer_data[0][4][0]
     which_views = [] # no input to use all the given views
-    n_folds = 1
+    n_folds = 3
 
     # needed for R, cant read in cancer name directly for some weird reason...
     with open('/Users/marlon/Desktop/Project/TCGAData/currentcancer.txt', 'w') as f:
@@ -68,7 +68,8 @@ if __name__ == '__main__':
         "LearningRate" : [0.01,0.001,0.0008,0.0006,0.0004,0.0001,0.00005,0.00001],
         "DropoutBool" : ['yes','no'],
         "BatchNormBool" : ['yes','no'],
-        "NNLayersConcat" : [[256,128,64], [64,32,16], [16,8,4,2]]
+        "NNLayersConcat" : [[256,128,64], [64,32,16], [16,8,4,2]],
+        "ConcatAELoss" : [0.2,0.3,0.4,0.5,0.6,0.7,0.8]
 
     }
 
@@ -76,7 +77,7 @@ if __name__ == '__main__':
     print("######################## RUNNING FULLY CONNECTED NEURAL NET ####################################")
     # FEATURE SELECTION SETTINGS
     selection_method_NN = 'pca'
-    components_PCA_NN = [74,74,74,74]
+    components_PCA_NN = [98,98,98,98]
     thresholds_VARIANCE_NN = [0.8,0.8,0.8,0.8]
 
 
@@ -126,7 +127,6 @@ if __name__ == '__main__':
 
     # FULLY CONNECTED NEURAL NET SETTINGS
     # LAYER SETTINGS
-    layers_NN = [[8] for i in range(len(view_names_fix))]
     # ACTIVATION FUNCTIONS SETTINGS
     activations_layers_NN = [['relu'] for i in range(len(view_names_fix))]
     activation_last_layer_NN = ['none']
@@ -135,10 +135,10 @@ if __name__ == '__main__':
     # DROPOUT SETTINGS
     dropout_bool_NN = False
     dropout_rate_NN = 0.1
-    dropout_layers_NN = [['yes' for _ in range(len(layers_NN[0]))] for i in range(len(view_names_fix))]
+    dropout_layers_NN = [['yes' for _ in range(len(config["Layers_mRNA"][0]))] for i in range(len(view_names_fix))]
     # BATCH NORMALIZATION SETTINGS
     batchnorm_bool_NN = False
-    batchnorm_layers_NN = [['yes' for _ in range(len(layers_NN[0]))] for i in range(len(view_names_fix))]
+    batchnorm_layers_NN = [['yes' for _ in range(len(config["Layers_mRNA"][0]))] for i in range(len(view_names_fix))]
     # L2 REGULARIZATION SETTINGS
     l2_regularization_bool_NN = False
     l2_regularization_rate_NN = 0.000001
@@ -148,31 +148,30 @@ if __name__ == '__main__':
     # EPOCH SETTINGS
     n_epochs_NN = 100
     # LEARNING RATE OPTIMIZER (ADAM)
-    learning_rate = 0.005
+    learning_rate_NN = 0.005
 
 
 
- #   NN.train(module= multimodule,
- #         feature_select_method= selection_method_NN,
- #         components = components_PCA_NN,
- #         thresholds= thresholds_VARIANCE_NN,
- #         feature_names= None,
- #         batch_size=batch_size_NN,
- #         n_epochs=n_epochs_NN,
- #         learning_rate= learning_rate,
- #         l2_regularization=l2_regularization_bool_NN,
- #         l2_regularization_rate=l2_regularization_rate_NN,
- #         val_batch_size=val_batch_size_NN,
- #         dropout=dropout_bool_NN,
- #         dropout_rate=dropout_rate_NN,
- #         batchnorm = batchnorm_bool_NN,
- #         layers = layers_NN,
- #         activation_layers = activations_NN,
- #         batchnorm_layers = batchnorm_layers_NN,
- #         dropout_layers = dropout_layers_NN,
- #         view_names = view_names_fix,
- #         config=config,
- #         n_grid_search_iterations= 100)
+#    NN.train(module= multimodule,
+#          feature_select_method= selection_method_NN,
+#          components = components_PCA_NN,
+#          thresholds= thresholds_VARIANCE_NN,
+#          feature_names= None,
+#          batch_size=batch_size_NN,
+#          n_epochs=n_epochs_NN,
+#          learning_rate= learning_rate_NN,
+#          l2_regularization=l2_regularization_bool_NN,
+#          l2_regularization_rate=l2_regularization_rate_NN,
+#          val_batch_size=val_batch_size_NN,
+#          dropout=dropout_bool_NN,
+#          dropout_rate=dropout_rate_NN,
+#          batchnorm = batchnorm_bool_NN,
+#          activation_layers = activations_NN,
+#          batchnorm_layers = batchnorm_layers_NN,
+#          dropout_layers = dropout_layers_NN,
+#          view_names = view_names_fix,
+#          config=config,
+#          n_grid_search_iterations= 100)
 
 
     print("######################## FULLY CONNECTED NEURAL NET FINISHED ####################################")
@@ -203,28 +202,45 @@ if __name__ == '__main__':
 
     # AE SETTINGS
     activations_AE = [['relu'] for i in range(len(view_names_fix))]
+    # DROPOUT SETTINGS
+    dropout_bool_AE = False
+    dropout_rate_AE = 0.1
+    dropout_layers_AE = [['yes' for _ in range(len(config["Layers_mRNA"][0]))] for i in range(len(view_names_fix))]
+    # BATCH NORMALIZATION SETTINGS
+    batchnorm_bool_AE = False
+    batchnorm_layers_AE = [['yes' for _ in range(len(config["Layers_mRNA"][0]))] for i in range(len(view_names_fix))]
+    # L2 REGULARIZATION SETTINGS
+    l2_regularization_bool_AE = False
+    l2_regularization_rate_AE = 0.000001
+    # BATCH SIZE SETTINGS
+    batch_size_AE = 64
+    val_batch_size_AE = 16
+    # EPOCH SETTINGS
+    n_epochs_AE = 100
+    # LEARNING RATE OPTIMIZER (ADAM)
+    learning_rate_AE = 0.005
+
 
     AE.train(module= multimodule,
-          feature_select_method= selection_method_NN,
-          components = components_PCA_NN,
-          thresholds= thresholds_VARIANCE_NN,
-          feature_names= None,
-          batch_size=batch_size_NN,
-          n_epochs=n_epochs_NN,
-          learning_rate= learning_rate,
-          l2_regularization=l2_regularization_bool_NN,
-          l2_regularization_rate=l2_regularization_rate_NN,
-          val_batch_size=val_batch_size_NN,
-          dropout=dropout_bool_NN,
-          dropout_rate=dropout_rate_NN,
-          batchnorm = batchnorm_bool_NN,
-          layers = layers_NN,
-          activation_layers = activations_AE,
-          batchnorm_layers = batchnorm_layers_NN,
-          dropout_layers = dropout_layers_NN,
-          view_names = view_names_fix,
-          config=config,
-          n_grid_search_iterations= 100)
+      feature_select_method= selection_method_NN,
+      components = components_PCA_NN,
+      thresholds= thresholds_VARIANCE_NN,
+      feature_names= None,
+      batch_size=batch_size_AE,
+      n_epochs=n_epochs_AE,
+      learning_rate= learning_rate_AE,
+      l2_regularization=l2_regularization_bool_AE,
+      l2_regularization_rate=l2_regularization_rate_AE,
+      val_batch_size=val_batch_size_AE,
+      dropout=dropout_bool_AE,
+      dropout_rate=dropout_rate_AE,
+      batchnorm = batchnorm_bool_AE,
+      activation_layers = activations_AE,
+      batchnorm_layers = batchnorm_layers_AE,
+      dropout_layers = dropout_layers_AE,
+      view_names = view_names_fix,
+      config=config,
+      n_grid_search_iterations= 100)
 
 
 

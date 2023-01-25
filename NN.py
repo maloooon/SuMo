@@ -282,7 +282,6 @@ def train(module,
           dropout_rate = 0.1,
           dropout = False,
           activation_layers = None,
-          layers = None,
           view_names = None,
           config = None,
           n_grid_search_iterations = 100):

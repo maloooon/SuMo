@@ -1,5 +1,5 @@
 import copy
-
+import pandas as pd
 import torch
 from torch import nn
 import numpy as np
@@ -8,8 +8,17 @@ import torchtuples as tt
 import matplotlib.pyplot as plt
 from pycox.evaluation import EvalSurv
 from torch.optim import Adam
-from sklearn.model_selection import KFold
-from torch.utils.data.sampler import SubsetRandomSampler
+from functools import partial
+import os
+import torch.nn.functional as F
+import torch.optim as optim
+from torch.utils.data import random_split
+import torchvision
+import torchvision.transforms as transforms
+from ray import tune
+from ray.tune import CLIReporter
+import random
+from ray.tune.schedulers import ASHAScheduler
 
 
 class NN_changeable(nn.Module):
@@ -250,6 +259,12 @@ class NN_changeable(nn.Module):
 
 
 
+
+
+
+
+
+
 def train(module,
           feature_select_method = 'eigengenes',
           components = None,
@@ -268,7 +283,9 @@ def train(module,
           dropout = False,
           activation_layers = None,
           layers = None,
-          view_names = None):
+          view_names = None,
+          config = None,
+          n_grid_search_iterations = 100):
     """
 
     :param module: basically the dataset to be used
@@ -327,9 +344,13 @@ def train(module,
         val_data[c] = tuple(val_data[c])
         test_data[c] = tuple(test_data[c])
 
-
+    best_concordance_folds = []
+    best_config_folds = []
+    all_concordances = [[] for _ in range(len(train_data))]
+    configs_for_good_concordances = [[] for _ in range(len(train_data))]
     ############################# FOLD X ###################################
     for c_fold,fold in enumerate(train_data):
+
         for c2,view in enumerate(fold):
 
             print("Train data has shape : {} for view {}".format(train_data[c_fold][c2].shape, view_names[c2]))
@@ -351,31 +372,58 @@ def train(module,
         val_data_full = (val_data[c_fold], (val_duration[c_fold], val_event[c_fold]))
 
 
-        # Call NN
+        curr_concordance = 0
 
-        if c_fold == 0:
+        # Call NN
+        # TODO : gleiche Durchläufe verhindern (check curr_config != new_config)
+        for grid_count in range(n_grid_search_iterations):
+            # Grid Search
+            curr_config = []
+            mRNA_layers = []
+            DNA_layers = []
+            microRNA_layers = []
+            RPPA_layers = []
+            for i in config["Layers_mRNA"]:
+                curr_layer_size = random.choice(i)
+                mRNA_layers.append(curr_layer_size)
+            for i in config["Layers_DNA"]:
+                curr_layer_size = random.choice(i)
+                DNA_layers.append(curr_layer_size)
+            for i in config["Layers_microRNA"]:
+                curr_layer_size = random.choice(i)
+                microRNA_layers.append(curr_layer_size)
+            for i in config["Layers_RPPA"]:
+                curr_layer_size = random.choice(i)
+                RPPA_layers.append(curr_layer_size)
+
+            # Set layers to views we currently look at
+            layers = [mRNA_layers, DNA_layers]
+
+            batch_size = random.choice(config["BatchSize"])
+            val_batch_size = random.choice(config["BatchSizeVal"])
+            learning_rate = random.choice(config["LearningRate"])
+            dropout = random.choice(config["DropoutBool"])
+            batchnorm = random.choice(config["BatchNormBool"])
+
+            curr_config = [layers, batch_size, val_batch_size, learning_rate, dropout, batchnorm]
+
+
+
+
+
+
+
+
+
+
+
             layers_u = copy.deepcopy(layers)
             activation_layers_u = copy.deepcopy(activation_layers)
             dropout_layers_u = copy.deepcopy(dropout_layers)
             batchnorm_layers_u = copy.deepcopy(batchnorm_layers)
             net = NN_changeable(views=view_names,
                                 in_features=dimensions,
-                                n_hidden_layers_dims=layers_u,
-                                activ_funcs=activation_layers_u,
-                                dropout_bool= dropout,
-                                dropout_prob= dropout_rate,
-                                dropout_layers= dropout_layers_u,
-                                batch_norm_bool= batchnorm,
-                                batch_norm= batchnorm_layers_u,
-                                print_bool=True)
-        else:
-            layers_u = copy.deepcopy(layers)
-            activation_layers_u = copy.deepcopy(activation_layers)
-            dropout_layers_u = copy.deepcopy(dropout_layers)
-            batchnorm_layers_u = copy.deepcopy(batchnorm_layers)
-            net = NN_changeable(views=view_names,
-                                in_features=dimensions,
-                                n_hidden_layers_dims=layers_u,
+                                n_hidden_layers_dims= layers_u,
                                 activ_funcs=activation_layers_u,
                                 dropout_bool= dropout,
                                 dropout_prob= dropout_rate,
@@ -385,73 +433,128 @@ def train(module,
                                 print_bool=False)
 
 
-        # Set parameters for NN
-        # set optimizer
-        if l2_regularization == True:
-            optimizer = Adam(net.parameters(), lr=learning_rate, weight_decay=l2_regularization_rate)
-        else:
-            optimizer = Adam(net.parameters(), lr=learning_rate)
-
-        callbacks = [tt.callbacks.EarlyStopping(patience=10)]
 
 
+            # Set parameters for NN
+            # set optimizer
+            if l2_regularization == True:
+                optimizer = Adam(net.parameters(), lr=learning_rate, weight_decay=l2_regularization_rate)
+            else:
+                optimizer = Adam(net.parameters(), lr=learning_rate)
 
-        # Call model
-        model = models.CoxPH(net,optimizer)
-
-        print("Split {} : ".format(c_fold + 1))
-        # Fit model
-        log = model.fit(train_data[c_fold],
-                        train_surv,
-                        batch_size,
-                        n_epochs,
-                        callbacks = callbacks,
-                        val_data=val_data_full,
-                        val_batch_size= val_batch_size,
-                        verbose=True)
+            callbacks = [tt.callbacks.EarlyStopping(patience=10)]
 
 
-        # Plot it
-        _ = log.plot()
-
-        # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
-        _ = model.compute_baseline_hazards()
-
-
-        # Predict based on test data
-        surv = model.predict_surv_df(test_data[c_fold])
-
-        # Plot it
-        surv.iloc[:, :5].plot()
-        plt.ylabel('S(t | x)')
-        _ = plt.xlabel('Time')
-
+            # Call model
+            model = models.CoxPH(net,optimizer)
+            print_loss = False
+            print("Split {} : ".format(c_fold + 1))
+            # Fit model
+            log = model.fit(train_data[c_fold],
+                            train_surv,
+                            batch_size,
+                            n_epochs,
+                            callbacks = callbacks,
+                            val_data=val_data_full,
+                            val_batch_size= val_batch_size,
+                            verbose=print_loss)
 
 
+            # Plot it
+      #      _ = log.plot()
 
-        # Evaluate with concordance, brier score and binomial log-likelihood
-        ev = EvalSurv(surv, test_duration, test_event, censor_surv='km') # censor_surv : Kaplan-Meier
+            # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
+            _ = model.compute_baseline_hazards()
 
-        # concordance
-        concordance_index = ev.concordance_td()
 
-        if concordance_index < 0.5:
-            concordance_index = 1 - concordance_index
+            # Predict based on test data
+            surv = model.predict_surv_df(test_data[c_fold])
 
-        #brier score
-        time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
-        _ = ev.brier_score(time_grid).plot
-        brier_score = ev.integrated_brier_score(time_grid)
-
-        #binomial log-likelihood
-        binomial_score = ev.integrated_nbll(time_grid)
-
-        print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
-                                                                                                           brier_score,
-                                                                                                           binomial_score))
+            # Plot it
+       #     surv.iloc[:, :5].plot()
+       #     plt.ylabel('S(t | x)')
+       #     _ = plt.xlabel('Time')
 
 
 
+
+            # Evaluate with concordance, brier score and binomial log-likelihood
+            ev = EvalSurv(surv, test_duration, test_event, censor_surv='km') # censor_surv : Kaplan-Meier
+
+            # concordance
+            concordance_index = ev.concordance_td()
+
+            if concordance_index < 0.5:
+                concordance_index = 1 - concordance_index
+
+            #brier score
+            time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
+            _ = ev.brier_score(time_grid).plot
+            brier_score = ev.integrated_brier_score(time_grid)
+
+            #binomial log-likelihood
+            binomial_score = ev.integrated_nbll(time_grid)
+
+            print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
+                                                                                                               brier_score,
+                                                                                                               binomial_score))
+
+            print("With config : ")
+            print("Layers : ", curr_config[0])
+            print("Batch Size : ", curr_config[1])
+            print("Validation Batch Size : ", curr_config[2])
+            print("Learning Rate : ", curr_config[3])
+            print("Dropout Bool : ", curr_config[4])
+            print("BatchNorm Bool : ", curr_config[5])
+
+
+            if concordance_index >= 0.6:
+                configs_for_good_concordances[c_fold].append(curr_config)
+
+
+            if concordance_index > curr_concordance:
+                best_config = curr_config
+                curr_concordance = concordance_index
+
+            all_concordances[c_fold].append(curr_concordance)
+
+        best_concordance_folds.append(curr_concordance)
+        best_config_folds.append(best_config)
+
+
+
+    print("Best concordances across folds : ", best_concordance_folds, "with config : ", best_config_folds)
+
+    for c_fold in range(len(all_concordances)):
+        print("Average concordance across fold for all grid search iterations",
+              str(c_fold + 1), ": ", sum(all_concordances[c_fold])/len(all_concordances[c_fold]))
+        print("Configs with concordances over 0.6 for current fold : ", len(configs_for_good_concordances[c_fold]))
+        print("Respective Config : ", configs_for_good_concordances[c_fold])
+
+
+
+
+
+
+
+
+
+
+
+
+def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/Fold", n_fold = 1):
+
+    trainset = pd.read_csv(
+        os.path.join(data_dir + str(n_fold) + "_TrainData.csv"), index_col=0)
+
+    valset = pd.read_csv(
+        os.path.join(data_dir + str(n_fold) + "_ValData.csv"), index_col=0)
+
+    testset = pd.read_csv(
+        os.path.join(data_dir + str(n_fold) + "_TestData.csv"), index_col=0)
+
+
+    return trainset, valset, testset
 
 
 

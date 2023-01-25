@@ -491,7 +491,7 @@ if (file.exists(path) & ('RPPA' %in% view_names_list))  {
 
 path <- paste0("/Users/marlon/Desktop/Project/TCGAData/",cancer_name,"/MICRORNA_for_r.csv")
 
-if (file.exists(path) & ('microRNA' %in% view_names_list)) {
+if (file.exists(path) & ('MICRORNA' %in% view_names_list)) {
   print("Creating microRNA eigengene matrix for training data ....")
   data_microRNA <- read.csv(path)
   data_microRNA = subset(data_microRNA, select= -c(X)) # remove added X column

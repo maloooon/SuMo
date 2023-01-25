@@ -789,6 +789,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             PCA_train_tensors = [[] for i in range(len(self.train_folds))]
             PCA_val_tensors = [[] for i in range(len(self.train_folds))]
             PCA_test_tensors = [[] for i in range(len(self.train_folds))]
+            feat_offs = [[] for i in range(len(self.train_folds))]
 
 
 
@@ -811,6 +812,9 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                     PCA_train_tensors[c].append(torch.tensor(train_data))
                     PCA_val_tensors[c].append(torch.tensor(val_data))
                     PCA_test_tensors[c].append(torch.tensor(test_data))
+                feat_offs[c] = components
+
+
 
 
 
@@ -821,6 +825,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                     PCA_train_tensors[c][c2] = PCA_train_tensors[c][c2].to(torch.float32)
                     PCA_val_tensors[c][c2] =PCA_val_tensors[c][c2].to(torch.float32)
                     PCA_test_tensors[c][c2] =PCA_test_tensors[c][c2].to(torch.float32)
+
 
 
 

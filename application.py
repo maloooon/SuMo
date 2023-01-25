@@ -1,3 +1,4 @@
+import pandas as pd
 import NN
 import AE
 import GCN
@@ -8,29 +9,20 @@ import torch
 
 
 if __name__ == '__main__':
-    cancer_data = ReadInData.readcancerdata('PAAD')
+    cancer_data = ReadInData.readcancerdata('LAML')
     data = cancer_data[0][0]
     feature_offsets = cancer_data[0][1]
     view_names = cancer_data[0][2]
     feature_names = cancer_data[0][3]
     cancer_name = cancer_data[0][4][0]
     which_views = [] # no input to use all the given views
+    n_folds = 1
 
     # needed for R, cant read in cancer name directly for some weird reason...
     with open('/Users/marlon/Desktop/Project/TCGAData/currentcancer.txt', 'w') as f:
         f.write(cancer_name)
 
-    if len(which_views) != 0:
-        with open('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt', 'w') as fp:
-            for item in which_views:
-                # write each item on a new line
-                fp.write("%s\n" % item)
-    else:
-        which_views = view_names
-        with open('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt', 'w') as fp:
-            for item in which_views:
-                # write each item on a new line
-                fp.write("%s\n" % item)
+
 
 
 
@@ -44,7 +36,7 @@ if __name__ == '__main__':
                                                         onezeronorm_bool=False,
                                                         cancer_name= cancer_name,
                                                         which_views = which_views,
-                                                        n_folds = 1,
+                                                        n_folds = n_folds,
                                                         preprocess_bool = True)
 
 
@@ -57,11 +49,79 @@ if __name__ == '__main__':
 
 
 
+    with open('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt', 'w') as fp:
+        for item in view_names_fix:
+            # write each item on a new line
+            fp.write("%s\n" % item)
+
+
+
+    # Grid search config
+
+    config = {
+        "Layers_mRNA" : [[1024,512,256], [256, 128, 64], [64,32,16]],
+        "Layers_DNA" : [[1024,512,256], [256, 128, 64], [64,32,16]],
+        "Layers_microRNA" : [[1024,512,256], [256, 128, 64], [64,32,16]],
+        "Layers_RPPA" : [[1024,512,256], [256, 128, 64], [64,32,16]],
+        "BatchSize" : [200,150,128,100,75,64,50,32,16],
+        "BatchSizeVal" : [100,75,64,50,40,32,20,16,8,4],
+        "LearningRate" : [0.01,0.001,0.0008,0.0006,0.0004,0.0001,0.00005,0.00001],
+        "DropoutBool" : ['yes','no'],
+        "BatchNormBool" : ['yes','no'],
+        "NNLayersConcat" : [[256,128,64], [64,32,16], [16,8,4,2]]
+
+    }
+
+
     print("######################## RUNNING FULLY CONNECTED NEURAL NET ####################################")
     # FEATURE SELECTION SETTINGS
-    selection_method_NN = 'eigengenes'
-    components_PCA_NN = [100,100,20,20]
+    selection_method_NN = 'pca'
+    components_PCA_NN = [74,74,74,74]
     thresholds_VARIANCE_NN = [0.8,0.8,0.8,0.8]
+
+
+    """
+    #Select method for feature selection
+
+    train_data, val_data, test_data, \
+    train_duration, train_event, \
+    val_duration, val_event, \
+    test_duration, test_event = multimodule.feature_selection(method=selection_method_NN,
+                                                              components= components_PCA_NN,
+                                                              thresholds= thresholds_VARIANCE_NN,
+                                                              feature_names= None)
+
+    # for RayTune we store prepared data and will load data with a function later on for each fold
+    # Feature offsets : Return them with feature selection methods
+    
+    for c_fold in range(n_folds):
+        all_train_data = train_data[c_fold]
+        all_train_data.append(train_duration[c_fold].unsqueeze(1))
+        all_train_data.append(train_event[c_fold].unsqueeze(1))
+        train_data = torch.cat(tuple(all_train_data), dim=1)
+        train_data_df = pd.DataFrame(train_data)
+        train_data_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/Fold" + str(c_fold + 1) +"_TrainData.csv")
+        all_val_data = val_data[c_fold]
+        all_val_data.append(val_duration[c_fold].unsqueeze(1))
+        all_val_data.append(val_event[c_fold].unsqueeze(1))
+        val_data = torch.cat(tuple(all_val_data), dim=1)
+        val_data_df = pd.DataFrame(val_data)
+        val_data_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/Fold" + str(c_fold + 1) +"_ValData.csv")
+        all_test_data = test_data[c_fold]
+        all_test_data.append(test_duration.unsqueeze(1))
+        all_test_data.append(test_event.unsqueeze(1))
+        test_data = torch.cat(tuple(all_test_data), dim=1)
+        test_data_df = pd.DataFrame(test_data)
+        test_data_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/Fold" + str(c_fold + 1) +"_TestData.csv")
+        
+    """
+
+
+
+
+ #   train,val,test = NN.load_data(n_fold=1)
+
+
 
 
     # FULLY CONNECTED NEURAL NET SETTINGS
@@ -92,25 +152,27 @@ if __name__ == '__main__':
 
 
 
-    NN.train(module= multimodule,
-          feature_select_method= selection_method_NN,
-          components = components_PCA_NN,
-          thresholds= thresholds_VARIANCE_NN,
-          feature_names= None,
-          batch_size=batch_size_NN,
-          n_epochs=n_epochs_NN,
-          learning_rate= learning_rate,
-          l2_regularization=l2_regularization_bool_NN,
-          l2_regularization_rate=l2_regularization_rate_NN,
-          val_batch_size=val_batch_size_NN,
-          dropout=dropout_bool_NN,
-          dropout_rate=dropout_rate_NN,
-          batchnorm = batchnorm_bool_NN,
-          layers = layers_NN,
-          activation_layers = activations_NN,
-          batchnorm_layers = batchnorm_layers_NN,
-          dropout_layers = dropout_layers_NN,
-          view_names = view_names_fix)
+ #   NN.train(module= multimodule,
+ #         feature_select_method= selection_method_NN,
+ #         components = components_PCA_NN,
+ #         thresholds= thresholds_VARIANCE_NN,
+ #         feature_names= None,
+ #         batch_size=batch_size_NN,
+ #         n_epochs=n_epochs_NN,
+ #         learning_rate= learning_rate,
+ #         l2_regularization=l2_regularization_bool_NN,
+ #         l2_regularization_rate=l2_regularization_rate_NN,
+ #         val_batch_size=val_batch_size_NN,
+ #         dropout=dropout_bool_NN,
+ #         dropout_rate=dropout_rate_NN,
+ #         batchnorm = batchnorm_bool_NN,
+ #         layers = layers_NN,
+ #         activation_layers = activations_NN,
+ #         batchnorm_layers = batchnorm_layers_NN,
+ #         dropout_layers = dropout_layers_NN,
+ #         view_names = view_names_fix,
+ #         config=config,
+ #         n_grid_search_iterations= 100)
 
 
     print("######################## FULLY CONNECTED NEURAL NET FINISHED ####################################")
@@ -139,21 +201,33 @@ if __name__ == '__main__':
     print("######################## RUNNING AUTOENCODER ####################################")
 
 
- #   AE.train(module=multimodule,
- #            device=device,
- #            feature_select_method= 'pca',
- #            components = [100,100,20,20],
- #            thresholds= [0.8,0.8,0.8,0.8],
- #            feature_names= None,
- #            batch_size=128,
- #            n_epochs=100,
- #            l2_regularization=False,
-  #           val_batch_size=32,
- #            number_folds=3,
- #            n_train_samples = n_train_samples,
- #            n_test_samples = n_test_samples,
-  #           n_val_samples = n_val_samples,
-  #           view_names = view_names)
+    # AE SETTINGS
+    activations_AE = [['relu'] for i in range(len(view_names_fix))]
+
+    AE.train(module= multimodule,
+          feature_select_method= selection_method_NN,
+          components = components_PCA_NN,
+          thresholds= thresholds_VARIANCE_NN,
+          feature_names= None,
+          batch_size=batch_size_NN,
+          n_epochs=n_epochs_NN,
+          learning_rate= learning_rate,
+          l2_regularization=l2_regularization_bool_NN,
+          l2_regularization_rate=l2_regularization_rate_NN,
+          val_batch_size=val_batch_size_NN,
+          dropout=dropout_bool_NN,
+          dropout_rate=dropout_rate_NN,
+          batchnorm = batchnorm_bool_NN,
+          layers = layers_NN,
+          activation_layers = activations_AE,
+          batchnorm_layers = batchnorm_layers_NN,
+          dropout_layers = dropout_layers_NN,
+          view_names = view_names_fix,
+          config=config,
+          n_grid_search_iterations= 100)
+
+
+
 
 
 

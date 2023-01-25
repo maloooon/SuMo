@@ -19,7 +19,7 @@ if __name__ == '__main__':
             cancer_types += 1
 
 
-    # different types ; TODO : deleted OV as it has only meta data
+    # different types
     cancers = ['PRAD', 'ACC', 'BLCA', 'BRCA', 'CESC', 'CHOL', 'COAD', 'DLBC', 'ESCA', 'GBM', 'HNSC', 'KICH',
                'KIRC','KIRP','LAML','LGG','LIHC','LUAD','LUSC','MESO','PAAD','PCPG','READ','SARC','SKCM',
                'STAD','TGCT','THCA','THYM','UCEC' ,'UCS', 'UVM']

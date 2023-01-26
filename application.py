@@ -5,18 +5,19 @@ import GCN
 import ReadInData
 import DataInputNew
 import torch
+import numpy as np
 
 
 
 if __name__ == '__main__':
-    cancer_data = ReadInData.readcancerdata('LUAD')
+    cancer_data = ReadInData.readcancerdata('KICH')
     data = cancer_data[0][0]
     feature_offsets = cancer_data[0][1]
     view_names = cancer_data[0][2]
     feature_names = cancer_data[0][3]
     cancer_name = cancer_data[0][4][0]
-    which_views = ['DNA','microRNA'] # no input to use all the given views
-    n_folds = 3
+    which_views = ['microRNA'] # no input to use all the given views
+    n_folds = 1
 
     # needed for R, cant read in cancer name directly for some weird reason...
     with open('/Users/marlon/Desktop/Project/TCGAData/currentcancer.txt', 'w') as f:
@@ -33,13 +34,13 @@ if __name__ == '__main__':
     multimodule = DataInputNew.SurvMultiOmicsDataModule(data,
                                                         feature_offsets,
                                                         view_names,
-                                                        onezeronorm_bool=False,
+                                                        onezeronorm_bool=False, ########################## Preprocessing : One-Zero-Normalization (for Cross/ConcatAE)
                                                         cancer_name= cancer_name,
                                                         which_views = which_views,
                                                         n_folds = n_folds,
-                                                        preprocess_bool = True)
+                                                        preprocess_bool = True)  ######################### basic preprocessing as in PyCox tutorial (works good with just FCNN and PCA, but not so well with ConcatAE)
 
-
+    # kurze Einführung worum geht es, was sind die Ziele, was ist die Vorgehensweise
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -89,6 +90,78 @@ if __name__ == '__main__':
     }
 
 
+    feature_select_method = 'pca'
+    components = [35,35,35,35]
+    thresholds = [0.8,0.8,0.8,0.8]
+
+
+
+    train_data, val_data, test_data, \
+    train_duration, train_event, \
+    val_duration, val_event, \
+    test_duration, test_event = multimodule.feature_selection(method=feature_select_method,
+                                                              components= components,
+                                                              thresholds= thresholds,
+                                                              feature_names= feature_names)
+
+
+
+    # for Optuna we store prepared data and feature offsets and will load them with a function later on for each fold
+
+    for c_fold in range(n_folds):
+        feat_offs_train = [0]
+        all_train_data = train_data[c_fold]
+
+        all_train_data.append(train_duration[c_fold].unsqueeze(1))
+        all_train_data.append(train_event[c_fold].unsqueeze(1))
+        # all_train_data is now a list containing data for all views, the durations and the events
+        # we can get the feature offsets by accessing dimension 1 of each
+        for idx, _ in enumerate(all_train_data):
+            feat_offs_train.append(all_train_data[idx].size(1))
+        train_data = torch.cat(tuple(all_train_data), dim=1)
+        train_data_df = pd.DataFrame(train_data)
+        feat_offs_train = np.cumsum(feat_offs_train)
+        feat_offs_train_df = pd.DataFrame(feat_offs_train)
+        train_data_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/TrainData.csv")
+        feat_offs_train_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/TrainDataFeatOffs.csv")
+
+        feat_offs_val = []
+        all_val_data = val_data[c_fold]
+        all_val_data.append(val_duration[c_fold].unsqueeze(1))
+        all_val_data.append(val_event[c_fold].unsqueeze(1))
+        for idx, _ in enumerate(all_val_data):
+            feat_offs_val.append(all_val_data[idx].size(1))
+        val_data = torch.cat(tuple(all_val_data), dim=1)
+        val_data_df = pd.DataFrame(val_data)
+        feat_offs_val = np.cumsum(feat_offs_val)
+        feat_offs_val_df = pd.DataFrame(feat_offs_val)
+        val_data_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/ValData.csv")
+        feat_offs_val_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/ValDataFeatOffs.csv")
+
+        feat_offs_test = []
+        all_test_data = test_data[c_fold]
+        all_test_data.append(test_duration.unsqueeze(1))
+        all_test_data.append(test_event.unsqueeze(1))
+        for idx, _ in enumerate(all_test_data):
+            feat_offs_test.append(all_test_data[idx].size(1))
+        test_data = torch.cat(tuple(all_test_data), dim=1)
+        test_data_df = pd.DataFrame(test_data)
+        feat_offs_test = np.cumsum(feat_offs_test)
+        feat_offs_test_df = pd.DataFrame(feat_offs_test)
+        test_data_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/TestData.csv")
+        feat_offs_test_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/TestDataFeatOffs.csv")
+
+
+
+
+        NN.optuna_optimization()
+
+
+
+
+
+
+
     print("######################## RUNNING FULLY CONNECTED NEURAL NET ####################################")
     # FEATURE SELECTION SETTINGS
     selection_method_NN = 'pca'
@@ -96,41 +169,12 @@ if __name__ == '__main__':
     thresholds_VARIANCE_NN = [0.8,0.8,0.8,0.8]
 
 
-    """
-    #Select method for feature selection
 
-    train_data, val_data, test_data, \
-    train_duration, train_event, \
-    val_duration, val_event, \
-    test_duration, test_event = multimodule.feature_selection(method=selection_method_NN,
-                                                              components= components_PCA_NN,
-                                                              thresholds= thresholds_VARIANCE_NN,
-                                                              feature_names= None)
 
-    # for RayTune we store prepared data and will load data with a function later on for each fold
-    # Feature offsets : Return them with feature selection methods
-    
-    for c_fold in range(n_folds):
-        all_train_data = train_data[c_fold]
-        all_train_data.append(train_duration[c_fold].unsqueeze(1))
-        all_train_data.append(train_event[c_fold].unsqueeze(1))
-        train_data = torch.cat(tuple(all_train_data), dim=1)
-        train_data_df = pd.DataFrame(train_data)
-        train_data_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/Fold" + str(c_fold + 1) +"_TrainData.csv")
-        all_val_data = val_data[c_fold]
-        all_val_data.append(val_duration[c_fold].unsqueeze(1))
-        all_val_data.append(val_event[c_fold].unsqueeze(1))
-        val_data = torch.cat(tuple(all_val_data), dim=1)
-        val_data_df = pd.DataFrame(val_data)
-        val_data_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/Fold" + str(c_fold + 1) +"_ValData.csv")
-        all_test_data = test_data[c_fold]
-        all_test_data.append(test_duration.unsqueeze(1))
-        all_test_data.append(test_event.unsqueeze(1))
-        test_data = torch.cat(tuple(all_test_data), dim=1)
-        test_data_df = pd.DataFrame(test_data)
-        test_data_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/Fold" + str(c_fold + 1) +"_TestData.csv")
+
+
         
-    """
+
 
 
 
@@ -164,6 +208,8 @@ if __name__ == '__main__':
     n_epochs_NN = 100
     # LEARNING RATE OPTIMIZER (ADAM)
     learning_rate_NN = 0.005
+
+
 
 
 

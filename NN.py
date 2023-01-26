@@ -19,10 +19,11 @@ from ray import tune
 from ray.tune import CLIReporter
 import random
 from ray.tune.schedulers import ASHAScheduler
+import optuna
 
 
 class NN_changeable(nn.Module):
-    def __init__(self,views,in_features, n_hidden_layers_dims =None,
+    def __init__(self,views,in_features, trial, n_hidden_layers_dims =None,
                  activ_funcs = None,dropout_prob = None, dropout_layers = None,
                  batch_norm = None, dropout_bool = None, batch_norm_bool = None,print_bool = False):
         """
@@ -51,8 +52,10 @@ class NN_changeable(nn.Module):
         self.in_features = in_features
         #self.feature_offsets = feature_offsets
         self.n_hidden_layers_dims = n_hidden_layers_dims
+
         self.activ_funcs = activ_funcs
-        self.dropout_prob = dropout_prob
+      #  self.dropout_prob = dropout_prob
+        self.dropout_prob = trial.suggest_float("dropout_prob", 0,0.5,step=0.1)
         self.dropout_layers = dropout_layers
         self.batch_norm = batch_norm
         self.dropout_bool = dropout_bool
@@ -60,6 +63,10 @@ class NN_changeable(nn.Module):
         # Create list of lists which will store each hidden layer call for each view
         self.hidden_layers = nn.ParameterList([nn.ParameterList([]) for x in range(len(in_features))])
         self.print_bool = print_bool
+
+
+
+
 
 
         # Produce activation functions list of lists
@@ -164,7 +171,7 @@ class NN_changeable(nn.Module):
 
 
         # Dropout
-        self.dropout = nn.Dropout(dropout_prob)
+        self.dropout = nn.Dropout(self.dropout_prob) # TODO:  hier self.dropout_prob oder der trial. Ausdruck ? möglicher Fehler!
 
 
         if print_bool == True:
@@ -183,6 +190,9 @@ class NN_changeable(nn.Module):
 
             print("Finally, the last output of each layer is summed up ({} features) and casted to a single element, "
                   "the hazard".format(sum_dim_last_layers))
+
+
+
 
 
 
@@ -259,6 +269,131 @@ class NN_changeable(nn.Module):
 
 
 
+
+
+
+def objective(trial):
+
+
+    # Load in data (##### For testing for first fold, later on
+
+    trainset, trainset_feat, valset, valset_feat, testset, testset_feat = load_data()
+
+    trainset_feat = list(trainset_feat.values)
+    for idx,_ in enumerate(trainset_feat):
+        trainset_feat[idx] = trainset_feat[idx].item()
+
+    valset_feat = list(valset_feat.values)
+    for idx,_ in enumerate(valset_feat):
+        valset_feat[idx] = valset_feat[idx].item()
+
+    testset_feat = list(testset_feat.values)
+    for idx,_ in enumerate(testset_feat):
+        testset_feat[idx] = testset_feat[idx].item()
+
+
+    train_data = []
+    for c,feat in enumerate(trainset_feat):
+        if c < len(trainset_feat) - 3: # train data views
+            train_data.append(np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values))
+        elif c == len(trainset_feat) - 3: # duration
+            train_duration = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values)).squeeze(axis=1)
+        elif c == len(trainset_feat) -2: # event
+            train_event = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values)).squeeze(axis=1)
+
+    train_data = tuple(train_data)
+
+    val_data = []
+    for c,feat in enumerate(valset_feat):
+        if c < len(valset_feat) - 3: # train data views
+            val_data.append(np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values))
+        elif c == len(valset_feat) - 3: # duration
+            train_duration = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values)).squeeze(axis=1)
+        elif c == len(valset_feat) -2: # event
+            train_event = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values)).squeeze(axis=1)
+
+    test_data = []
+
+    for c,feat in enumerate(testset_feat):
+        if c < len(testset_feat) - 3: # train data views
+            test_data.append(np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values))
+        elif c == len(testset_feat) - 3: # duration
+            train_duration = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values)).squeeze(axis=1)
+        elif c == len(testset_feat) -2: # event
+            train_event = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values)).squeeze(axis=1)
+
+
+
+    # Change data structure for the FCNN and PyCox
+    """
+    try:
+        test_duration = test_duration.numpy()
+        test_event = test_event.numpy()
+    except AttributeError:
+        pass
+    
+    
+    for c,fold in enumerate(train_data):
+        try:
+            train_duration[c] = train_duration[c].numpy()
+            train_event[c] = train_event[c].numpy()
+            val_duration[c] = val_duration[c].numpy()
+            val_event[c] = val_event[c].numpy()
+        except AttributeError: # in this case already numpy arrays
+            pass
+    
+    
+    
+        for c2,view in enumerate(fold):
+            try:
+                train_data[c][c2] = (train_data[c][c2]).numpy()
+                val_data[c][c2] = (val_data[c][c2]).numpy()
+                test_data[c][c2] = (test_data[c][c2]).numpy()
+            except AttributeError:
+                pass
+    
+    
+        # Need tuple structure for PyCox
+        train_data[c] = tuple(train_data[c])
+        val_data[c] = tuple(val_data[c])
+        test_data[c] = tuple(test_data[c])
+    """
+
+
+
+
+    model = NN_changeable(views=['microRNA'],
+                              in_features=[35],
+                              trial=trial,
+                              n_hidden_layers_dims=[[64,32]],activ_funcs=[['relu','relu'],['none']],
+                              dropout_prob=None,dropout_layers=[['yes','yes']],batch_norm=[['yes','yes']],dropout_bool=True,
+                              batch_norm_bool=True,
+                              print_bool=False
+                              )
+
+
+
+
+
+
+    print("H")
+
+
+
+
+
+
+
+
+
+def optuna_optimization(fold = 1):
+    EPOCHS = 30
+    study = optuna.create_study(direction='maximize',sampler=optuna.samplers.TPESampler(),pruner=optuna.pruners.MedianPruner())
+    study.optimize(objective, n_trials = EPOCHS)
+
+    trial = study.best_trial
+
+    print("Concordance", trial.value)
 
 
 
@@ -346,6 +481,7 @@ def train(module,
 
     best_concordance_folds = []
     best_config_folds = []
+    concordances = []
     all_concordances = [[] for _ in range(len(train_data))]
     configs_for_good_concordances = [[] for _ in range(len(train_data))]
     ############################# FOLD X ###################################
@@ -374,6 +510,7 @@ def train(module,
 
         curr_concordance = 0
 
+        """
         # Call NN
         # TODO : gleiche Durchläufe verhindern (check curr_config != new_config)
         for grid_count in range(n_grid_search_iterations):
@@ -407,6 +544,7 @@ def train(module,
 
             curr_config = [layers, batch_size, val_batch_size, learning_rate, dropout, batchnorm]
 
+            """
 
 
 
@@ -417,479 +555,69 @@ def train(module,
 
 
 
-            layers_u = copy.deepcopy(layers)
-            activation_layers_u = copy.deepcopy(activation_layers)
-            dropout_layers_u = copy.deepcopy(dropout_layers)
-            batchnorm_layers_u = copy.deepcopy(batchnorm_layers)
+        layers_u = [[64,32]]#copy.deepcopy(layers)
+        activation_layers_u = copy.deepcopy(activation_layers)
+        dropout_layers_u = copy.deepcopy(dropout_layers)
+        batchnorm_layers_u = copy.deepcopy(batchnorm_layers)
 
 
-            net = NN_changeable(views=view_names,
-                                in_features=dimensions,
-                                n_hidden_layers_dims= layers_u,
-                                activ_funcs=activation_layers_u,
-                                dropout_bool= dropout,
-                                dropout_prob= dropout_rate,
-                                dropout_layers= dropout_layers_u,
-                                batch_norm_bool= batchnorm,
-                                batch_norm= batchnorm_layers_u,
-                                print_bool=False)
-
-
-
-
-            # Set parameters for NN
-            # set optimizer
-            if l2_regularization == True:
-                optimizer = Adam(net.parameters(), lr=learning_rate, weight_decay=l2_regularization_rate)
-            else:
-                optimizer = Adam(net.parameters(), lr=learning_rate)
-
-            callbacks = [tt.callbacks.EarlyStopping(patience=10)]
-
-
-            # Call model
-            model = models.CoxPH(net,optimizer)
-            print_loss = False
-            print("Split {} : ".format(c_fold + 1))
-            # Fit model
-            log = model.fit(train_data[c_fold],
-                            train_surv,
-                            batch_size,
-                            n_epochs,
-                            callbacks = callbacks,
-                            val_data=val_data_full,
-                            val_batch_size= val_batch_size,
-                            verbose=print_loss)
-
-
-            # Plot it
-      #      _ = log.plot()
-
-            # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
-            _ = model.compute_baseline_hazards()
-
-
-            # Predict based on test data
-            surv = model.predict_surv_df(test_data[c_fold])
-
-            # Plot it
-       #     surv.iloc[:, :5].plot()
-       #     plt.ylabel('S(t | x)')
-       #     _ = plt.xlabel('Time')
-
-
-
-
-            # Evaluate with concordance, brier score and binomial log-likelihood
-            ev = EvalSurv(surv, test_duration, test_event, censor_surv='km') # censor_surv : Kaplan-Meier
-
-            # concordance
-            concordance_index = ev.concordance_td()
-
-            if concordance_index < 0.5:
-                concordance_index = 1 - concordance_index
-
-            #brier score
-            time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
-            _ = ev.brier_score(time_grid).plot
-            brier_score = ev.integrated_brier_score(time_grid)
-
-            #binomial log-likelihood
-            binomial_score = ev.integrated_nbll(time_grid)
-
-            print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
-                                                                                                               brier_score,
-                                                                                                               binomial_score))
-
-            print("With config : ")
-            print("Layers : ", curr_config[0])
-            print("Batch Size : ", curr_config[1])
-            print("Validation Batch Size : ", curr_config[2])
-            print("Learning Rate : ", curr_config[3])
-            print("Dropout Bool : ", curr_config[4])
-            print("BatchNorm Bool : ", curr_config[5])
-
-
-            if concordance_index >= 0.6:
-                configs_for_good_concordances[c_fold].append(curr_config)
-
-
-            if concordance_index > curr_concordance:
-                best_config = curr_config
-                curr_concordance = concordance_index
-
-            all_concordances[c_fold].append(concordance_index)
-
-        best_concordance_folds.append(curr_concordance)
-        best_config_folds.append(best_config)
-
-
-
-    print("Best concordances across folds : ", best_concordance_folds, "with config : ", best_config_folds)
-
-    for c_fold in range(len(all_concordances)):
-        print("Average concordance across fold for all grid search iterations",
-              str(c_fold + 1), ": ", sum(all_concordances[c_fold])/len(all_concordances[c_fold]))
-        print("Configs with concordances over 0.6 for current fold : ", len(configs_for_good_concordances[c_fold]))
-    #    print("Respective Config : ", configs_for_good_concordances[c_fold])
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/Fold", n_fold = 1):
-
-    trainset = pd.read_csv(
-        os.path.join(data_dir + str(n_fold) + "_TrainData.csv"), index_col=0)
-
-    valset = pd.read_csv(
-        os.path.join(data_dir + str(n_fold) + "_ValData.csv"), index_col=0)
-
-    testset = pd.read_csv(
-        os.path.join(data_dir + str(n_fold) + "_TestData.csv"), index_col=0)
-
-
-    return trainset, valset, testset
-
-
-
-
-
-
-
-
-
-    """
-
-    # Setup all the data
-    n_train_samples, n_test_samples,view_names = module.setup()
-
-
-
-    #Select method for feature selection
-    module.feature_selection(method=feature_select_method,
-                             components= components,
-                             thresholds= thresholds,
-                             feature_names= feature_names)
-
-    # Load Dataloaders
-
-
-    trainloader = module.train_dataloader(batch_size=n_train_samples)
-    testloader =module.test_dataloader(batch_size=n_test_samples)
-
-    # Load data and set device to cuda if possible
-
-    #Train
-    for train_data, train_duration, train_event in trainloader:
-        for view in range(len(train_data)):
-            train_data[view] = train_data[view].to(device=device)
-
-
-        train_duration.to(device=device)
-        train_event.to(device=device)
-
-
-    for view in range(len(view_names)):
-        print("Train data shape for view {} after feature selection {}".format(view_names[view],train_data[view].shape))
-
-
-    #Test
-    for test_data, test_duration, test_event in testloader:
-        for view in range(len(test_data)):
-            test_data[view] = test_data[view].to(device=device)
-     #       test_data[view] = test_data[view].numpy()
-
-
-        test_duration.to(device=device)
-        test_event.to(device=device)
-
-
-    for view in range(len(view_names)):
-        print("Test data shape for view {} after feature selection {}".format(view_names[view],test_data[view].shape))
-
-
-
-
-    # For PyCox, we need to change the structure so that all the data of different views is wrapped in a tuple
-    train_data = tuple(train_data)
-    test_data = tuple(test_data)
-
-
-
-
-    # Input dimensions (features for each view) for NN based on different data (train/test)
-    # Need to be the same for NN to work
-
-    dimensions_train = [x.shape[1] for x in train_data]
-    dimensions_test = [x.shape[1] for x in test_data]
-
-
-    assert(dimensions_train == dimensions_test), "Dimensions have to be the same size in train and test for each view."
-
-
-
-    dimensions = dimensions_train
-
-    # Cross Validation:
-    # We first need to concatenate all the data (train,test) together.
-    # Since each view has a different feature size, we do that in the cross validation loop ;
-    # duration & event can be done here already.
-
-    full_data = []
-    for view_idx in range(len(view_names)):
-        data = torch.cat(tuple([train_data[view_idx],test_data[view_idx]]), dim=0)
-        full_data.append(data)
-
-
-    full_duration = torch.cat(tuple([train_duration,test_duration]),dim=0)
-    full_event = torch.cat(tuple([train_event,test_event]),dim=0)
-
-    # k is the number of folds
-    k = number_folds
-    # TODO : skicit learn split --> stratify for event / stratifiedKFold
-    # TODO : gradient clipping
-    # TODO : sonst auch nur train/test mit 1 fold --> train/test split
-    splits = KFold(n_splits=k,shuffle=True,random_state=42)
-
-    n_all_samples = n_train_samples + n_test_samples
-
-    for fold, (train_idx,val_idx) in enumerate(splits.split(np.arange(n_all_samples))):
-        torch.manual_seed(0)
-
-        print('Fold {}'.format(fold + 1))
-
-
-        event_boolean = False
-
-        while event_boolean == False:
-            np.random.seed(seed=0)
-            train_sampler = SubsetRandomSampler(train_idx) # np.array e.g. [0 2 4 8 18 22 ..]
-            test_sampler = SubsetRandomSampler(val_idx)
-
-
-
-
-
-
-            # we take a subset of our train samples for the validation set
-            # 20% of train is validation set
-            # We first need to turn the train_sampler into a np.array (else the method won't work)
-            train_sampler_array = np.empty(len(train_sampler))
-
-            for c,idx in enumerate(train_sampler):
-                np.put(train_sampler_array,c,idx)
-
-            val_sampler = np.random.choice(train_sampler_array, int(0.2 * len(train_sampler)))
-
-            #change dtype
-            val_sampler = val_sampler.astype('int32')
-            train_sampler_array = train_sampler_array.astype('int32')
-
-            # get indices as list
-            val_sampler_list = val_sampler.tolist()
-            # remove these from train sampler
-            train_sampler_array = np.setdiff1d(train_sampler_array, val_sampler_list)
-
-            # Get duration & events
-            train_duration = []
-            train_event = []
-            for idx in train_sampler_array:
-                train_duration.append(full_duration[idx])
-                train_event.append(full_event[idx])
-
-            train_duration = torch.stack(tuple(train_duration))
-            train_event = torch.stack(tuple(train_event))
-
-            train_duration = train_duration.numpy()
-            train_event = train_event.numpy()
-
-
-            val_duration = []
-            val_event = []
-            for idx in val_sampler:
-                val_duration.append(full_duration[idx])
-                val_event.append(full_event[idx])
-
-            val_duration = torch.stack(tuple(val_duration))
-            val_event = torch.stack(tuple(val_event))
-
-            val_duration = val_duration.numpy()
-            val_event = val_event.numpy()
-
-            # Check that each set contains atleast one event that is not censored
-
-
-
-
-            test_duration = []
-            test_event = []
-            for idx in test_sampler:
-
-                test_duration.append(full_duration[idx])
-                test_event.append(full_event[idx])
-
-            test_duration = torch.stack(tuple(test_duration))
-            test_event = torch.stack(tuple(test_event))
-
-            test_duration = test_duration.numpy()
-            test_event = test_event.numpy()
-
-
-            print("val non censored samples : ", np.count_nonzero(val_event))
-            print("train non censored samples : ", np.count_nonzero(train_event))
-            print("test non censored samples : ", np.count_nonzero(test_event))
-
-
-            if np.count_nonzero(val_event) != 0 \
-                    and np.count_nonzero(train_event) != 0 \
-                    and np.count_nonzero(test_event) != 0:
-
-                event_boolean = True
-
-
-        # Numpy transforms for PyCox
-
-
-        train_surv = (train_duration, train_event)
-
-
-
-
-        # Get necessary data for each view
-        train_data_full = []
-        val_data_full = []
-        test_data_full = []
-        for view_idx in range(len(view_names)):
-
-            # get training data
-            train_data = []
-
-            for idx in train_sampler_array:
-                train_data.append(full_data[view_idx][idx])
-
-
-            train_data = torch.stack(tuple(train_data))
-
-            train_data_full.append(train_data.numpy())
-
-
-            # get validation data
-            val_data = []
-
-            for idx in val_sampler:
-                val_data.append(full_data[view_idx][idx])
-
-
-            val_data = torch.stack(tuple(val_data))
-
-            val_data_full.append(val_data.numpy())
-
-
-
-            # get testing data
-            test_data = []
-
-            for idx in test_sampler:
-                test_data.append(full_data[view_idx][idx])
-
-
-            test_data = torch.stack(tuple(test_data))
-
-            test_data_full.append(test_data.numpy())
-
-
-
-
-
-        #Change into tuple structure
-        train_data_full = tuple(train_data_full)
-        val_data_full = tuple(val_data_full)
-        test_data_full = tuple(test_data_full)
-
-
-        # for PyCox
-        val_data = (val_data_full, (val_duration, val_event))
-
-
-
-        torch.manual_seed(0)
-
-        # Call NN
-        if fold == 0:
-            net = NN_changeable(view_names,dimensions,[[8,4] for i in range(len(view_names))],
-                                [['relu'],['relu'], ['relu'],['none']], dropout_rate,
-                                dropout_per_view,
-                                [['yes','yes'],['yes','yes'],['yes','yes'],['yes','yes']],
-                                dropout,batch_norm_bool=False,print_bool=True)
-        else:
-            net = NN_changeable(view_names,dimensions, [[8,4] for i in range(len(view_names))],
-                                [['relu'],['relu'], ['relu'],['none']], dropout_rate,
-                                dropout_per_view,
-                                [['yes','yes'],['yes','yes'],['yes','yes'],['yes','yes']],
-                                dropout,batch_norm_bool=False,print_bool=False)
-
-
-        # Dropout makes performance worse !
-        # Batch norm only works if each batch has enough samples --> check that the last batch in an epoch (which may
-        # get cut off since we don't have enough samples anymore) is bigger than 3-5 (?) samples for BatchNorm to work
-
+        net = NN_changeable(views=view_names,
+                            in_features=dimensions,
+                            n_hidden_layers_dims= layers_u,
+                            activ_funcs=activation_layers_u,
+                            dropout_bool= dropout,
+                            dropout_prob= dropout_rate,
+                            dropout_layers= dropout_layers_u,
+                            batch_norm_bool= batchnorm,
+                            batch_norm= batchnorm_layers_u,
+                            print_bool=False)
 
 
 
 
         # Set parameters for NN
         # set optimizer
+      #  lr = trial.suggest_float("lr", 1e-5,1e-1, log=True)
+
+
         if l2_regularization == True:
-            optimizer = Adam(net.parameters(), lr=0.001, weight_decay=0.0001)
+            optimizer = Adam(net.parameters(), lr=learning_rate, weight_decay=l2_regularization_rate)
         else:
-            optimizer = Adam(net.parameters(), lr=0.001)
+            optimizer = Adam(net.parameters(), lr=learning_rate)
 
         callbacks = [tt.callbacks.EarlyStopping(patience=10)]
 
 
-
+        # TODO : validation & train batch size same size
         # Call model
         model = models.CoxPH(net,optimizer)
-
-
+        print_loss = False
+        print("Split {} : ".format(c_fold + 1))
         # Fit model
-        log = model.fit(train_data_full,
+        log = model.fit(train_data[c_fold],
                         train_surv,
                         batch_size,
                         n_epochs,
                         callbacks = callbacks,
-                        val_data=val_data,
-                        val_batch_size= val_batch_size,
-                        verbose=True)
-
+                        val_data=val_data_full,
+                        val_batch_size= batch_size,
+                        verbose=print_loss)
 
 
         # Plot it
-        _ = log.plot()
+  #      _ = log.plot()
 
         # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
         _ = model.compute_baseline_hazards()
 
 
         # Predict based on test data
-        surv = model.predict_surv_df(test_data_full)
+        surv = model.predict_surv_df(test_data[c_fold])
 
         # Plot it
-        surv.iloc[:, :5].plot()
-        plt.ylabel('S(t | x)')
-        _ = plt.xlabel('Time')
+   #     surv.iloc[:, :5].plot()
+   #     plt.ylabel('S(t | x)')
+   #     _ = plt.xlabel('Time')
 
 
 
@@ -899,6 +627,9 @@ def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/Fold", n_fold
 
         # concordance
         concordance_index = ev.concordance_td()
+
+        if concordance_index < 0.5:
+            concordance_index = 1 - concordance_index
 
         #brier score
         time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
@@ -910,8 +641,34 @@ def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/Fold", n_fold
 
         print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
                                                                                                            brier_score,
-                                                                                                     binomial_score))
-    """
+                                                                                                           binomial_score))
+        concordances.append(concordance_index)
+
+
+
+
+
+
+       #     print("With config : ")
+       #     print("Layers : ", curr_config[0])
+       #     print("Batch Size : ", curr_config[1])
+       #     print("Validation Batch Size : ", curr_config[2])
+       #     print("Learning Rate : ", curr_config[3])
+        #    print("Dropout Bool : ", curr_config[4])
+        #    print("BatchNorm Bool : ", curr_config[5])
+
+
+    #    if concordance_index >= 0.6:
+          #  configs_for_good_concordances[c_fold].append(curr_config)
+
+
+     #   if concordance_index > curr_concordance:
+          #  best_config = curr_config
+     #       curr_concordance = concordance_index
+
+    #    all_concordances[c_fold].append(concordance_index)
+
+    #best_concordance_folds.append(curr_concordance)
 
 
 
@@ -920,6 +677,70 @@ def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/Fold", n_fold
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/"):
+
+    trainset = pd.read_csv(
+        os.path.join(data_dir + "TrainData.csv"), index_col=0)
+
+    trainset_feat = pd.read_csv(
+        os.path.join(data_dir +"TrainDataFeatOffs.csv"), index_col=0)
+
+
+    valset = pd.read_csv(
+        os.path.join(data_dir + "ValData.csv"), index_col=0)
+
+    valset_feat = pd.read_csv(
+        os.path.join(data_dir +"ValDataFeatOffs.csv"), index_col=0)
+
+    testset = pd.read_csv(
+        os.path.join(data_dir +  "TestData.csv"), index_col=0)
+
+    testset_feat = pd.read_csv(
+        os.path.join(data_dir + "TestDataFeatOffs.csv"), index_col=0)
+
+
+    return trainset, trainset_feat, valset, valset_feat, testset, testset_feat
+
+
+
+"""
+def objective(trial):
+
+    params = {
+        'learning_rate': trial.suggest_loguniform('learning_rate', 1e-5,1e-1),
+        'n_hidden_layers_mRNA_1' : trial.suggest_int('n_hidden_layers_mRNA_1', 1, 1024),
+        'n_hidden_layers_mRNA_2' : trial.suggest_int('n_hidden_layers_mRNA_2', 1, 1024),
+        'n_hidden_layers_DNA_1' : trial.suggest_int('n_hidden_layers_DNA_1', 1, 1024),
+        'n_hidden_layers_DNA_2' : trial.suggest_int('n_hidden_layers_DNA_2', 1, 1024),
+        'n_hidden_layers_microRNA_1' : trial.suggest_int('n_hidden_layers_microRNA_1', 1, 1024),
+        'n_hidden_layers_microRNA_2' : trial.suggest_int('n_hidden_layers_microRNA_2', 1, 1024),
+        'n_hidden_layers_RPPA_1' : trial.suggest_int('n_hidden_layers_RPPA_1', 1, 1024),
+        'n_hidden_layers_RPPA_2' : trial.suggest_int('n_hidden_layers_RPPA_2', 1, 1024),
+        'activ_funcs_mRNA_1' : trial.suggest_categorical('activ_funcs_mRNA_1', ['relu', 'sigmoid']),
+        'activ_funcs_mRNA_2' : trial.suggest_categorical('activ_funcs_mRNA_2', ['relu', 'sigmoid']),
+        'activ_funcs_DNA_1' : trial.suggest_categorical('activ_funcs_DNA_1', ['relu', 'sigmoid']),
+        'activ_funcs_DNA_2' : trial.suggest_categorical('activ_funcs_DNA_2', ['relu', 'sigmoid']),
+        'activ_funcs_microRNA_1' : trial.suggest_categorical('activ_funcs_microRNA_1', ['relu', 'sigmoid']),
+        'activ_funcs_microRNA_2' : trial.suggest_categorical('activ_funcs_microRNA_2', ['relu', 'sigmoid']),
+        'activ_funcs_RPPA_1' : trial.suggest_categorical('activ_funcs_RPPA_1', ['relu', 'sigmoid']),
+        'activ_funcs_RPPA_2' : trial.suggest_categorical('activ_funcs_RPPA_2', ['relu', 'sigmoid']),
+        'dropout_prob' : trial.suggest_loguniform('dropout_prob', 0,1)
+    }
+
+    model = NN_changeable(params)
+"""
 
 
 

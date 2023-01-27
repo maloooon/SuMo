@@ -54,8 +54,7 @@ class NN_changeable(nn.Module):
         self.n_hidden_layers_dims = n_hidden_layers_dims
 
         self.activ_funcs = activ_funcs
-      #  self.dropout_prob = dropout_prob
-        self.dropout_prob = trial.suggest_float("dropout_prob", 0,0.5,step=0.1)
+        self.dropout_prob = dropout_prob
         self.dropout_layers = dropout_layers
         self.batch_norm = batch_norm
         self.dropout_bool = dropout_bool
@@ -295,88 +294,219 @@ def objective(trial):
     train_data = []
     for c,feat in enumerate(trainset_feat):
         if c < len(trainset_feat) - 3: # train data views
-            train_data.append(np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values))
+            train_data.append(np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32'))
         elif c == len(trainset_feat) - 3: # duration
-            train_duration = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values)).squeeze(axis=1)
+            train_duration = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')).squeeze(axis=1)
         elif c == len(trainset_feat) -2: # event
-            train_event = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values)).squeeze(axis=1)
+            train_event = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')).squeeze(axis=1)
 
     train_data = tuple(train_data)
 
     val_data = []
     for c,feat in enumerate(valset_feat):
         if c < len(valset_feat) - 3: # train data views
-            val_data.append(np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values))
+            val_data.append(np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32'))
         elif c == len(valset_feat) - 3: # duration
-            train_duration = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values)).squeeze(axis=1)
+            val_duration = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
         elif c == len(valset_feat) -2: # event
-            train_event = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values)).squeeze(axis=1)
+            val_event = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
 
     test_data = []
 
     for c,feat in enumerate(testset_feat):
         if c < len(testset_feat) - 3: # train data views
-            test_data.append(np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values))
+            test_data.append(np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32'))
         elif c == len(testset_feat) - 3: # duration
-            train_duration = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values)).squeeze(axis=1)
+            test_duration = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
         elif c == len(testset_feat) -2: # event
-            train_event = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values)).squeeze(axis=1)
+            test_event = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
 
 
 
-    # Change data structure for the FCNN and PyCox
-    """
-    try:
-        test_duration = test_duration.numpy()
-        test_event = test_event.numpy()
-    except AttributeError:
-        pass
-    
-    
-    for c,fold in enumerate(train_data):
-        try:
-            train_duration[c] = train_duration[c].numpy()
-            train_event[c] = train_event[c].numpy()
-            val_duration[c] = val_duration[c].numpy()
-            val_event[c] = val_event[c].numpy()
-        except AttributeError: # in this case already numpy arrays
-            pass
-    
-    
-    
-        for c2,view in enumerate(fold):
-            try:
-                train_data[c][c2] = (train_data[c][c2]).numpy()
-                val_data[c][c2] = (val_data[c][c2]).numpy()
-                test_data[c][c2] = (test_data[c][c2]).numpy()
-            except AttributeError:
-                pass
-    
-    
-        # Need tuple structure for PyCox
-        train_data[c] = tuple(train_data[c])
-        val_data[c] = tuple(val_data[c])
-        test_data[c] = tuple(test_data[c])
-    """
+    views = []
+    read_in = open('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt', 'r')
+    for view in read_in:
+            views.append(view)
+
+    view_names = [line[:-1] for line in views]
+
+
+    dimensions_train = [x.shape[1] for x in train_data]
+    dimensions_val = [x.shape[1] for x in val_data]
+    dimensions_test = [x.shape[1] for x in test_data]
+
+    assert (dimensions_train == dimensions_val == dimensions_test), 'Feature mismatch between train/test'
+
+    dimensions = dimensions_train
+
+    # Transforms for PyCox
+    train_surv = (train_duration, train_event)
+    val_data_full = (val_data, (val_duration, val_event))
+
+
+    ##################################### HYPERPARAMETER SEARCH SETTINGS ##############################################
+    l2_regularization_bool = trial.suggest_categorical('l2_regularization_bool', [True,False])
+    learning_rate = trial.suggest_float("learning_rate", 1e-5,1e-1,log=True)
+    l2_regularization_rate = trial.suggest_float("l2_regularization_rate", 1e-6,1e-3, log=True)
+    batch_size = trial.suggest_int("batch_size", 5, 200) # TODO : batch size so wählen, dass train samples/ batch_size und val samples/batch_size nie 1 ergeben können, da sonst Error : noch besser error abfangen und einfach skippen, da selten passiert !
+    n_epochs = trial.suggest_int("n_epochs", 10,100)
+    dropout_prob = trial.suggest_float("dropout_prob", 0,0.5,step=0.1)
+    dropout_bool = trial.suggest_categorical('dropout_bool', [True,False])
+    batchnorm_bool = trial.suggest_categorical('batchnorm_bool',[True,False])
+
+    layers_1_mRNA = trial.suggest_int('layers_1_mRNA', 5, 1200)
+    layers_2_mRNA = trial.suggest_int('layers_2_mRNA', 5, 1200)
+    layers_1_DNA = trial.suggest_int('layers_1_DNA', 5, 1200)
+    layers_2_DNA = trial.suggest_int('layers_2_DNA', 5, 1200)
+    layers_1_microRNA = trial.suggest_int('layers_1_microRNA', 5, 1200)
+    layers_2_microRNA = trial.suggest_int('layers_1_microRNA', 5, 1200)
+    layers_1_RPPA = trial.suggest_int('layers_1_microRNA', 5, 1200)
+    layers_2_RPPA = trial.suggest_int('layers_1_microRNA', 5, 1200)
+
+    layers_1_mRNA_activfunc = trial.suggest_categorical('layers_1_mRNA_activfunc', ['relu','sigmoid'])
+    layers_2_mRNA_activfunc = trial.suggest_categorical('layers_2_mRNA_activfunc', ['relu','sigmoid'])
+    layers_1_DNA_activfunc = trial.suggest_categorical('layers_1_DNA_activfunc', ['relu','sigmoid'])
+    layers_2_DNA_activfunc = trial.suggest_categorical('layers_2_DNA_activfunc', ['relu','sigmoid'])
+    layers_1_microRNA_activfunc = trial.suggest_categorical('layers_1_microRNA_activfunc', ['relu','sigmoid'])
+    layers_2_microRNA_activfunc = trial.suggest_categorical('layers_2_microRNA_activfunc', ['relu','sigmoid'])
+    layers_1_RPPA_activfunc = trial.suggest_categorical('layers_1_RPPA_activfunc', ['relu','sigmoid'])
+    layers_2_RPPA_activfunc = trial.suggest_categorical('layers_2_RPPA_activfunc', ['relu','sigmoid'])
+
+    layers_1_mRNA_dropout = trial.suggest_categorical('layers_1_mRNA_dropout', ['yes','no'])
+    layers_2_mRNA_dropout = trial.suggest_categorical('layers_2_mRNA_dropout', ['yes','no'])
+    layers_1_DNA_dropout = trial.suggest_categorical('layers_1_DNA_dropout', ['yes','no'])
+    layers_2_DNA_dropout = trial.suggest_categorical('layers_2_DNA_dropout', ['yes','no'])
+    layers_1_microRNA_dropout = trial.suggest_categorical('layers_1_microRNA_dropout', ['yes','no'])
+    layers_2_microRNA_dropout = trial.suggest_categorical('layers_2_microRNA_dropout', ['yes','no'])
+    layers_1_RPPA_dropout = trial.suggest_categorical('layers_1_RPPA_dropout', ['yes','no'])
+    layers_2_RPPA_dropout = trial.suggest_categorical('layers_2_RPPA_dropout', ['yes','no'])
+
+    layers_1_mRNA_batchnorm = trial.suggest_categorical('layers_1_mRNA_batchnorm', ['yes', 'no'])
+    layers_2_mRNA_batchnorm = trial.suggest_categorical('layers_2_mRNA_batchnorm', ['yes', 'no'])
+
+    layers_1_DNA_batchnorm = trial.suggest_categorical('layers_1_DNA_batchnorm', ['yes', 'no'])
+    layers_2_DNA_batchnorm = trial.suggest_categorical('layers_2_DNA_batchnorm', ['yes', 'no'])
+
+    layers_1_microRNA_batchnorm = trial.suggest_categorical('layers_1_microRNA_batchnorm', ['yes', 'no'])
+    layers_2_microRNA_batchnorm = trial.suggest_categorical('layers_2_microRNA_batchnorm', ['yes', 'no'])
+
+    layers_1_RPPA_batchnorm = trial.suggest_categorical('layers_1_RPPA_batchnorm', ['yes', 'no'])
+    layers_2_RPPA_batchnorm = trial.suggest_categorical('layers_2_RPPA_batchnorm', ['yes', 'no'])
+
+
+    layers = []
+    activation_functions = []
+    dropouts = []
+    batchnorms = []
+
+    if 'MRNA' in view_names:
+        layers.append([layers_1_mRNA,layers_2_mRNA])
+        activation_functions.append([layers_1_mRNA_activfunc, layers_2_mRNA_activfunc])
+        dropouts.append([layers_1_mRNA_dropout, layers_2_mRNA_dropout])
+        batchnorms.append([layers_1_mRNA_batchnorm, layers_2_mRNA_batchnorm])
+
+    if 'DNA' in view_names:
+        layers.append([layers_1_DNA,layers_2_DNA])
+        activation_functions.append([layers_1_DNA_activfunc, layers_2_DNA_activfunc])
+        dropouts.append([layers_1_DNA_dropout, layers_2_DNA_dropout])
+        batchnorms.append([layers_1_DNA_batchnorm, layers_2_DNA_batchnorm])
+
+    if 'MICRORNA' in view_names:
+        layers.append([layers_1_microRNA,layers_2_microRNA])
+        activation_functions.append([layers_1_microRNA_activfunc, layers_2_microRNA_activfunc])
+        dropouts.append([layers_1_microRNA_dropout, layers_2_microRNA_dropout])
+        batchnorms.append([layers_1_microRNA_batchnorm, layers_2_microRNA_batchnorm])
+
+    if 'RPPA' in view_names:
+        layers.append([layers_1_RPPA,layers_2_RPPA])
+        activation_functions.append([layers_1_RPPA_activfunc, layers_2_RPPA_activfunc])
+        dropouts.append([layers_1_RPPA_dropout, layers_2_RPPA_dropout])
+        batchnorms.append([layers_1_RPPA_batchnorm, layers_2_RPPA_batchnorm])
+
+    activation_functions.append(['none'])
 
 
 
 
-    model = NN_changeable(views=['microRNA'],
-                              in_features=[35],
+
+    net = NN_changeable(views=view_names,
+                              in_features=dimensions,
                               trial=trial,
-                              n_hidden_layers_dims=[[64,32]],activ_funcs=[['relu','relu'],['none']],
-                              dropout_prob=None,dropout_layers=[['yes','yes']],batch_norm=[['yes','yes']],dropout_bool=True,
-                              batch_norm_bool=True,
+                              n_hidden_layers_dims=layers,
+                              activ_funcs=activation_functions,
+                              dropout_prob=dropout_prob,
+                              dropout_layers=dropouts,
+                              batch_norm=batchnorms,
+                              dropout_bool=dropout_bool,
+                              batch_norm_bool=batchnorm_bool,
                               print_bool=False
                               )
 
 
 
+    if l2_regularization_bool == True:
+        optimizer = Adam(net.parameters(), lr=learning_rate, weight_decay=l2_regularization_rate)
+    else:
+        optimizer = Adam(net.parameters(), lr=learning_rate)
+
+    callbacks = [tt.callbacks.EarlyStopping(patience=10)]
+
+
+    model = models.CoxPH(net,optimizer)
+    print_loss = False
+
+    # Fit model
+    log = model.fit(train_data,
+                    train_surv,
+                    batch_size,
+                    n_epochs,
+                    callbacks = callbacks,
+                    val_data=val_data_full,
+                    val_batch_size= batch_size,
+                    verbose=print_loss)
+
+
+    # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
+    _ = model.compute_baseline_hazards()
+
+
+    # Predict based on test data
+    surv = model.predict_surv_df(test_data)
+
+    # Plot it
+    #     surv.iloc[:, :5].plot()
+    #     plt.ylabel('S(t | x)')
+    #     _ = plt.xlabel('Time')
 
 
 
-    print("H")
+
+    # Evaluate with concordance, brier score and binomial log-likelihood
+    ev = EvalSurv(surv, test_duration, test_event, censor_surv='km') # censor_surv : Kaplan-Meier
+
+    # concordance
+    concordance_index = ev.concordance_td()
+
+    if concordance_index < 0.5:
+        concordance_index = 1 - concordance_index
+
+    #brier score
+    time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
+    _ = ev.brier_score(time_grid).plot
+    brier_score = ev.integrated_brier_score(time_grid)
+
+    #binomial log-likelihood
+    binomial_score = ev.integrated_nbll(time_grid)
+
+#    print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
+#                                                                                                       brier_score,
+#                                                                                                       binomial_score))
+    return concordance_index
+
+
+
+
+
 
 
 
@@ -387,13 +517,16 @@ def objective(trial):
 
 
 def optuna_optimization(fold = 1):
-    EPOCHS = 30
+
+
+    EPOCHS = 150
     study = optuna.create_study(direction='maximize',sampler=optuna.samplers.TPESampler(),pruner=optuna.pruners.MedianPruner())
     study.optimize(objective, n_trials = EPOCHS)
 
     trial = study.best_trial
 
-    print("Concordance", trial.value)
+    print("Best Concordance", trial.value)
+    print("Best Hyperparamters : {}".format(trial.params))
 
 
 

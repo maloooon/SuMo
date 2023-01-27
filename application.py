@@ -10,23 +10,18 @@ import numpy as np
 
 
 if __name__ == '__main__':
-    cancer_data = ReadInData.readcancerdata('KICH')
+    cancer_data = ReadInData.readcancerdata('LUAD')
     data = cancer_data[0][0]
     feature_offsets = cancer_data[0][1]
     view_names = cancer_data[0][2]
     feature_names = cancer_data[0][3]
     cancer_name = cancer_data[0][4][0]
-    which_views = ['microRNA'] # no input to use all the given views
+    which_views = [] # no input to use all the given views
     n_folds = 1
 
     # needed for R, cant read in cancer name directly for some weird reason...
     with open('/Users/marlon/Desktop/Project/TCGAData/currentcancer.txt', 'w') as f:
         f.write(cancer_name)
-
-
-
-
-
 
 
     # Possible Cancers : 'DNA', 'microRNA' , 'mRNA', 'RPPA'
@@ -56,40 +51,6 @@ if __name__ == '__main__':
             fp.write("%s\n" % item)
 
 
-
-    # Grid search config
-
-    config = {
-        "Layers_mRNA" : [[64,32,16], [32,16,8], [16,8,4,2]],
-        "Layers_DNA" : [[64,32,16], [32,16,8], [16,8,4,2]],
-        "Layers_microRNA" : [[64,32,16], [32,16,8], [16,8,4,2]],
-        "Layers_RPPA" : [[64,32,16], [32,16,8], [16,8,4,2]],
-        "BatchSize" : [150,128,100,75,64,50],
-        "BatchSizeVal" : [100,75,64,50,40,32],
-        "LearningRate" : [0.001,0.0008,0.0006,0.0004,0.0001,0.00005,0.00001],
-        "DropoutBool" : ['no'], # trying without dropout
-        "BatchNormBool" : ['no'], # trying without batch norm
-        "NNLayersConcat" : [[64,32,16], [16,8,4,2]],
-        "ConcatAELoss" : [0.4,0.5,0.6]
-
-    }
-
-    LUAD_PCA_FCNN_config = {
-        "Layers_mRNA" : [[1024], [64], [16]],
-        "Layers_DNA" : [[512], [128], [32]],
-        "Layers_microRNA" : [[1024], [256], [16]],
-        "Layers_RPPA" : [[1024,512,256], [256, 128, 64], [64,32,16]],
-        "BatchSize" : [75],
-        "BatchSizeVal" : [32],
-        "LearningRate" : [0.0006],
-        "DropoutBool" : ['no'], # trying without dropout
-        "BatchNormBool" : ['no'], # trying without batch norm
-        "NNLayersConcat" : [[256,128,64], [64,32,16], [16,8,4,2]],
-        "ConcatAELoss" : [0.2,0.3,0.4,0.5,0.6,0.7,0.8]
-
-    }
-
-
     feature_select_method = 'pca'
     components = [35,35,35,35]
     thresholds = [0.8,0.8,0.8,0.8]
@@ -106,10 +67,22 @@ if __name__ == '__main__':
 
 
 
-    # for Optuna we store prepared data and feature offsets and will load them with a function later on for each fold
+
+
+
+    print("######################## RUNNING FULLY CONNECTED NEURAL NET ####################################")
 
     for c_fold in range(n_folds):
-        feat_offs_train = [0]
+        # for Optuna we store prepared data and feature offsets and will load them with a function later on for each fold
+
+        for c_view, view in enumerate(view_names_fix):
+            print("Train data has shape : {} for view {}".format(train_data[c_fold][c_view].shape, view_names_fix[c_view]))
+            print("Validation data has shape : {} for view {}".format(val_data[c_fold][c_view].shape, view_names_fix[c_view]))
+            print("Test data has shape : {} for view {}".format(test_data[c_fold][c_view].shape, view_names_fix[c_view]))
+
+        feat_offs_train = [0] # TODO : need to be the same size over train/val/test : reicht hier nur 1 x zu rechnen
+        feat_offs_val = [0]
+        feat_offs_test = [0]
         all_train_data = train_data[c_fold]
 
         all_train_data.append(train_duration[c_fold].unsqueeze(1))
@@ -125,7 +98,6 @@ if __name__ == '__main__':
         train_data_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/TrainData.csv")
         feat_offs_train_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/TrainDataFeatOffs.csv")
 
-        feat_offs_val = []
         all_val_data = val_data[c_fold]
         all_val_data.append(val_duration[c_fold].unsqueeze(1))
         all_val_data.append(val_event[c_fold].unsqueeze(1))
@@ -138,7 +110,7 @@ if __name__ == '__main__':
         val_data_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/ValData.csv")
         feat_offs_val_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/ValDataFeatOffs.csv")
 
-        feat_offs_test = []
+
         all_test_data = test_data[c_fold]
         all_test_data.append(test_duration.unsqueeze(1))
         all_test_data.append(test_event.unsqueeze(1))
@@ -153,36 +125,12 @@ if __name__ == '__main__':
 
 
 
-
+        ###################  NN CALL FOR HYPERPARAMETER SEARCH #########################
         NN.optuna_optimization()
 
 
 
-
-
-
-
-    print("######################## RUNNING FULLY CONNECTED NEURAL NET ####################################")
-    # FEATURE SELECTION SETTINGS
-    selection_method_NN = 'pca'
-    components_PCA_NN = [98,98,98,98]
-    thresholds_VARIANCE_NN = [0.8,0.8,0.8,0.8]
-
-
-
-
-
-
-        
-
-
-
-
-
- #   train,val,test = NN.load_data(n_fold=1)
-
-
-
+    ######## SET OWN SETTINGS FOR NN CALL ############
 
     # FULLY CONNECTED NEURAL NET SETTINGS
     # LAYER SETTINGS
@@ -194,10 +142,10 @@ if __name__ == '__main__':
     # DROPOUT SETTINGS
     dropout_bool_NN = False
     dropout_rate_NN = 0.1
-    dropout_layers_NN = [['yes' for _ in range(len(config["Layers_mRNA"][0]))] for i in range(len(view_names_fix))]
+    dropout_layers_NN = []
     # BATCH NORMALIZATION SETTINGS
     batchnorm_bool_NN = False
-    batchnorm_layers_NN = [['yes' for _ in range(len(config["Layers_mRNA"][0]))] for i in range(len(view_names_fix))]
+    batchnorm_layers_NN = []
     # L2 REGULARIZATION SETTINGS
     l2_regularization_bool_NN = False
     l2_regularization_rate_NN = 0.000001
@@ -208,9 +156,6 @@ if __name__ == '__main__':
     n_epochs_NN = 100
     # LEARNING RATE OPTIMIZER (ADAM)
     learning_rate_NN = 0.005
-
-
-
 
 
 #    NN.train(module= multimodule,
@@ -267,10 +212,10 @@ if __name__ == '__main__':
     # DROPOUT SETTINGS
     dropout_bool_AE = False
     dropout_rate_AE = 0.1
-    dropout_layers_AE = [['yes' for _ in range(len(config["Layers_mRNA"][0]))] for i in range(len(view_names_fix))]
+    dropout_layers_AE = []
     # BATCH NORMALIZATION SETTINGS
     batchnorm_bool_AE = False
-    batchnorm_layers_AE = [['yes' for _ in range(len(config["Layers_mRNA"][0]))] for i in range(len(view_names_fix))]
+    batchnorm_layers_AE = []
     # L2 REGULARIZATION SETTINGS
     l2_regularization_bool_AE = False
     l2_regularization_rate_AE = 0.000001
@@ -283,26 +228,26 @@ if __name__ == '__main__':
     learning_rate_AE = 0.005
 
 
-    AE.train(module= multimodule,
-      feature_select_method= selection_method_NN,
-      components = components_PCA_NN,
-      thresholds= thresholds_VARIANCE_NN,
-      feature_names= None,
-      batch_size=batch_size_AE,
-      n_epochs=n_epochs_AE,
-      learning_rate= learning_rate_AE,
-      l2_regularization=l2_regularization_bool_AE,
-      l2_regularization_rate=l2_regularization_rate_AE,
-      val_batch_size=val_batch_size_AE,
-      dropout=dropout_bool_AE,
-      dropout_rate=dropout_rate_AE,
-      batchnorm = batchnorm_bool_AE,
-      activation_layers = activations_AE,
-      batchnorm_layers = batchnorm_layers_AE,
-      dropout_layers = dropout_layers_AE,
-      view_names = view_names_fix,
-      config=config,
-      n_grid_search_iterations= 10)
+#    AE.train(module= multimodule,
+#      feature_select_method= selection_method_NN,
+#      components = components_PCA_NN,
+#      thresholds= thresholds_VARIANCE_NN,
+#      feature_names= None,
+#      batch_size=batch_size_AE,
+#      n_epochs=n_epochs_AE,
+#      learning_rate= learning_rate_AE,
+#      l2_regularization=l2_regularization_bool_AE,
+#      l2_regularization_rate=l2_regularization_rate_AE,
+#      val_batch_size=val_batch_size_AE,
+#      dropout=dropout_bool_AE,
+#      dropout_rate=dropout_rate_AE,
+#      batchnorm = batchnorm_bool_AE,
+#      activation_layers = activations_AE,
+#      batchnorm_layers = batchnorm_layers_AE,
+#      dropout_layers = dropout_layers_AE,
+#      view_names = view_names_fix,
+#      config=config,
+#      n_grid_search_iterations= 10)
 
 
 

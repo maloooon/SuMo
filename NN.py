@@ -498,9 +498,7 @@ def objective(trial):
     #binomial log-likelihood
     binomial_score = ev.integrated_nbll(time_grid)
 
-#    print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
-#                                                                                                       brier_score,
-#                                                                                                       binomial_score))
+
     return concordance_index
 
 
@@ -533,11 +531,15 @@ def optuna_optimization(fold = 1):
 
 
 
-def train(module,
-          feature_select_method = 'eigengenes',
-          components = None,
-          thresholds = None,
-          feature_names = None,
+def train(train_data,
+          val_data,
+          test_data,
+          train_duration,
+          train_event,
+          val_duration,
+          val_event,
+          test_duration,
+          test_event,
           learning_rate = 0.0001,
           batch_size =128,
           n_epochs = 512,
@@ -550,10 +552,7 @@ def train(module,
           dropout_rate = 0.1,
           dropout = False,
           activation_layers = None,
-          view_names = None,
-          config = None,
-          n_grid_search_iterations = 100,
-          testing_config = None):
+          view_names = None):
     """
 
     :param module: basically the dataset to be used
@@ -567,15 +566,6 @@ def train(module,
   #  n_train_samples, n_test_samples,n_val_samples, view_names = module.setup()
 
 
-
-    #Select method for feature selection
-    train_data, val_data, test_data, \
-    train_duration, train_event, \
-    val_duration, val_event, \
-    test_duration, test_event = module.feature_selection(method=feature_select_method,
-                                                         components= components,
-                                                         thresholds= thresholds,
-                                                         feature_names= feature_names)
 
 
 
@@ -643,46 +633,6 @@ def train(module,
 
         curr_concordance = 0
 
-        """
-        # Call NN
-        # TODO : gleiche Durchläufe verhindern (check curr_config != new_config)
-        for grid_count in range(n_grid_search_iterations):
-            # Grid Search
-            curr_config = []
-            mRNA_layers = []
-            DNA_layers = []
-            microRNA_layers = []
-            RPPA_layers = []
-            for i in testing_config["Layers_mRNA"]:
-                curr_layer_size = random.choice(i)
-                mRNA_layers.append(curr_layer_size)
-            for i in testing_config["Layers_DNA"]:
-                curr_layer_size = random.choice(i)
-                DNA_layers.append(curr_layer_size)
-            for i in testing_config["Layers_microRNA"]:
-                curr_layer_size = random.choice(i)
-                microRNA_layers.append(curr_layer_size)
-            for i in testing_config["Layers_RPPA"]:
-                curr_layer_size = random.choice(i)
-                RPPA_layers.append(curr_layer_size)
-
-            # Set layers to views we currently look at
-            layers = [mRNA_layers, DNA_layers, microRNA_layers]
-
-            batch_size = random.choice(testing_config["BatchSize"])
-            val_batch_size = random.choice(testing_config["BatchSizeVal"])
-            learning_rate = random.choice(testing_config["LearningRate"])
-            dropout = random.choice(testing_config["DropoutBool"])
-            batchnorm = random.choice(testing_config["BatchNormBool"])
-
-            curr_config = [layers, batch_size, val_batch_size, learning_rate, dropout, batchnorm]
-
-            """
-
-
-
-
-
 
 
 
@@ -696,6 +646,7 @@ def train(module,
 
         net = NN_changeable(views=view_names,
                             in_features=dimensions,
+                            trial= None,
                             n_hidden_layers_dims= layers_u,
                             activ_funcs=activation_layers_u,
                             dropout_bool= dropout,

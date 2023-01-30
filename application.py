@@ -6,7 +6,7 @@ import ReadInData
 import DataInputNew
 import torch
 import numpy as np
-
+import copy
 
 
 if __name__ == '__main__':
@@ -16,7 +16,7 @@ if __name__ == '__main__':
     view_names = cancer_data[0][2]
     feature_names = cancer_data[0][3]
     cancer_name = cancer_data[0][4][0]
-    which_views = [] # no input to use all the given views
+    which_views = ['microRNA'] # no input to use all the given views
     n_folds = 1
 
     # needed for R, cant read in cancer name directly for some weird reason...
@@ -72,7 +72,7 @@ if __name__ == '__main__':
 
     print("######################## RUNNING FULLY CONNECTED NEURAL NET ####################################")
 
-    for c_fold in range(n_folds):
+    for c_fold in range(n_folds): # TODO :optuna can be done on just the one fold
         # for Optuna we store prepared data and feature offsets and will load them with a function later on for each fold
 
         for c_view, view in enumerate(view_names_fix):
@@ -83,7 +83,7 @@ if __name__ == '__main__':
         feat_offs_train = [0] # TODO : need to be the same size over train/val/test : reicht hier nur 1 x zu rechnen
         feat_offs_val = [0]
         feat_offs_test = [0]
-        all_train_data = train_data[c_fold]
+        all_train_data = copy.deepcopy(train_data[c_fold])
 
         all_train_data.append(train_duration[c_fold].unsqueeze(1))
         all_train_data.append(train_event[c_fold].unsqueeze(1))
@@ -91,33 +91,33 @@ if __name__ == '__main__':
         # we can get the feature offsets by accessing dimension 1 of each
         for idx, _ in enumerate(all_train_data):
             feat_offs_train.append(all_train_data[idx].size(1))
-        train_data = torch.cat(tuple(all_train_data), dim=1)
-        train_data_df = pd.DataFrame(train_data)
+        train_data_c = torch.cat(tuple(all_train_data), dim=1)
+        train_data_df = pd.DataFrame(train_data_c)
         feat_offs_train = np.cumsum(feat_offs_train)
         feat_offs_train_df = pd.DataFrame(feat_offs_train)
         train_data_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/TrainData.csv")
         feat_offs_train_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/TrainDataFeatOffs.csv")
 
-        all_val_data = val_data[c_fold]
+        all_val_data = copy.deepcopy(val_data[c_fold])
         all_val_data.append(val_duration[c_fold].unsqueeze(1))
         all_val_data.append(val_event[c_fold].unsqueeze(1))
         for idx, _ in enumerate(all_val_data):
             feat_offs_val.append(all_val_data[idx].size(1))
-        val_data = torch.cat(tuple(all_val_data), dim=1)
-        val_data_df = pd.DataFrame(val_data)
+        val_data_c = torch.cat(tuple(all_val_data), dim=1)
+        val_data_df = pd.DataFrame(val_data_c)
         feat_offs_val = np.cumsum(feat_offs_val)
         feat_offs_val_df = pd.DataFrame(feat_offs_val)
         val_data_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/ValData.csv")
         feat_offs_val_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/ValDataFeatOffs.csv")
 
 
-        all_test_data = test_data[c_fold]
+        all_test_data = copy.deepcopy(test_data[c_fold])
         all_test_data.append(test_duration.unsqueeze(1))
         all_test_data.append(test_event.unsqueeze(1))
         for idx, _ in enumerate(all_test_data):
             feat_offs_test.append(all_test_data[idx].size(1))
-        test_data = torch.cat(tuple(all_test_data), dim=1)
-        test_data_df = pd.DataFrame(test_data)
+        test_data_c = torch.cat(tuple(all_test_data), dim=1)
+        test_data_df = pd.DataFrame(test_data_c)
         feat_offs_test = np.cumsum(feat_offs_test)
         feat_offs_test_df = pd.DataFrame(feat_offs_test)
         test_data_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/TestData.csv")
@@ -126,7 +126,8 @@ if __name__ == '__main__':
 
 
         ###################  NN CALL FOR HYPERPARAMETER SEARCH #########################
-        NN.optuna_optimization()
+ #   NN.optuna_optimization()
+    AE.optuna_optimization()
 
 
 
@@ -158,27 +159,20 @@ if __name__ == '__main__':
     learning_rate_NN = 0.005
 
 
-#    NN.train(module= multimodule,
-#          feature_select_method= selection_method_NN,
-#          components = components_PCA_NN,
-#          thresholds= thresholds_VARIANCE_NN,
-#          feature_names= None,
-#          batch_size=batch_size_NN,
-#          n_epochs=n_epochs_NN,
-#          learning_rate= learning_rate_NN,
-#          l2_regularization=l2_regularization_bool_NN,
-#          l2_regularization_rate=l2_regularization_rate_NN,
-#          val_batch_size=val_batch_size_NN,
-#          dropout=dropout_bool_NN,
-#          dropout_rate=dropout_rate_NN,
-#          batchnorm = batchnorm_bool_NN,
-#          activation_layers = activations_NN,
-#          batchnorm_layers = batchnorm_layers_NN,
-#          dropout_layers = dropout_layers_NN,
-#          view_names = view_names_fix,
-#          config=config,
-#          n_grid_search_iterations= 50,
-#          testing_config = LUAD_PCA_FCNN_config)
+ #   NN.train(train_data, val_data, test_data, train_duration, train_event, val_duration, val_event, test_duration,test_event,
+ #         batch_size=batch_size_NN,
+ #         n_epochs=n_epochs_NN,
+ #         learning_rate= learning_rate_NN,
+ #         l2_regularization=l2_regularization_bool_NN,
+ #         l2_regularization_rate=l2_regularization_rate_NN,
+ #         val_batch_size=val_batch_size_NN,
+ #         dropout=dropout_bool_NN,
+ #         dropout_rate=dropout_rate_NN,
+ #         batchnorm = batchnorm_bool_NN,
+ #         activation_layers = activations_NN,
+ #         batchnorm_layers = batchnorm_layers_NN,
+ #         dropout_layers = dropout_layers_NN,
+ #         view_names = view_names_fix)
 
 
     print("######################## FULLY CONNECTED NEURAL NET FINISHED ####################################")
@@ -206,16 +200,17 @@ if __name__ == '__main__':
 
     print("######################## RUNNING AUTOENCODER ####################################")
 
-
+    # LAYERS
+    layers_AE = [[64,32]]
     # AE SETTINGS
     activations_AE = [['relu'] for i in range(len(view_names_fix))]
     # DROPOUT SETTINGS
     dropout_bool_AE = False
     dropout_rate_AE = 0.1
-    dropout_layers_AE = []
+    dropout_layers_AE = [['yes' for _ in range(len(a))] for a in layers_AE]
     # BATCH NORMALIZATION SETTINGS
     batchnorm_bool_AE = False
-    batchnorm_layers_AE = []
+    batchnorm_layers_AE = [['yes' for _ in range(len(a))] for a in layers_AE]
     # L2 REGULARIZATION SETTINGS
     l2_regularization_bool_AE = False
     l2_regularization_rate_AE = 0.000001
@@ -228,11 +223,7 @@ if __name__ == '__main__':
     learning_rate_AE = 0.005
 
 
-#    AE.train(module= multimodule,
-#      feature_select_method= selection_method_NN,
-#      components = components_PCA_NN,
-#      thresholds= thresholds_VARIANCE_NN,
-#      feature_names= None,
+#    AE.train(train_data, val_data, test_data, train_duration, train_event, val_duration, val_event, test_duration,test_event,
 #      batch_size=batch_size_AE,
 #      n_epochs=n_epochs_AE,
 #      learning_rate= learning_rate_AE,
@@ -246,8 +237,7 @@ if __name__ == '__main__':
 #      batchnorm_layers = batchnorm_layers_AE,
 #      dropout_layers = dropout_layers_AE,
 #      view_names = view_names_fix,
-#      config=config,
-#      n_grid_search_iterations= 10)
+#      layers = layers_AE)
 
 
 

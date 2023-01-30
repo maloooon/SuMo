@@ -11,6 +11,9 @@ from sklearn.model_selection import KFold
 from torch.utils.data.sampler import SubsetRandomSampler
 import random
 import copy
+import optuna
+import pandas as pd
+import os
 
 
 class AE_Hierarichal(nn.Module):
@@ -890,13 +893,343 @@ class LossAECrossHazard(nn.Module):
 
 
 
+def objective(trial):
 
 
-def train(module,
-          feature_select_method = 'PCA',
-          components = None,
-          thresholds = None,
-          feature_names = None,
+    # Load in data (##### For testing for first fold, later on
+
+    trainset, trainset_feat, valset, valset_feat, testset, testset_feat = load_data()
+
+    trainset_feat = list(trainset_feat.values)
+    for idx,_ in enumerate(trainset_feat):
+        trainset_feat[idx] = trainset_feat[idx].item()
+
+    valset_feat = list(valset_feat.values)
+    for idx,_ in enumerate(valset_feat):
+        valset_feat[idx] = valset_feat[idx].item()
+
+    testset_feat = list(testset_feat.values)
+    for idx,_ in enumerate(testset_feat):
+        testset_feat[idx] = testset_feat[idx].item()
+
+
+    train_data = []
+    for c,feat in enumerate(trainset_feat):
+        if c < len(trainset_feat) - 3: # train data views
+            train_data.append(np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32'))
+        elif c == len(trainset_feat) - 3: # duration
+            train_duration = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')).squeeze(axis=1)
+        elif c == len(trainset_feat) -2: # event
+            train_event = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')).squeeze(axis=1)
+
+    train_data = tuple(train_data)
+
+    val_data = []
+    for c,feat in enumerate(valset_feat):
+        if c < len(valset_feat) - 3: # train data views
+            val_data.append(np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32'))
+        elif c == len(valset_feat) - 3: # duration
+            val_duration = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+        elif c == len(valset_feat) -2: # event
+            val_event = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+
+    test_data = []
+
+    for c,feat in enumerate(testset_feat):
+        if c < len(testset_feat) - 3: # train data views
+            test_data.append(np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32'))
+        elif c == len(testset_feat) - 3: # duration
+            test_duration = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+        elif c == len(testset_feat) -2: # event
+            test_event = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+
+
+
+    views = []
+    read_in = open('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt', 'r')
+    for view in read_in:
+        views.append(view)
+
+    view_names = [line[:-1] for line in views]
+
+
+    dimensions_train = [x.shape[1] for x in train_data]
+    dimensions_val = [x.shape[1] for x in val_data]
+    dimensions_test = [x.shape[1] for x in test_data]
+
+    assert (dimensions_train == dimensions_val == dimensions_test), 'Feature mismatch between train/test'
+
+    dimensions = dimensions_train
+
+    # Transforms for PyCox
+    train_surv = (train_duration, train_event)
+    val_data_full = (val_data, (val_duration, val_event))
+
+
+    ##################################### HYPERPARAMETER SEARCH SETTINGS ##############################################
+    l2_regularization_bool = trial.suggest_categorical('l2_regularization_bool', [True,False])
+    learning_rate = trial.suggest_float("learning_rate", 1e-5,1e-1,log=True)
+    l2_regularization_rate = trial.suggest_float("l2_regularization_rate", 1e-6,1e-3, log=True)
+    batch_size = trial.suggest_int("batch_size", 5, 200) # TODO : batch size so wählen, dass train samples/ batch_size und val samples/batch_size nie 1 ergeben können, da sonst Error : noch besser error abfangen und einfach skippen, da selten passiert !
+    n_epochs = trial.suggest_int("n_epochs", 10,100)
+    dropout_prob = trial.suggest_float("dropout_prob", 0,0.5,step=0.1)
+    dropout_bool = trial.suggest_categorical('dropout_bool', [True,False])
+    batchnorm_bool = trial.suggest_categorical('batchnorm_bool',[True,False])
+
+    layers_1_mRNA = trial.suggest_int('layers_1_mRNA', 5, 1200)
+    layers_2_mRNA = trial.suggest_int('layers_2_mRNA', 5, 1200)
+    layers_1_DNA = trial.suggest_int('layers_1_DNA', 5, 1200)
+    layers_2_DNA = trial.suggest_int('layers_2_DNA', 5, 1200)
+    layers_1_microRNA = trial.suggest_int('layers_1_microRNA', 5, 1200)
+    layers_2_microRNA = trial.suggest_int('layers_1_microRNA', 5, 1200)
+    layers_1_RPPA = trial.suggest_int('layers_1_microRNA', 5, 1200)
+    layers_2_RPPA = trial.suggest_int('layers_1_microRNA', 5, 1200)
+
+
+    # After ConcatAE FCNN
+    layers_1_FCNN = trial.suggest_int('layers_1_FCNN', 5, 1200)
+    layers_2_FCNN = trial.suggest_int('layers_2_FCNN', 5, 1200)
+
+    layers_FCNN = [[layers_1_FCNN,layers_2_FCNN]]
+
+    layers_1_FCNN_activfunc = trial.suggest_categorical('layers_1_FCNN_activfunc', ['relu','sigmoid'])
+    layers_2_FCNN_activfunc = trial.suggest_categorical('layers_2_FCNN_activfunc', ['relu','sigmoid'])
+
+    FCNN_activation_functions = [layers_1_FCNN_activfunc, layers_2_FCNN_activfunc]
+
+    FCNN_dropout_prob = trial.suggest_float("FCNN_dropout_prob", 0,0.5,step=0.1)
+    FCNN_dropout_bool = trial.suggest_categorical('FCNN_dropout_bool', [True,False])
+    FCNN_batchnorm_bool = trial.suggest_categorical('FCNN_batchnorm_bool',[True,False])
+
+    layers_1_FCNN_dropout = trial.suggest_categorical('layers_1_FCNN_dropout', ['yes','no'])
+    layers_2_FCNN_dropout = trial.suggest_categorical('layers_2_FCNN_dropout', ['yes','no'])
+
+    FCNN_dropouts = [layers_1_FCNN_dropout, layers_2_FCNN_dropout]
+
+
+    layers_1_FCNN_batchnorm = trial.suggest_categorical('layers_1_FCNN_batchnorm', ['yes', 'no'])
+    layers_2_FCNN_batchnorm = trial.suggest_categorical('layers_2_FCNN_batchnorm', ['yes', 'no'])
+
+    FCNN_batchnorms = [layers_1_FCNN_batchnorm, layers_2_FCNN_batchnorm]
+
+    # Survival + MSE-Loss
+    loss_2_values = trial.suggest_float("loss_2_values", 0,1)
+
+
+
+
+    layers_1_mRNA_activfunc = trial.suggest_categorical('layers_1_mRNA_activfunc', ['relu','sigmoid'])
+    layers_2_mRNA_activfunc = trial.suggest_categorical('layers_2_mRNA_activfunc', ['relu','sigmoid'])
+    layers_1_DNA_activfunc = trial.suggest_categorical('layers_1_DNA_activfunc', ['relu','sigmoid'])
+    layers_2_DNA_activfunc = trial.suggest_categorical('layers_2_DNA_activfunc', ['relu','sigmoid'])
+    layers_1_microRNA_activfunc = trial.suggest_categorical('layers_1_microRNA_activfunc', ['relu','sigmoid'])
+    layers_2_microRNA_activfunc = trial.suggest_categorical('layers_2_microRNA_activfunc', ['relu','sigmoid'])
+    layers_1_RPPA_activfunc = trial.suggest_categorical('layers_1_RPPA_activfunc', ['relu','sigmoid'])
+    layers_2_RPPA_activfunc = trial.suggest_categorical('layers_2_RPPA_activfunc', ['relu','sigmoid'])
+
+    layers_1_mRNA_dropout = trial.suggest_categorical('layers_1_mRNA_dropout', ['yes','no'])
+    layers_2_mRNA_dropout = trial.suggest_categorical('layers_2_mRNA_dropout', ['yes','no'])
+    layers_1_DNA_dropout = trial.suggest_categorical('layers_1_DNA_dropout', ['yes','no'])
+    layers_2_DNA_dropout = trial.suggest_categorical('layers_2_DNA_dropout', ['yes','no'])
+    layers_1_microRNA_dropout = trial.suggest_categorical('layers_1_microRNA_dropout', ['yes','no'])
+    layers_2_microRNA_dropout = trial.suggest_categorical('layers_2_microRNA_dropout', ['yes','no'])
+    layers_1_RPPA_dropout = trial.suggest_categorical('layers_1_RPPA_dropout', ['yes','no'])
+    layers_2_RPPA_dropout = trial.suggest_categorical('layers_2_RPPA_dropout', ['yes','no'])
+
+    layers_1_mRNA_batchnorm = trial.suggest_categorical('layers_1_mRNA_batchnorm', ['yes', 'no'])
+    layers_2_mRNA_batchnorm = trial.suggest_categorical('layers_2_mRNA_batchnorm', ['yes', 'no'])
+
+    layers_1_DNA_batchnorm = trial.suggest_categorical('layers_1_DNA_batchnorm', ['yes', 'no'])
+    layers_2_DNA_batchnorm = trial.suggest_categorical('layers_2_DNA_batchnorm', ['yes', 'no'])
+
+    layers_1_microRNA_batchnorm = trial.suggest_categorical('layers_1_microRNA_batchnorm', ['yes', 'no'])
+    layers_2_microRNA_batchnorm = trial.suggest_categorical('layers_2_microRNA_batchnorm', ['yes', 'no'])
+
+    layers_1_RPPA_batchnorm = trial.suggest_categorical('layers_1_RPPA_batchnorm', ['yes', 'no'])
+    layers_2_RPPA_batchnorm = trial.suggest_categorical('layers_2_RPPA_batchnorm', ['yes', 'no'])
+
+
+    # Loss 3 values TODO : HierarichcalAE has 2 MSE losses and partial negative log likelihood, how to select 3 values that sum up to 1 with optuna?
+
+    # TODO : cross-mutation optuna search only works when we can assert that all views have same feature sizes
+
+
+    layers = []
+    activation_functions = []
+    dropouts = []
+    batchnorms = []
+
+    if 'MRNA' in view_names:
+        layers.append([layers_1_mRNA,layers_2_mRNA])
+        activation_functions.append([layers_1_mRNA_activfunc, layers_2_mRNA_activfunc])
+        dropouts.append([layers_1_mRNA_dropout, layers_2_mRNA_dropout])
+        batchnorms.append([layers_1_mRNA_batchnorm, layers_2_mRNA_batchnorm])
+
+    if 'DNA' in view_names:
+        layers.append([layers_1_DNA,layers_2_DNA])
+        activation_functions.append([layers_1_DNA_activfunc, layers_2_DNA_activfunc])
+        dropouts.append([layers_1_DNA_dropout, layers_2_DNA_dropout])
+        batchnorms.append([layers_1_DNA_batchnorm, layers_2_DNA_batchnorm])
+
+    if 'MICRORNA' in view_names:
+        layers.append([layers_1_microRNA,layers_2_microRNA])
+        activation_functions.append([layers_1_microRNA_activfunc, layers_2_microRNA_activfunc])
+        dropouts.append([layers_1_microRNA_dropout, layers_2_microRNA_dropout])
+        batchnorms.append([layers_1_microRNA_batchnorm, layers_2_microRNA_batchnorm])
+
+    if 'RPPA' in view_names:
+        layers.append([layers_1_RPPA,layers_2_RPPA])
+        activation_functions.append([layers_1_RPPA_activfunc, layers_2_RPPA_activfunc])
+        dropouts.append([layers_1_RPPA_dropout, layers_2_RPPA_dropout])
+        batchnorms.append([layers_1_RPPA_batchnorm, layers_2_RPPA_batchnorm])
+
+
+    # Create List of models to be used
+    all_models = nn.ModuleList()
+
+
+    model_types = ['concat','elementwisemax']
+
+  #  print("MODEL TYPES : ", model_types)
+
+    out_sizes = []
+    for c_layer in range(len(layers)):
+        out_sizes.append(layers[c_layer][-1])
+
+    in_feats_second_NN_concat = sum(out_sizes)
+
+
+    # AE's
+
+
+    all_models.append(AE(views = view_names,
+                         in_features= dimensions,
+                         n_hidden_layers_dims= layers,
+                         activ_funcs=activation_functions,
+                         dropout_bool= dropout_bool,
+                         dropout_prob= dropout_prob,
+                         dropout_layers= dropouts,
+                         batch_norm_bool= batchnorm_bool,
+                         batch_norm= batchnorms,
+                         type_ae=model_types[0],
+                         cross_mutation=[1,0],
+                         print_bool=False))
+
+
+    all_models.append(NN.NN_changeable(views = ['AE'],
+                                       trial= trial,
+                                       in_features = [in_feats_second_NN_concat],
+                                       n_hidden_layers_dims= layers_FCNN,
+                                       activ_funcs = [FCNN_activation_functions,['none']],
+                                       dropout_prob=FCNN_dropout_prob,
+                                       dropout_layers=FCNN_dropouts,
+                                       batch_norm = FCNN_batchnorms,
+                                       dropout_bool=FCNN_dropout_bool,
+                                       batch_norm_bool=FCNN_batchnorm_bool,
+                                       print_bool=False))
+
+
+
+
+    #    full_net = AE_Hierarichal(all_models, types=model_types)
+
+    full_net = AE_NN(all_models, type=model_types[0])
+
+
+    # set optimizer
+    if l2_regularization_bool == True:
+        optimizer = Adam(full_net.parameters(), lr=learning_rate, weight_decay=l2_regularization_rate)
+    else:
+        optimizer = Adam(full_net.parameters(), lr=learning_rate)
+
+    callbacks = [tt.callbacks.EarlyStopping(patience=10)]
+    #   cross_pos = model_types.index("cross") + 1
+    #   model = models.CoxPH(full_net,optimizer, loss=LossHierarichcalAESingleCross(alpha=[0.4,0.4,0.2], decoding_bool=True, cross_position=cross_pos)) # Change Loss here
+
+
+    # loss : alpha * surv_loss + (1-alpha) * ae_loss
+    model = models.CoxPH(full_net,
+                         optimizer,
+                         loss=LossAEConcatHazard(loss_2_values))
+    print_loss = False
+
+    log = model.fit(train_data,
+                    train_surv,
+                    batch_size,
+                    n_epochs,
+                    verbose=print_loss,
+                    val_data= val_data_full,
+                    val_batch_size= batch_size,
+                    callbacks=callbacks)
+
+    # Plot it
+    #      _ = log.plot()
+
+    # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
+    _ = model.compute_baseline_hazards()
+
+    # Predict based on test data
+    surv = model.predict_surv_df(test_data)
+
+    # Plot it
+    #      surv.iloc[:, :5].plot()
+    #      plt.ylabel('S(t | x)')
+    #      _ = plt.xlabel('Time')
+
+
+    # Evaluate with concordance, brier score and binomial log-likelihood
+    ev = EvalSurv(surv, test_duration, test_event, censor_surv='km') # censor_surv : Kaplan-Meier
+
+    # concordance
+    concordance_index = ev.concordance_td()
+
+    if concordance_index < 0.5:
+        concordance_index = 1 - concordance_index
+
+    #brier score
+    time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
+    _ = ev.brier_score(time_grid).plot
+    brier_score = ev.integrated_brier_score(time_grid)
+
+    #binomial log-likelihood
+    binomial_score = ev.integrated_nbll(time_grid)
+
+
+    return concordance_index
+
+
+
+
+
+
+
+
+
+def optuna_optimization(fold = 1):
+
+
+    EPOCHS = 150
+    study = optuna.create_study(direction='maximize',sampler=optuna.samplers.TPESampler(),pruner=optuna.pruners.MedianPruner())
+    study.optimize(objective, n_trials = EPOCHS)
+
+    trial = study.best_trial
+
+    print("Best Concordance", trial.value)
+    print("Best Hyperparamters : {}".format(trial.params))
+
+
+
+
+
+def train(train_data,
+          val_data,
+          test_data,
+          train_duration,
+          train_event,
+          val_duration,
+          val_event,
+          test_duration,
+          test_event,
           learning_rate = 0.0001,
           batch_size =128,
           n_epochs = 512,
@@ -910,8 +1243,7 @@ def train(module,
           dropout = False,
           activation_layers = None,
           view_names = None,
-          config = None,
-          n_grid_search_iterations = 100):
+          layers = None):
     """
 
     :param module: basically the dataset to be used
@@ -922,21 +1254,6 @@ def train(module,
     """
 
 
-
-
-  #  # Setup all the data
-  #  n_train_samples, n_test_samples,n_val_samples, view_names = module.setup()
-
-
-
-    #Select method for feature selection
-    train_data, val_data, test_data, \
-    train_duration, train_event,\
-    val_duration, val_event,\
-    test_duration, test_event = module.feature_selection(method=feature_select_method,
-                                                         components= components,
-                                                         thresholds= thresholds,
-                                                         feature_names= feature_names)
 
 
 
@@ -975,11 +1292,6 @@ def train(module,
         test_data[c] = tuple(test_data[c])
 
 
-    best_concordance_folds = []
-    best_config_folds = []
-    all_concordances = [[] for _ in range(len(train_data))]
-    configs_for_good_concordances = [[] for _ in range(len(train_data))]
-
 
     ############################# FOLD X ###################################
     for c_fold,fold in enumerate(train_data):
@@ -1013,499 +1325,38 @@ def train(module,
 
         curr_concordance = 0
 
-        for grid_count in range(n_grid_search_iterations):
-            # Grid Search
-            curr_config = []
-            mRNA_layers = []
-            DNA_layers = []
-            microRNA_layers = []
-            RPPA_layers = []
-            concat_layers = []
-            for i in config["Layers_mRNA"]:
-                curr_layer_size = random.choice(i)
-                mRNA_layers.append(curr_layer_size)
-            for i in config["Layers_DNA"]:
-                curr_layer_size = random.choice(i)
-                DNA_layers.append(curr_layer_size)
-            for i in config["Layers_microRNA"]:
-                curr_layer_size = random.choice(i)
-                microRNA_layers.append(curr_layer_size)
-            for i in config["Layers_RPPA"]:
-                curr_layer_size = random.choice(i)
-                RPPA_layers.append(curr_layer_size)
-            for i in config["NNLayersConcat"]:
-                curr_layer_size = random.choice(i)
-                concat_layers.append(curr_layer_size)
+        out_sizes = []
+        for c_layer in range(len(layers)):
+            out_sizes.append(layers[c_layer][-1])
 
+        in_feats_second_NN_concat = sum(out_sizes)
 
-            # Set layers to views we currently look at
-            layers = [DNA_layers, microRNA_layers]
-
-            batch_size = random.choice(config["BatchSize"])
-            val_batch_size = random.choice(config["BatchSizeVal"])
-            learning_rate = random.choice(config["LearningRate"])
-            dropout = random.choice(config["DropoutBool"])
-            batchnorm = random.choice(config["BatchNormBool"])
-            loss_concatAE = random.choice(config["ConcatAELoss"])
-
-
-            curr_config = [layers, batch_size, val_batch_size, learning_rate, dropout, batchnorm, concat_layers, loss_concatAE]
-
-            out_sizes = []
-            for c_layer in range(len(layers)):
-                out_sizes.append(layers[c_layer][-1])
-
-            in_feats_second_NN_concat = sum(out_sizes)
-
-
-            # AE's
-            layers_u = copy.deepcopy(layers)
-            activation_layers_u = copy.deepcopy(activation_layers)
-            dropout_layers_u = copy.deepcopy(dropout_layers)
-            batchnorm_layers_u = copy.deepcopy(batchnorm_layers)
-            all_models.append(AE(views = view_names,
-                                 in_features= dimensions,
-                                 n_hidden_layers_dims= layers_u,
-                                 activ_funcs=activation_layers_u,
-                                 dropout_bool= dropout,
-                                 dropout_prob= dropout_rate,
-                                 dropout_layers= dropout_layers_u,
-                                 batch_norm_bool= batchnorm,
-                                 batch_norm= batchnorm_layers_u,
-                                 type_ae=model_types[0],
-                                 cross_mutation=[1,0],
-                                 print_bool=False))
-
-
-            #    all_models.append(AE(views = ['AE'],in_features=[4], n_hidden_layers_dims= [[10,5,4]],
-            #                         activ_funcs = [['relu']],
-            #                         dropout_prob= 0.2,
-            #                         dropout_layers =[['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-            #                         batch_norm = [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-            #                         dropout_bool=False,batch_norm_bool=False,type=model_types[1], cross_mutation=[1,0,3,2], ae_hierarichcal_bool= True,print_bool=False))
-
-
-            # NN
-
-            # Note : For Concat, the in_feats for NN need to be the sum of all last output layer dimensions.
-            #        For Cross, the in_feats for NN need to be the size of the largest output layer dim, as we take the
-            #                    element wise avg
-            #        For overall(mean/max/min), the in_feats for NN is 1 (as we take the overall average)
-            #        For elementwise(mean/max/min), the in_feats for NN must be size of the largest output layer dim
-
-
-            dropout_layers_u = copy.deepcopy(dropout_layers)
-            batchnorm_layers_u = copy.deepcopy(batchnorm_layers)
-            all_models.append(NN.NN_changeable(views = ['AE'],
-                                               in_features = [in_feats_second_NN_concat],
-                                               n_hidden_layers_dims= [concat_layers],
-                                               activ_funcs = [['relu'],['none']],
-                                               dropout_prob=dropout_rate,
-                                               dropout_layers=[dropout_layers_u[0]],
-                                               batch_norm = [batchnorm_layers_u[0]],
-                                               dropout_bool=dropout,
-                                               batch_norm_bool=batchnorm,
-                                               print_bool=False))
-
-
-
-
-            #############
-            # Note that for the Cross Method, the cross_mutation must be set in a way so that the input view x and
-            # "crossed" view y have the same feature size : Otherwise, the MSELoss() cant be calculated
-            # e.g. 4 views having feature sizes [15,15,5,5] --> cross mutations between first two and last two work,
-            # but not e.g. between first and third/fourth
-
-
-
-
-
-            #    full_net = AE_Hierarichal(all_models, types=model_types)
-
-            full_net = AE_NN(all_models, type=model_types[0])
-
-
-            # set optimizer
-            if l2_regularization == True:
-                optimizer = Adam(full_net.parameters(), lr=learning_rate, weight_decay=l2_regularization_rate)
-            else:
-                optimizer = Adam(full_net.parameters(), lr=learning_rate)
-
-            callbacks = [tt.callbacks.EarlyStopping(patience=10)]
-            #   cross_pos = model_types.index("cross") + 1
-            #   model = models.CoxPH(full_net,optimizer, loss=LossHierarichcalAESingleCross(alpha=[0.4,0.4,0.2], decoding_bool=True, cross_position=cross_pos)) # Change Loss here
-
-
-            # loss : alpha * surv_loss + (1-alpha) * ae_loss
-            model = models.CoxPH(full_net,
-                                 optimizer,
-                                 loss=LossAEConcatHazard(loss_concatAE))
-            print_loss = False
-            print("Split {} : ".format(c_fold + 1))
-            log = model.fit(train_data[c_fold],
-                            train_surv,
-                            batch_size,
-                            n_epochs,
-                            verbose=print_loss,
-                            val_data= val_data_full,
-                            val_batch_size= val_batch_size,
-                            callbacks=callbacks)
-
-            # Plot it
-      #      _ = log.plot()
-
-            # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
-            _ = model.compute_baseline_hazards()
-
-            # Predict based on test data
-            surv = model.predict_surv_df(test_data[c_fold])
-
-            # Plot it
-      #      surv.iloc[:, :5].plot()
-      #      plt.ylabel('S(t | x)')
-      #      _ = plt.xlabel('Time')
-
-
-            # Evaluate with concordance, brier score and binomial log-likelihood
-            ev = EvalSurv(surv, test_duration, test_event, censor_surv='km') # censor_surv : Kaplan-Meier
-
-            # concordance
-            concordance_index = ev.concordance_td()
-
-            if concordance_index < 0.5:
-                concordance_index = 1 - concordance_index
-
-            #brier score
-            time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
-            _ = ev.brier_score(time_grid).plot
-            brier_score = ev.integrated_brier_score(time_grid)
-
-            #binomial log-likelihood
-            binomial_score = ev.integrated_nbll(time_grid)
-
-            print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
-                                                                                                               brier_score,
-                                                                                                               binomial_score))
-
-
-            print("With config : ")
-            print("Layers : ", curr_config[0])
-            print("Batch Size : ", curr_config[1])
-            print("Validation Batch Size : ", curr_config[2])
-            print("Learning Rate : ", curr_config[3])
-            print("Dropout Bool : ", curr_config[4])
-            print("BatchNorm Bool : ", curr_config[5])
-            print("Concat Layers :", curr_config[6])
-            print("Survival loss {} and AE MSE loss {}".format(curr_config[7], 1 - curr_config[7]))
-
-
-            if concordance_index >= 0.6:
-                configs_for_good_concordances[c_fold].append(curr_config)
-
-
-            if concordance_index > curr_concordance:
-                best_config = curr_config
-                curr_concordance = concordance_index
-
-            all_concordances[c_fold].append(curr_concordance)
-
-        best_concordance_folds.append(concordance_index)
-        best_config_folds.append(best_config)
-
-
-    print("Best concordances across folds : ", best_concordance_folds, "with config : ", best_config_folds)
-
-    for c_fold in range(len(all_concordances)):
-        print("Average concordance across fold for all grid search iterations",
-              str(c_fold + 1), ": ", sum(all_concordances[c_fold])/len(all_concordances[c_fold]))
-        print("Configs with concordances over 0.6 for current fold : ", len(configs_for_good_concordances[c_fold]))
-    #    print("Respective Config : ", configs_for_good_concordances[c_fold])
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    """
-    # Load Dataloaders
-    trainloader = module.train_dataloader(batch_size=n_train_samples[0])
-
-    #Train
-    for train_data, train_duration, train_event in trainloader:
-        for c,fold in enumerate(train_data):
-            for c2,view in enumerate(fold):
-                train_data[c][c2] = train_data[c][c2].to(device=device)
-
-    trainloader = module.train_dataloader(batch_size=n_train_samples) # all training examples
-    testloader =module.test_dataloader(batch_size=n_test_samples)
-
-    # Load data and set device to cuda if possible
-
-    #Train
-    for train_data, train_duration, train_event in trainloader:
-        for view in range(len(train_data)):
-            train_data[view] = train_data[view].to(device=device)
-
-        train_duration.to(device=device)
-        train_event.to(device=device)
-
-    for c,_ in enumerate(train_data):
-        print("Train data shape after feature selection {}".format(train_data[c].shape))
-
-
-    #Test
-    for test_data, test_duration, test_event in testloader:
-        for view in range(len(test_data)):
-            test_data[view] = test_data[view].to(device=device)
-
-
-        test_duration.to(device=device)
-        test_event.to(device=device)
-
-    for c,_ in enumerate(test_data):
-        print("Test data shape after feature selection {}".format(test_data[c].shape))
-
-
-
-    # For PyCox, we need to change the structure so that all the data of different views is wrapped in a tuple
-    train_data = tuple(train_data)
-    test_data = tuple(test_data)
-
-    # Input dimensions (features for each view) for NN based on different data (train/validation/test)
-    # Need to be the same for NN to work
-  #  dimensions_train = [x.size(1) for x in train_data]
-  #  dimensions_test = [x.size(1) for x in test_data]
-
-    dimensions_train = [x.shape[1] for x in train_data]
-    dimensions_test = [x.shape[1] for x in test_data]
-
-    assert (dimensions_train == dimensions_test), 'Feature mismatch between train/test'
-
-    dimensions = dimensions_train
-
-    print("Views :", view_names)
-
-    # Cross Validation:
-    # We first need to concatenate all the data (train,test) together.
-    # Since each view has a different feature size, we do that in the cross validation loop ;
-    # duration & event can be done here already.
-
-    full_data = []
-    for view_idx in range(len(view_names)):
-        data = torch.cat(tuple([train_data[view_idx],test_data[view_idx]]), dim=0)
-        full_data.append(data)
-
-
-    full_duration = torch.cat(tuple([train_duration,test_duration]),dim=0)
-    full_event = torch.cat(tuple([train_event,test_event]),dim=0)
-
-    # k is the number of folds
-    k = number_folds
-
-    splits = KFold(n_splits=k,shuffle=True,random_state=42)
-
-    n_all_samples = n_train_samples + n_test_samples
-
-
-    for fold, (train_idx,val_idx) in enumerate(splits.split(np.arange(n_all_samples))):
-        torch.manual_seed(0)
-
-        print('Fold {}'.format(fold + 1))
-
-
-        event_boolean = False
-
-        while event_boolean == False: # TODO : random shuffle, wenn in e.g val_idx schon alle event 0 sind , wird nichts verändern und loop geht unendlich..
-            np.random.seed(seed=0)
-            train_sampler = SubsetRandomSampler(train_idx) # np.array e.g. [0 2 4 8 18 22 ..]
-            test_sampler = SubsetRandomSampler(val_idx)
-
-
-
-
-
-
-            # we take a subset of our train samples for the validation set
-            # 20% of train is validation set
-            # We first need to turn the train_sampler into a np.array (else the method won't work)
-            train_sampler_array = np.empty(len(train_sampler))
-
-            for c,idx in enumerate(train_sampler):
-                np.put(train_sampler_array,c,idx)
-
-            val_sampler = np.random.choice(train_sampler_array, int(0.2 * len(train_sampler)))
-
-            #change dtype
-            val_sampler = val_sampler.astype('int32')
-            train_sampler_array = train_sampler_array.astype('int32')
-
-            # get indices as list
-            val_sampler_list = val_sampler.tolist()
-            # remove these from train sampler
-            train_sampler_array = np.setdiff1d(train_sampler_array, val_sampler_list)
-
-            # Get duration & events
-            train_duration = []
-            train_event = []
-            for idx in train_sampler_array:
-                train_duration.append(full_duration[idx])
-                train_event.append(full_event[idx])
-
-            train_duration = torch.stack(tuple(train_duration))
-            train_event = torch.stack(tuple(train_event))
-
-            train_duration = train_duration.numpy()
-            train_event = train_event.numpy()
-
-
-            val_duration = []
-            val_event = []
-            for idx in val_sampler:
-                val_duration.append(full_duration[idx])
-                val_event.append(full_event[idx])
-
-            val_duration = torch.stack(tuple(val_duration))
-            val_event = torch.stack(tuple(val_event))
-
-            val_duration = val_duration.numpy()
-            val_event = val_event.numpy()
-
-            # Check that each set contains atleast one event that is not censored
-
-
-
-
-            test_duration = []
-            test_event = []
-            for idx in test_sampler:
-
-                test_duration.append(full_duration[idx])
-                test_event.append(full_event[idx])
-
-            test_duration = torch.stack(tuple(test_duration))
-            test_event = torch.stack(tuple(test_event))
-
-            test_duration = test_duration.numpy()
-            test_event = test_event.numpy()
-
-
-            print("val non censored samples : ", np.count_nonzero(val_event))
-            print("train non censored samples : ", np.count_nonzero(train_event))
-            print("test non censored samples : ", np.count_nonzero(test_event))
-
-
-            if np.count_nonzero(val_event) != 0 \
-                    and np.count_nonzero(train_event) != 0 \
-                    and np.count_nonzero(test_event) != 0:
-
-                event_boolean = True
-
-
-        # Numpy transforms for PyCox
-
-
-        train_surv = (train_duration, train_event)
-
-
-
-
-        # Get necessary data for each view
-        train_data_full = []
-        val_data_full = []
-        test_data_full = []
-        for view_idx in range(len(view_names)):
-
-            # get training data
-            train_data = []
-
-            for idx in train_sampler_array:
-                train_data.append(full_data[view_idx][idx])
-
-
-            train_data = torch.stack(tuple(train_data))
-
-            train_data_full.append(train_data.numpy())
-
-
-            # get validation data
-            val_data = []
-
-            for idx in val_sampler:
-                val_data.append(full_data[view_idx][idx])
-
-
-            val_data = torch.stack(tuple(val_data))
-
-            val_data_full.append(val_data.numpy())
-
-
-
-            # get testing data
-            test_data = []
-
-            for idx in test_sampler:
-                test_data.append(full_data[view_idx][idx])
-
-
-            test_data = torch.stack(tuple(test_data))
-
-            test_data_full.append(test_data.numpy())
-
-
-
-
-
-        #Change into tuple structure
-        train_data_full = tuple(train_data_full)
-        val_data_full = tuple(val_data_full)
-        test_data_full = tuple(test_data_full)
-
-
-        # for PyCox
-        val_data = (val_data_full, (val_duration, val_event))
-
-
-
-        torch.manual_seed(0)
-
-        # Create List of models to be used
-        all_models = nn.ModuleList()
-
-
-        model_types = ['cross','elementwisemax']
-
-        print("MODEL TYPES : ", model_types)
-
-        # TODO : weird problem with variables for models, bc models change variables outside model itself
-        # TODO : could be that we create way more layers than we want --> debug!
 
         # AE's
-        all_models.append(AE(view_names, dimensions, [[128,64] for i in range(len(view_names))],
-                             [['relu'] for i in range(len(view_names))], 0.2,
-                             [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-                             [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-                             dropout_bool=False, batch_norm_bool=False, type_ae=model_types[0], cross_mutation=[1,0], print_bool=False))
+        layers_u = copy.deepcopy(layers)
+        activation_layers_u = copy.deepcopy(activation_layers)
+        dropout_layers_u = copy.deepcopy(dropout_layers)
+        batchnorm_layers_u = copy.deepcopy(batchnorm_layers)
+        all_models.append(AE(views = view_names,
+                             in_features= dimensions,
+                             n_hidden_layers_dims= layers_u,
+                             activ_funcs=activation_layers_u,
+                             dropout_bool= dropout,
+                             dropout_prob= dropout_rate,
+                             dropout_layers= dropout_layers_u,
+                             batch_norm_bool= batchnorm,
+                             batch_norm= batchnorm_layers_u,
+                             type_ae=model_types[0],
+                             cross_mutation=[1,0],
+                             print_bool=False))
 
 
-    #    all_models.append(AE(views = ['AE'],in_features=[4], n_hidden_layers_dims= [[10,5,4]],
-    #                         activ_funcs = [['relu']],
-    #                         dropout_prob= 0.2,
-    #                         dropout_layers =[['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-    #                         batch_norm = [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-    #                         dropout_bool=False,batch_norm_bool=False,type=model_types[1], cross_mutation=[1,0,3,2], ae_hierarichcal_bool= True,print_bool=False))
+        #    all_models.append(AE(views = ['AE'],in_features=[4], n_hidden_layers_dims= [[10,5,4]],
+        #                         activ_funcs = [['relu']],
+        #                         dropout_prob= 0.2,
+        #                         dropout_layers =[['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+        #                         batch_norm = [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
+        #                         dropout_bool=False,batch_norm_bool=False,type=model_types[1], cross_mutation=[1,0,3,2], ae_hierarichcal_bool= True,print_bool=False))
 
 
         # NN
@@ -1516,69 +1367,78 @@ def train(module,
         #        For overall(mean/max/min), the in_feats for NN is 1 (as we take the overall average)
         #        For elementwise(mean/max/min), the in_feats for NN must be size of the largest output layer dim
 
-        all_models.append(NN.NN_changeable(views = ['AE'],in_features = [64],
-                                           n_hidden_layers_dims= [[128,64]],
-                                           activ_funcs = [['relu'],['none']],dropout_prob=0.2,dropout_layers=[['yes','yes']],
-                                           batch_norm = [['yes','yes']],
-                                           dropout_bool=False,batch_norm_bool=False,print_bool=False))
+
+        dropout_layers_u = copy.deepcopy(dropout_layers)
+        batchnorm_layers_u = copy.deepcopy(batchnorm_layers)
+        all_models.append(NN.NN_changeable(views = ['AE'],
+                                           trial= None,
+                                           in_features = [in_feats_second_NN_concat],
+                                           n_hidden_layers_dims= [[64,32]],
+                                           activ_funcs = [['relu'],['none']],
+                                           dropout_prob=dropout_rate,
+                                           dropout_layers=[dropout_layers_u[0]],
+                                           batch_norm = [batchnorm_layers_u[0]],
+                                           dropout_bool=dropout,
+                                           batch_norm_bool=batchnorm,
+                                           print_bool=False))
 
 
 
 
-            #############
-            # Note that for the Cross Method, the cross_mutation must be set in a way so that the input view x and
-            # "crossed" view y have the same feature size : Otherwise, the MSELoss() cant be calculated
-            # e.g. 4 views having feature sizes [15,15,5,5] --> cross mutations between first two and last two work,
-            # but not e.g. between first and third/fourth
+        #############
+        # Note that for the Cross Method, the cross_mutation must be set in a way so that the input view x and
+        # "crossed" view y have the same feature size : Otherwise, the MSELoss() cant be calculated
+        # e.g. 4 views having feature sizes [15,15,5,5] --> cross mutations between first two and last two work,
+        # but not e.g. between first and third/fourth
 
 
 
 
 
-    #    full_net = AE_Hierarichal(all_models, types=model_types)
+        #    full_net = AE_Hierarichal(all_models, types=model_types)
 
         full_net = AE_NN(all_models, type=model_types[0])
 
 
         # set optimizer
         if l2_regularization == True:
-            optimizer = Adam(full_net.parameters(), lr=0.001, weight_decay=0.0001)
+            optimizer = Adam(full_net.parameters(), lr=learning_rate, weight_decay=l2_regularization_rate)
         else:
-            optimizer = Adam(full_net.parameters(), lr=0.001)
+            optimizer = Adam(full_net.parameters(), lr=learning_rate)
 
-        callbacks = [tt.callbacks.EarlyStopping()]
-     #   cross_pos = model_types.index("cross") + 1
-     #   model = models.CoxPH(full_net,optimizer, loss=LossHierarichcalAESingleCross(alpha=[0.4,0.4,0.2], decoding_bool=True, cross_position=cross_pos)) # Change Loss here
+        callbacks = [tt.callbacks.EarlyStopping(patience=10)]
+        #   cross_pos = model_types.index("cross") + 1
+        #   model = models.CoxPH(full_net,optimizer, loss=LossHierarichcalAESingleCross(alpha=[0.4,0.4,0.2], decoding_bool=True, cross_position=cross_pos)) # Change Loss here
 
 
         # loss : alpha * surv_loss + (1-alpha) * ae_loss
         model = models.CoxPH(full_net,
                              optimizer,
-                             loss=LossAECrossHazard(0.7))
-
-
-        log = model.fit(train_data_full,
+                             loss=LossAEConcatHazard(0.6))
+        print_loss = False
+        print("Split {} : ".format(c_fold + 1))
+        log = model.fit(train_data[c_fold],
                         train_surv,
                         batch_size,
                         n_epochs,
-                        verbose=True,
-                        val_data= val_data,
+                        verbose=print_loss,
+                        val_data= val_data_full,
                         val_batch_size= val_batch_size,
                         callbacks=callbacks)
 
         # Plot it
-        _ = log.plot()
+  #      _ = log.plot()
 
         # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
         _ = model.compute_baseline_hazards()
 
         # Predict based on test data
-        surv = model.predict_surv_df(test_data_full)
+        surv = model.predict_surv_df(test_data[c_fold])
 
         # Plot it
-        surv.iloc[:, :5].plot()
-        plt.ylabel('S(t | x)')
-        _ = plt.xlabel('Time')
+  #      surv.iloc[:, :5].plot()
+  #      plt.ylabel('S(t | x)')
+  #      _ = plt.xlabel('Time')
 
 
         # Evaluate with concordance, brier score and binomial log-likelihood
@@ -1586,6 +1446,9 @@ def train(module,
 
         # concordance
         concordance_index = ev.concordance_td()
+
+        if concordance_index < 0.5:
+            concordance_index = 1 - concordance_index
 
         #brier score
         time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
@@ -1598,39 +1461,32 @@ def train(module,
         print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
                                                                                                            brier_score,
                                                                                                            binomial_score))
-        """
 
 
-"""
-    # Get feature offsets for train/validation/test
-    # Need to be the same for NN to work
-    feature_offsets_train = [0] + np.cumsum(dimensions_train).tolist()
-    feature_offsets_test = [0] + np.cumsum(dimensions_test).tolist()
-
-    feature_offsets = feature_offsets_train
-
-    # Number of all features (summed up) for train/validation/test
-    # These need to be the same, otherwise NN won't work
-    feature_sum_train = feature_offsets_train[-1]
-    feature_sum_test = feature_offsets_test[-1]
-
-    feature_sum = feature_sum_train
-
-    # Initialize empty tensors to store the data for train/validation/test
-    train_data_pycox = torch.empty(n_train_samples, feature_sum_train).to(torch.float32)
-    test_data_pycox = torch.empty(n_test_samples, feature_sum_test).to(torch.float32)
-
-    # Train
-    for idx_view,view in enumerate(train_data):
-        for idx_sample, sample in enumerate(view):
-            train_data_pycox[idx_sample][feature_offsets_train[idx_view]:
-                                         feature_offsets_train[idx_view+1]] = sample
 
 
-    # Test
-    for idx_view,view in enumerate(test_data):
-        for idx_sample, sample in enumerate(view):
-            test_data_pycox[idx_sample][feature_offsets_test[idx_view]:
-                                        feature_offsets_test[idx_view+1]] = sample
 
-"""
+
+def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/"):
+
+    trainset = pd.read_csv(
+        os.path.join(data_dir + "TrainData.csv"), index_col=0)
+
+    trainset_feat = pd.read_csv(
+        os.path.join(data_dir +"TrainDataFeatOffs.csv"), index_col=0)
+
+
+    valset = pd.read_csv(
+        os.path.join(data_dir + "ValData.csv"), index_col=0)
+
+    valset_feat = pd.read_csv(
+        os.path.join(data_dir +"ValDataFeatOffs.csv"), index_col=0)
+
+    testset = pd.read_csv(
+        os.path.join(data_dir +  "TestData.csv"), index_col=0)
+
+    testset_feat = pd.read_csv(
+        os.path.join(data_dir + "TestDataFeatOffs.csv"), index_col=0)
+
+
+    return trainset, trainset_feat, valset, valset_feat, testset, testset_feat

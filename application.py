@@ -16,7 +16,7 @@ if __name__ == '__main__':
     view_names = cancer_data[0][2]
     feature_names = cancer_data[0][3]
     cancer_name = cancer_data[0][4][0]
-    which_views = ['microRNA'] # no input to use all the given views
+    which_views = [] # no input to use all the given views
     n_folds = 1
 
     # needed for R, cant read in cancer name directly for some weird reason...

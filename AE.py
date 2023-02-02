@@ -1086,9 +1086,9 @@ def objective(trial):
     train_surv = (train_duration, train_event)
     val_data_full = (val_data, (val_duration, val_event))
 
-
-    model_types = ['cross_elementwiseavg']# 'elementwiseavg']
     second_decoder_bool = True
+    model_types = ['cross_elementwiseavg','concat']
+
 
     ##################################### HYPERPARAMETER SEARCH SETTINGS ##############################################
     l2_regularization_bool = trial.suggest_categorical('l2_regularization_bool', [True,False])
@@ -1099,6 +1099,10 @@ def objective(trial):
     dropout_prob = trial.suggest_float("dropout_prob", 0,0.5,step=0.1)
     dropout_bool = trial.suggest_categorical('dropout_bool', [True,False])
     batchnorm_bool = trial.suggest_categorical('batchnorm_bool',[True,False])
+    if len(model_types) == 2:
+        dropout_prob_hierachical = trial.suggest_float("dropout_prob_hierachical", 0,0.5,step=0.1)
+        dropout_bool_hierachical = trial.suggest_categorical('dropout_bool_hierachical', [True,False])
+        batchnorm_bool_hierachical = trial.suggest_categorical('batchnorm_bool_hierachical',[True,False])
 
 
 
@@ -1292,6 +1296,9 @@ def objective(trial):
         layers_2_dropout_hierarichcal_integrated = trial.suggest_categorical('layers_2_dropout_hierarichcal_integrated', ['yes','no'])
         layers_1_batchnorm_hierarichcal_integrated = trial.suggest_categorical('layers_1_batchnorm_hierarichcal_integrated', ['yes', 'no'])
         layers_2_batchnorm_hierarichcal_integrated = trial.suggest_categorical('layers_2_batchnorm_hierarichcal_integrated', ['yes', 'no'])
+        dropout_prob_hierachical_integrated = trial.suggest_float("dropout_prob_hierachical_integrated", 0,0.5,step=0.1)
+        dropout_bool_hierachical_integrated = trial.suggest_categorical('dropout_bool_hierachical_integrated', [True,False])
+        batchnorm_bool_hierachical_integrated = trial.suggest_categorical('batchnorm_bool_hierachical_integrated',[True,False])
         layers_hierarchical_integrated.append([layers_1_hierarichcal_integrated,layers_2_hierarichcal_integrated])
         activation_functions_hierarchical_integrated.append([layers_1_activfunc_hierarichcal_integrated, layers_2_activfunc_hierarichcal_integrated])
         dropouts_hierarchical_integrated.append([layers_1_dropout_hierarichcal_integrated, layers_2_dropout_hierarichcal_integrated])
@@ -1330,6 +1337,13 @@ def objective(trial):
     # Size is the one of the largest output dim of AE layers
     in_feats_second_NN_element_wise = max([i[-1] for i in layers])
 
+    # After hierarichcal integrated method
+    in_feats_third_NN_element_wise = max([i[-1] for i in layers_hierarchical_integrated])
+
+    out_sizes_hierachical = []
+
+    in_feats_third_NN_concat = layers_hierarchical_integrated[0][-1] # integrated method has only one layer left
+
     in_feats_second_NN_overall = 1
 
 
@@ -1353,13 +1367,27 @@ def objective(trial):
                          batch_norm_bool= batchnorm_bool,
                          batch_norm= batchnorms,
                          type_ae=model_types[0],
-                         cross_mutation=list(cross_decoders_3_views),
+                         cross_mutation=[1,2,0],
+                         print_bool=False))
+
+
+    all_models.append(AE(views = ['AE'],
+                         in_features= [in_feats_second_NN_element_wise],
+                         n_hidden_layers_dims= layers_hierarchical_integrated,
+                         activ_funcs=activation_functions_hierarchical_integrated,
+                         dropout_bool= dropout_bool_hierachical_integrated,
+                         dropout_prob= dropout_prob_hierachical_integrated,
+                         dropout_layers= dropouts_hierarchical_integrated,
+                         batch_norm_bool= batchnorm_bool_hierachical_integrated,
+                         batch_norm= batchnorms_hierarchical_integrated,
+                         type_ae=model_types[1],
+                         cross_mutation=None,
                          print_bool=False))
 
 
     all_models.append(NN.NN_changeable(views = ['AE'],
                                        trial= trial,
-                                       in_features = [in_feats_second_NN_element_wise],
+                                       in_features = [in_feats_third_NN_concat],
                                        n_hidden_layers_dims= layers_FCNN,
                                        activ_funcs = [FCNN_activation_functions,['none']],
                                        dropout_prob=FCNN_dropout_prob,
@@ -1372,9 +1400,9 @@ def objective(trial):
 
 
 
-    #    full_net = AE_Hierarichal(all_models, types=model_types)
+    full_net = AE_Hierarichal(all_models, types=model_types)
 
-    full_net = AE_NN(all_models, type=model_types[0])
+  #  full_net = AE_NN(all_models, type=model_types[0])
 
 
     # set optimizer
@@ -1389,10 +1417,14 @@ def objective(trial):
 
     loss_concat = LossAEConcatHazard(loss_surv)
     loss_cross = LossAECrossHazard(loss_surv)
+
+    # if second decoder, we need to use loss_3 ; else normal 2 valued loss
+    loss_hierachical_no_cross = LossHierarichcalAE(loss_3_values_hierarchical)
+    loss_hierachical_cross = LossHierarichcalAESingleCross(loss_3_values_hierarchical, cross_position=1)
     # loss : alpha * surv_loss + (1-alpha) * ae_loss
     model = models.CoxPH(full_net,
                          optimizer,
-                         loss=loss_cross)
+                         loss=loss_hierachical_cross)
     print_loss = False
 
     log = model.fit(train_data,

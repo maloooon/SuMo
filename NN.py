@@ -163,9 +163,9 @@ class NN_changeable(nn.Module):
         sum_dim_last_layers = sum([dim[-1] for dim in n_hidden_layers_dims])
 
         if activ_funcs[-1][0] != 'none':
-            self.final_out = nn.Sequential(nn.Linear(sum_dim_last_layers,1), activ_funcs[-1][0])
+            self.final_out = nn.Sequential(nn.Linear(sum_dim_last_layers,1), activ_funcs[-1][0]) # TODO : add possible batchnorm
         else:
-            self.final_out = nn.Sequential(nn.Linear(sum_dim_last_layers,1))
+            self.final_out = nn.Sequential(nn.Linear(sum_dim_last_layers,1)) # TODO : add possible batchnorm
 
 
 
@@ -210,32 +210,8 @@ class NN_changeable(nn.Module):
         encoded_features = [[] for x in range(len(self.views))]
 
         #order data by views for diff. hidden layers
-    #    data_ordered = []
 
-
-    #    if self.ae_bool == False:
-            #Get batch size
-    #        batch_size = x.size(0)
-
-    #        for view in range(len(self.views)):
-
-                # Calculate the amount of features for current view via offset
-    #            feature_size = self.feature_offsets[view+1] - self.feature_offsets[view]
-
-                # Intialize an empty tensor to store data for current view
-    #            temp = torch.empty(batch_size,feature_size)
-
-                # fill empty tensor with according features for view for each sample in batch
-    #            for i in range(batch_size):
-    #                temp[i, :] = x[i][self.feature_offsets[view] : self.feature_offsets[view+1]]
-
-    #            data_ordered.append(temp)
-
-
-   #     if type(x) is list or type(x) is tuple:
         data_ordered = x
-    #    else:
-    #        data_ordered.append(x)
 
         batch_size = x[0].size(0) # take arbitrary view for batch size, since for each view same batch size
 
@@ -259,7 +235,7 @@ class NN_changeable(nn.Module):
 
 
 
-        predict = self.final_out(final_in)
+        predict = self.final_out(final_in)  # TODO : add possible dropout
 
 
 

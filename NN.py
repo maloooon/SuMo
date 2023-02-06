@@ -325,7 +325,7 @@ def objective(trial):
     learning_rate = trial.suggest_float("learning_rate", 1e-5,1e-1,log=True)
     l2_regularization_rate = trial.suggest_float("l2_regularization_rate", 1e-6,1e-3, log=True)
     batch_size = trial.suggest_int("batch_size", 5, 200) # TODO : batch size so wählen, dass train samples/ batch_size und val samples/batch_size nie 1 ergeben können, da sonst Error : noch besser error abfangen und einfach skippen, da selten passiert !
-    n_epochs = trial.suggest_int("n_epochs", 10,100)
+    n_epochs = trial.suggest_int("n_epochs", 10,100) # TODO : fest
     dropout_prob = trial.suggest_float("dropout_prob", 0,0.5,step=0.1)
     dropout_bool = trial.suggest_categorical('dropout_bool', [True,False])
     batchnorm_bool = trial.suggest_categorical('batchnorm_bool',[True,False])

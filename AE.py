@@ -1086,8 +1086,8 @@ def objective(trial):
     train_surv = (train_duration, train_event)
     val_data_full = (val_data, (val_duration, val_event))
 
-    second_decoder_bool = True
-    model_types = ['cross_elementwiseavg','concat']
+    second_decoder_bool = False
+    model_types = ['concat']
 
 
     ##################################### HYPERPARAMETER SEARCH SETTINGS ##############################################
@@ -1112,8 +1112,8 @@ def objective(trial):
 
     # This is needed in nearly every case, just not if we don't integrate the data in the autoencoders in any way
     # (basically just let AE work as feature selection method) ; TODO : add if case for this case
-    layers_1_FCNN = trial.suggest_int('layers_1_FCNN', 5, 1200)
-    layers_2_FCNN = trial.suggest_int('layers_2_FCNN', 5, 1200)
+    layers_1_FCNN = trial.suggest_int('layers_1_FCNN', 5, 300)
+    layers_2_FCNN = trial.suggest_int('layers_2_FCNN', 5, 300)
 
     layers_FCNN = [[layers_1_FCNN,layers_2_FCNN]]
 
@@ -1163,8 +1163,8 @@ def objective(trial):
     batchnorms_hierarchical_integrated = []
 
     if 'MRNA' in view_names:
-        layers_1_mRNA = trial.suggest_int('layers_1_mRNA', 5, 1200)
-        layers_2_mRNA = trial.suggest_int('layers_2_mRNA', 5, 1200)
+        layers_1_mRNA = trial.suggest_int('layers_1_mRNA', 5, 300)
+        layers_2_mRNA = trial.suggest_int('layers_2_mRNA', 5, 300)
         layers_1_mRNA_activfunc = trial.suggest_categorical('layers_1_mRNA_activfunc', ['relu','sigmoid'])
         layers_2_mRNA_activfunc = trial.suggest_categorical('layers_2_mRNA_activfunc', ['relu','sigmoid'])
         layers_1_mRNA_dropout = trial.suggest_categorical('layers_1_mRNA_dropout', ['yes','no'])
@@ -1172,8 +1172,8 @@ def objective(trial):
         layers_1_mRNA_batchnorm = trial.suggest_categorical('layers_1_mRNA_batchnorm', ['yes', 'no'])
         layers_2_mRNA_batchnorm = trial.suggest_categorical('layers_2_mRNA_batchnorm', ['yes', 'no'])
         if len(model_types) == 2 and model_types[0] == 'none':
-            layers_1_mRNA_hierarichcal = trial.suggest_int('layers_1_mRNA_hierarichcal', 5, 1200)
-            layers_2_mRNA_hierarichcal = trial.suggest_int('layers_2_mRNA_hierarichcal', 5, 1200)
+            layers_1_mRNA_hierarichcal = trial.suggest_int('layers_1_mRNA_hierarichcal', 5, 300)
+            layers_2_mRNA_hierarichcal = trial.suggest_int('layers_2_mRNA_hierarichcal', 5, 300)
             layers_1_mRNA_activfunc_hierarichcal = trial.suggest_categorical('layers_1_mRNA_activfunc_hierarichcal', ['relu','sigmoid'])
             layers_2_mRNA_activfunc_hierarichcal = trial.suggest_categorical('layers_2_mRNA_activfunc_hierarichcal', ['relu','sigmoid'])
             layers_1_mRNA_dropout_hierarichcal = trial.suggest_categorical('layers_1_mRNA_dropout_hierarichcal', ['yes','no'])
@@ -1194,8 +1194,8 @@ def objective(trial):
 
 
     if 'DNA' in view_names:
-        layers_1_DNA = trial.suggest_int('layers_1_DNA', 5, 1200)
-        layers_2_DNA = trial.suggest_int('layers_2_DNA', 5, 1200)
+        layers_1_DNA = trial.suggest_int('layers_1_DNA', 5, 300)
+        layers_2_DNA = trial.suggest_int('layers_2_DNA', 5, 300)
         layers_1_DNA_activfunc = trial.suggest_categorical('layers_1_DNA_activfunc', ['relu','sigmoid'])
         layers_2_DNA_activfunc = trial.suggest_categorical('layers_2_DNA_activfunc', ['relu','sigmoid'])
         layers_1_DNA_dropout = trial.suggest_categorical('layers_1_DNA_dropout', ['yes','no'])
@@ -1204,8 +1204,8 @@ def objective(trial):
         layers_2_DNA_batchnorm = trial.suggest_categorical('layers_2_DNA_batchnorm', ['yes', 'no'])
 
         if len(model_types) == 2 and model_types[0] == 'none':
-            layers_1_DNA_hierarichcal = trial.suggest_int('layers_1_DNA_hierarichcal', 5, 1200)
-            layers_2_DNA_hierarichcal = trial.suggest_int('layers_2_DNA_hierarichcal', 5, 1200)
+            layers_1_DNA_hierarichcal = trial.suggest_int('layers_1_DNA_hierarichcal', 5, 300)
+            layers_2_DNA_hierarichcal = trial.suggest_int('layers_2_DNA_hierarichcal', 5, 300)
             layers_1_DNA_activfunc_hierarichcal = trial.suggest_categorical('layers_1_DNA_activfunc_hierarichcal', ['relu','sigmoid'])
             layers_2_DNA_activfunc_hierarichcal = trial.suggest_categorical('layers_2_DNA_activfunc_hierarichcal', ['relu','sigmoid'])
             layers_1_DNA_dropout_hierarichcal = trial.suggest_categorical('layers_1_DNA_dropout_hierarichcal', ['yes','no'])
@@ -1225,8 +1225,8 @@ def objective(trial):
 
 
     if 'MICRORNA' in view_names:
-        layers_1_microRNA = trial.suggest_int('layers_1_microRNA', 5, 1200)
-        layers_2_microRNA = trial.suggest_int('layers_1_microRNA', 5, 1200)
+        layers_1_microRNA = trial.suggest_int('layers_1_microRNA', 5, 300)
+        layers_2_microRNA = trial.suggest_int('layers_1_microRNA', 5, 300)
         layers_1_microRNA_activfunc = trial.suggest_categorical('layers_1_microRNA_activfunc', ['relu','sigmoid'])
         layers_2_microRNA_activfunc = trial.suggest_categorical('layers_2_microRNA_activfunc', ['relu','sigmoid'])
         layers_1_microRNA_dropout = trial.suggest_categorical('layers_1_microRNA_dropout', ['yes','no'])
@@ -1235,8 +1235,8 @@ def objective(trial):
         layers_2_microRNA_batchnorm = trial.suggest_categorical('layers_2_microRNA_batchnorm', ['yes', 'no'])
 
         if len(model_types) == 2 and model_types[0] == 'none':
-            layers_1_microRNA_hierarichcal = trial.suggest_int('layers_1_microRNA_hierarichcal', 5, 1200)
-            layers_2_microRNA_hierarichcal = trial.suggest_int('layers_2_microRNA_hierarichcal', 5, 1200)
+            layers_1_microRNA_hierarichcal = trial.suggest_int('layers_1_microRNA_hierarichcal', 5, 300)
+            layers_2_microRNA_hierarichcal = trial.suggest_int('layers_2_microRNA_hierarichcal', 5, 300)
             layers_1_microRNA_activfunc_hierarichcal = trial.suggest_categorical('layers_1_microRNA_activfunc_hierarichcal', ['relu','sigmoid'])
             layers_2_microRNA_activfunc_hierarichcal = trial.suggest_categorical('layers_2_microRNA_activfunc_hierarichcal', ['relu','sigmoid'])
             layers_1_microRNA_dropout_hierarichcal = trial.suggest_categorical('layers_1_microRNA_dropout_hierarichcal', ['yes','no'])
@@ -1255,8 +1255,8 @@ def objective(trial):
 
 
     if 'RPPA' in view_names:
-        layers_1_RPPA = trial.suggest_int('layers_1_microRNA', 5, 1200)
-        layers_2_RPPA = trial.suggest_int('layers_1_microRNA', 5, 1200)
+        layers_1_RPPA = trial.suggest_int('layers_1_microRNA', 5, 300)
+        layers_2_RPPA = trial.suggest_int('layers_1_microRNA', 5, 300)
         layers_1_RPPA_activfunc = trial.suggest_categorical('layers_1_RPPA_activfunc', ['relu','sigmoid'])
         layers_2_RPPA_activfunc = trial.suggest_categorical('layers_2_RPPA_activfunc', ['relu','sigmoid'])
         layers_1_RPPA_dropout = trial.suggest_categorical('layers_1_RPPA_dropout', ['yes','no'])
@@ -1265,8 +1265,8 @@ def objective(trial):
         layers_2_RPPA_batchnorm = trial.suggest_categorical('layers_2_RPPA_batchnorm', ['yes', 'no'])
 
         if len(model_types) == 2 and model_types[0] == 'none':
-            layers_1_RPPA_hierarichcal = trial.suggest_int('layers_1_RPPA_hierarichcal', 5, 1200)
-            layers_2_RPPA_hierarichcal = trial.suggest_int('layers_2_RPPA_hierarichcal', 5, 1200)
+            layers_1_RPPA_hierarichcal = trial.suggest_int('layers_1_RPPA_hierarichcal', 5, 300)
+            layers_2_RPPA_hierarichcal = trial.suggest_int('layers_2_RPPA_hierarichcal', 5, 300)
             layers_1_RPPA_activfunc_hierarichcal = trial.suggest_categorical('layers_1_RPPA_activfunc_hierarichcal', ['relu','sigmoid'])
             layers_2_RPPA_activfunc_hierarichcal = trial.suggest_categorical('layers_2_RPPA_activfunc_hierarichcal', ['relu','sigmoid'])
             layers_1_RPPA_dropout_hierarichcal = trial.suggest_categorical('layers_1_RPPA_dropout_hierarichcal', ['yes','no'])
@@ -1288,8 +1288,8 @@ def objective(trial):
 
     if len(model_types) == 2 and model_types[0] != 'none':
     # In this case we already have done integration method and have single omic data structure left
-        layers_1_hierarichcal_integrated = trial.suggest_int('layers_1_hierarichcal_integrated', 5, 1200)
-        layers_2_hierarichcal_integrated = trial.suggest_int('layers_2_hierarichcal_integrated', 5, 1200)
+        layers_1_hierarichcal_integrated = trial.suggest_int('layers_1_hierarichcal_integrated', 5, 300)
+        layers_2_hierarichcal_integrated = trial.suggest_int('layers_2_hierarichcal_integrated', 5, 300)
         layers_1_activfunc_hierarichcal_integrated = trial.suggest_categorical('layers_1_activfunc_hierarichcal_integrated', ['relu','sigmoid'])
         layers_2_activfunc_hierarichcal_integrated = trial.suggest_categorical('layers_2_activfunc_hierarichcal_integrated', ['relu','sigmoid'])
         layers_1_dropout_hierarichcal_integrated = trial.suggest_categorical('layers_1_dropout_hierarichcal_integrated', ['yes','no'])
@@ -1318,7 +1318,7 @@ def objective(trial):
     if len(layers) == 3 and 'cross' in model_types[0]:
         cross_decoders_3_views = trial.suggest_categorical("cross_decoders_3_views",[(0,1,2),(0,2,1),(2,1,0),(1,2,0),(1,0,2),(2,0,1)])
     if len(layers) == 2 and 'cross' in model_types[0]:
-        cross_decoders_2_views = trial.suggest_categorical("cross_decoders_2_views",[(0,1),(1,0)])
+        cross_decoders_2_views = trial.suggest_categorical("cross_decoders_2_views",[(0,1),(1,0)]) # TODO : als string definieren ; dann splitten für NN call
 
 
 
@@ -1338,11 +1338,12 @@ def objective(trial):
     in_feats_second_NN_element_wise = max([i[-1] for i in layers])
 
     # After hierarichcal integrated method
-    in_feats_third_NN_element_wise = max([i[-1] for i in layers_hierarchical_integrated])
+    if len(model_types) == 2:
+        in_feats_third_NN_element_wise = max([i[-1] for i in layers_hierarchical_integrated])
 
-    out_sizes_hierachical = []
+        out_sizes_hierachical = []
 
-    in_feats_third_NN_concat = layers_hierarchical_integrated[0][-1] # integrated method has only one layer left
+        in_feats_third_NN_concat = layers_hierarchical_integrated[0][-1] # integrated method has only one layer left
 
     in_feats_second_NN_overall = 1
 
@@ -1371,23 +1372,23 @@ def objective(trial):
                          print_bool=False))
 
 
-    all_models.append(AE(views = ['AE'],
-                         in_features= [in_feats_second_NN_element_wise],
-                         n_hidden_layers_dims= layers_hierarchical_integrated,
-                         activ_funcs=activation_functions_hierarchical_integrated,
-                         dropout_bool= dropout_bool_hierachical_integrated,
-                         dropout_prob= dropout_prob_hierachical_integrated,
-                         dropout_layers= dropouts_hierarchical_integrated,
-                         batch_norm_bool= batchnorm_bool_hierachical_integrated,
-                         batch_norm= batchnorms_hierarchical_integrated,
-                         type_ae=model_types[1],
-                         cross_mutation=None,
-                         print_bool=False))
+  #  all_models.append(AE(views = ['AE'],
+  #                       in_features= [in_feats_second_NN_element_wise],
+  #                       n_hidden_layers_dims= layers_hierarchical_integrated,
+  #                       activ_funcs=activation_functions_hierarchical_integrated,
+  #                       dropout_bool= dropout_bool_hierachical_integrated,
+  #                       dropout_prob= dropout_prob_hierachical_integrated,
+  #                       dropout_layers= dropouts_hierarchical_integrated,
+  #                       batch_norm_bool= batchnorm_bool_hierachical_integrated,
+  #                       batch_norm= batchnorms_hierarchical_integrated,
+   #                      type_ae=model_types[1],
+  #                       cross_mutation=None,
+   #                      print_bool=False))
 
 
     all_models.append(NN.NN_changeable(views = ['AE'],
                                        trial= trial,
-                                       in_features = [in_feats_third_NN_concat],
+                                       in_features = [in_feats_second_NN_concat],
                                        n_hidden_layers_dims= layers_FCNN,
                                        activ_funcs = [FCNN_activation_functions,['none']],
                                        dropout_prob=FCNN_dropout_prob,
@@ -1400,9 +1401,9 @@ def objective(trial):
 
 
 
-    full_net = AE_Hierarichal(all_models, types=model_types)
+   # full_net = AE_Hierarichal(all_models, types=model_types)
 
-  #  full_net = AE_NN(all_models, type=model_types[0])
+    full_net = AE_NN(all_models, type=model_types[0])
 
 
     # set optimizer
@@ -1419,12 +1420,13 @@ def objective(trial):
     loss_cross = LossAECrossHazard(loss_surv)
 
     # if second decoder, we need to use loss_3 ; else normal 2 valued loss
-    loss_hierachical_no_cross = LossHierarichcalAE(loss_3_values_hierarchical)
-    loss_hierachical_cross = LossHierarichcalAESingleCross(loss_3_values_hierarchical, cross_position=1)
+    if len(model_types) == 2:
+        loss_hierachical_no_cross = LossHierarichcalAE(loss_3_values_hierarchical)
+        loss_hierachical_cross = LossHierarichcalAESingleCross(loss_3_values_hierarchical, cross_position=1)
     # loss : alpha * surv_loss + (1-alpha) * ae_loss
     model = models.CoxPH(full_net,
                          optimizer,
-                         loss=loss_hierachical_cross)
+                         loss=loss_concat)
     print_loss = False
 
     log = model.fit(train_data,

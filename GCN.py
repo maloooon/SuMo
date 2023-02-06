@@ -191,8 +191,8 @@ class GCN(nn.Module):
 # https://github.com/bio-ontology-research-group/DeepMOCCA/blob/master/step-by-step/deepmocca_training.ipynb
 def normalize(data, minx=None, maxx=None):
     if minx is None:
-        minx = torch.min(data)
-        maxx = torch.max(data)
+        minx = np.min(data)
+        maxx = np.max(data)
     if minx == maxx:
         return data
     return (data - minx) / (maxx - minx)
@@ -288,10 +288,10 @@ def objective(trial):
     edge_index = torch.LongTensor(edge_index) #.to(device)
 
 
- #   for i in range(num_features):
- #       train_data[:,:,i] = normalize_by_row(train_data[:,:,i])
- #       val_data[:,:,i] = normalize_by_row(val_data[:,:,i])
- #       test_data[:,:,i] = normalize_by_row(test_data[:,:,i])
+    for i in range(num_features):
+        train_data[:,:,i] = normalize_by_row(train_data[:,:,i])
+        val_data[:,:,i] = normalize_by_row(val_data[:,:,i])
+        test_data[:,:,i] = normalize_by_row(test_data[:,:,i])
 
     # Transforms for PyCox
     train_surv = (train_duration, train_event)
@@ -320,8 +320,8 @@ def objective(trial):
     batchnorm_bool = trial.suggest_categorical('batchnorm_bool',[True,False])
 
 
-    layers_1_FCNN = trial.suggest_int('layers_1_FCNN', 5, 1200)
-    layers_2_FCNN = trial.suggest_int('layers_2_FCNN', 5, 1200)
+    layers_1_FCNN = trial.suggest_int('layers_1_FCNN', 5, 300)
+    layers_2_FCNN = trial.suggest_int('layers_2_FCNN', 5, 300)
 
     layers_FCNN = [layers_1_FCNN,layers_2_FCNN]
 
@@ -344,11 +344,11 @@ def objective(trial):
 
     FCNN_batchnorms = [layers_1_FCNN_batchnorm, layers_2_FCNN_batchnorm, layers_3_FCNN_batchnorm]
 
-    out_1_graphconv = trial.suggest_int('out_1_graphconv', 5, 1200)
+    out_1_graphconv = trial.suggest_int('out_1_graphconv', 5, 300)
     graphconv_1_activation_function = trial.suggest_categorical('graphconv_1_activation_function', ['relu','sigmoid'])
 
     # decide whether second graphconv layer
-    out_2_graphconv = trial.suggest_int('out_2_graphconv', 5, 1200)
+    out_2_graphconv = trial.suggest_int('out_2_graphconv', 5, 300)
     graphconv_2_activation_function = trial.suggest_categorical('graphconv_2_activation_function', ['relu','sigmoid'])
 
     # if no second graphconv layer, take it out here

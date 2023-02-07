@@ -32,7 +32,7 @@ if __name__ == '__main__':
                                                         cancer_name= cancer_name,
                                                         which_views = which_views,
                                                         n_folds = n_folds,
-                                                        type_preprocess= 'standardize')  ######################### basic preprocessing as in PyCox tutorial (works good with just FCNN and PCA, but not so well with ConcatAE)
+                                                        type_preprocess= 'none')  ######################### basic preprocessing as in PyCox tutorial (works good with just FCNN and PCA, but not so well with ConcatAE)
 
     # kurze Einführung worum geht es, was sind die Ziele, was ist die Vorgehensweise
 
@@ -52,7 +52,7 @@ if __name__ == '__main__':
 
 
     ############# AE FEATURE SELECTION HYPERPARAMETER OPTIMIZATION ##############
-    DataInputNew.optuna_optimization()
+  #  DataInputNew.optuna_optimization()
 
 
     method = 'FCNN'
@@ -162,15 +162,14 @@ if __name__ == '__main__':
                     f.write(','.join(str(i) for i in edge_index[1]))
 
 
-
-
+        GCN.optuna_optimization()
 
 
 
 
     elif method == 'FCNN' or method == 'AE': # for GCN, we always have PPI feature selection
         feature_select_method = 'pca'
-        components = [None,None,None,None]
+        components = [100,100,100,100]
         thresholds = [0.8,0.8,0.8,0.8]
 
 
@@ -237,14 +236,11 @@ if __name__ == '__main__':
             feat_offs_test_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/TestDataFeatOffs.csv")
 
 
-        ###################  NN CALL FOR HYPERPARAMETER SEARCH #########################
-    print("######################## RUNNING FULLY CONNECTED NEURAL NET ####################################")
+        if method == 'FCNN':
+            NN.optuna_optimization()
+        elif method == 'AE':
+            AE.optuna_optimization()
 
-
-
- #   NN.optuna_optimization()
- #   AE.optuna_optimization()
-    GCN.optuna_optimization()
 
 
 
@@ -275,7 +271,7 @@ if __name__ == '__main__':
     # LEARNING RATE OPTIMIZER (ADAM)
     learning_rate_NN = 0.005
 
-
+    print("######################## RUNNING FULLY CONNECTED NEURAL NET ####################################")
  #   NN.train(train_data, val_data, test_data, train_duration, train_event, val_duration, val_event, test_duration,test_event,
  #         batch_size=batch_size_NN,
  #         n_epochs=n_epochs_NN,

@@ -27,7 +27,7 @@ class GCN(nn.Module):
     def __init__(self, num_nodes, edge_index, in_features, n_hidden_layer_dims, activ_funcs,
                  dropout_prob = 0.1, ratio = 0.4, dropout_bool = False, batchnorm_bool = False,
                  dropout_layers = None, batchnorm_layers = None,
-                 activ_funcs_graphconv = None, graphconvs = None):
+                 activ_funcs_graphconv = None, graphconvs = None, prelu_init = 0.25):
         super(GCN, self).__init__()
         self.num_nodes = num_nodes # number of proteins
         self.edge_index = edge_index
@@ -44,12 +44,15 @@ class GCN(nn.Module):
         self.params_for_print = nn.ParameterList([])
         self.activ_funcs_graphconv = activ_funcs_graphconv
         self.graphconvs = graphconvs # 1 or 2 graph conv layers ; inputs are the wanted out_features
+        self.prelu_init = prelu_init
 
         for c,afunc in enumerate(activ_funcs):
             if afunc.lower() == 'relu':
                 activ_funcs[c] = nn.ReLU()
             elif afunc.lower() == 'sigmoid':
                 activ_funcs[c] = nn.Sigmoid()
+            elif afunc.lower() == 'prelu':
+                activ_funcs[c] = nn.PReLU(init= prelu_init)
 
 
 
@@ -143,7 +146,11 @@ class GCN(nn.Module):
             if self.activ_funcs_graphconv[0].lower() == 'relu':
                 x = F.relu(self.conv1(x=x, edge_index=batch.edge_index))
             elif self.activ_funcs_graphconv[0].lower() == 'sigmoid':
-                x = F.sigmoid(self.conv1(x=x, edge_index=batch.edge_index))
+                x = torch.sigmoid(self.conv1(x=x, edge_index=batch.edge_index))
+                #TODO : does not work here for some reason
+        #    elif self.activ_funcs_graphconv[0].lower() == 'prelu':
+        #        x = nn.PReLU(self.conv1(x=x, edge_index=batch.edge_index))
+
             x, edge_index, _, batch, perm, score = self.pool1(
                 x, batch.edge_index, None, batch.batch)
 
@@ -313,11 +320,14 @@ def objective(trial):
     l2_regularization_bool = trial.suggest_categorical('l2_regularization_bool', [True,False])
     learning_rate = trial.suggest_float("learning_rate", 1e-5,1e-1,log=True)
     l2_regularization_rate = trial.suggest_float("l2_regularization_rate", 1e-6,1e-3, log=True)
-    batch_size = trial.suggest_int("batch_size", 5, 200) # TODO : batch size so wählen, dass train samples/ batch_size und val samples/batch_size nie 1 ergeben können, da sonst Error : noch besser error abfangen und einfach skippen, da selten passiert !
-    n_epochs = trial.suggest_int("n_epochs", 10,20) # setting num of epochs to 10-20 instead of 10-100 bc. it takes too much time
+  #  batch_size = trial.suggest_int("batch_size", 5, 200) # TODO : batch size so wählen, dass train samples/ batch_size und val samples/batch_size nie 1 ergeben können, da sonst Error : noch besser error abfangen und einfach skippen, da selten passiert !
+    batch_size = trial.suggest_categorical("batch_size", [8,16,32,64,128,256])
+  #  n_epochs = trial.suggest_int("n_epochs", 10,20) # setting num of epochs to 10-20 instead of 10-100 bc. it takes too much time
+    n_epochs = 15
     dropout_prob = trial.suggest_float("dropout_prob", 0,0.5,step=0.1)
     dropout_bool = trial.suggest_categorical('dropout_bool', [True,False])
     batchnorm_bool = trial.suggest_categorical('batchnorm_bool',[True,False])
+    prelu_rate = trial.suggest_float('prelu_rate',0,1,step=0.05)
 
 
     layers_1_FCNN = trial.suggest_int('layers_1_FCNN', 5, 300)
@@ -325,8 +335,11 @@ def objective(trial):
 
     layers_FCNN = [layers_1_FCNN,layers_2_FCNN]
 
-    layers_1_FCNN_activfunc = trial.suggest_categorical('layers_1_FCNN_activfunc', ['relu','sigmoid'])
-    layers_2_FCNN_activfunc = trial.suggest_categorical('layers_2_FCNN_activfunc', ['relu','sigmoid'])
+    # TODO : Sigmoid just for classification tasks which we dont have here, better to learn with relu or perhaps leaky/parametric relu
+    layers_1_FCNN_activfunc = trial.suggest_categorical('layers_1_FCNN_activfunc', ['relu','prelu','sigmoid'])
+  #  layers_1_FCNN_activfunc = 'relu'
+    layers_2_FCNN_activfunc = trial.suggest_categorical('layers_2_FCNN_activfunc', ['relu','prelu', 'sigmoid'])
+  #  layers_2_FCNN_activfunc = 'relu'
 
     FCNN_activation_functions = [layers_1_FCNN_activfunc, layers_2_FCNN_activfunc]
 
@@ -344,16 +357,21 @@ def objective(trial):
 
     FCNN_batchnorms = [layers_1_FCNN_batchnorm, layers_2_FCNN_batchnorm, layers_3_FCNN_batchnorm]
 
-    out_1_graphconv = trial.suggest_int('out_1_graphconv', 5, 300)
-    graphconv_1_activation_function = trial.suggest_categorical('graphconv_1_activation_function', ['relu','sigmoid'])
+ #   out_1_graphconv = trial.suggest_int('out_1_graphconv', 5, 300)
+    out_1_graphconv = 2 # constant bc of some float error
+    # TODO : prelu doesnt work for graph conv activation for some reason
+ #   graphconv_1_activation_function = trial.suggest_categorical('graphconv_1_activation_function', ['relu','prelu'])
+    graphconv_1_activation_function = 'relu'
 
     # decide whether second graphconv layer
-    out_2_graphconv = trial.suggest_int('out_2_graphconv', 5, 300)
-    graphconv_2_activation_function = trial.suggest_categorical('graphconv_2_activation_function', ['relu','sigmoid'])
+  #  out_2_graphconv = trial.suggest_int('out_2_graphconv', 5, 300)
+ #   graphconv_2_activation_function = trial.suggest_categorical('graphconv_2_activation_function', ['relu','sigmoid'])
 
     # if no second graphconv layer, take it out here
-    graphconvs = [out_1_graphconv, out_2_graphconv] # TODO : with only one rundungsfehler im pooling layer
-    graphconvs_activation_functions = [graphconv_1_activation_function, graphconv_2_activation_function]
+ #   graphconvs = [out_1_graphconv, out_2_graphconv] # TODO : with only one rundungsfehler im pooling layer
+    graphconvs = [out_1_graphconv]
+  #  graphconvs_activation_functions = [graphconv_1_activation_function, graphconv_2_activation_function]
+    graphconvs_activation_functions = [graphconv_1_activation_function]
 
 
 
@@ -373,7 +391,8 @@ def objective(trial):
               batchnorm_bool=batchnorm_bool,
               batchnorm_layers=FCNN_batchnorms,
               activ_funcs_graphconv= graphconvs_activation_functions,
-              graphconvs=graphconvs) #.to(device)
+              graphconvs=graphconvs,
+              prelu_init= prelu_rate) #.to(device)
 
 
 

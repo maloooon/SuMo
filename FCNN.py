@@ -95,10 +95,8 @@ class NN_changeable(nn.Module):
                         activ_funcs[c][c2] = nn.ReLU()
                     elif activfunc.lower() == 'sigmoid':
                         activ_funcs[c][c2] = nn.Sigmoid()
-                    elif activfunc.lower() == 'softmax':
-                        activ_funcs[c][c2] = nn.Softmax()
                     elif activfunc.lower() == 'prelu':
-                        activ_funcs[c][c2] == nn.PReLU(init=prelu_init)
+                        activ_funcs[c][c2] = nn.PReLU(init=prelu_init)
 
 
         else:

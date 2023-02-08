@@ -52,9 +52,6 @@ class MultiOmicsDataset(Dataset):
 
 
 
-
-
-
     def __len__(self):
         """Return the amount of samples"""
         return self.n_samples
@@ -62,37 +59,9 @@ class MultiOmicsDataset(Dataset):
 
     def __getitem__(self, index):
         """return the whole sample (all views)"""
-  #      if self.type == 'new':
-  #          return [self.X[m][index, :] for m in range(self.n_views)], \
-  #                 [self.mask[m][index, :] for m in range(self.n_views)], \
-  #                 self.duration[index], self.event[index]
-
-
 
         return [self.X[m][index, :] for m in range(self.n_views)], \
                self.duration[index], self.event[index]
-
-
-
-   #     elif self.type == 'processed2':
-
-   #         for fold in range(self.n_folds):
-   #             for m in range(self.n_views):
-   #                 return self.X[fold][m][index, :], self.duration[fold][index], self.event[fold][index]
-
-
-    #    elif self.type == 'processed':
-    #        return [self.X[m][index, :] for m in range(self.n_views)], \
-    #               self.duration[index], self.event[index]
-    #    elif self.type == 'ppi':
-    #        return self.X[index], self.duration[index], self.event[index]
-
-
-
-
-
-
-
 
 
 
@@ -261,15 +230,6 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                 # return to right structure
                 self.feature_offsets = sorted(list(self.feature_offsets))
 
-
-   #     if self.onezeronorm_bool == True: # Scale ALL views (complete data) between 0&1
-            # 01-Normalization if wanted
-   #         event_and_duration = self.df.iloc[:,-2:].values # get event & duration values, as they don't need to be normalized to 01
-   #         x = self.df.iloc[:,0:-2].values #returns a numpy array
-   #         min_max_scaler = preprocessing.MinMaxScaler()
-   #         x_scaled = min_max_scaler.fit_transform(x)
-   #         x_scaled = np.append(x_scaled, event_and_duration, axis=1)
-   #         self.df = pd.DataFrame(x_scaled, columns=self.df.columns)
 
         """Split data into test and training set and training into training and validation set
            , preprocess this data with preprocess_features."""

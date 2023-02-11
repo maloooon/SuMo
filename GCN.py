@@ -135,12 +135,15 @@ class GCN(nn.Module):
             x = x.reshape(batch_size, self.num_nodes, self.in_features)
             if batch_size not in self.batches:
                 l = []
+                # For each sample in the batch assign the edge indices to it
                 for i in range(batch_size):
                     l.append(Data(x=x[i], edge_index=self.edge_index))
+                # batch of form : DataBatch(x = [n_samples_in_batch * n_nodes , n_features], edge_index=[n_features, n_edge_indices * n_samples], batch = [n_samples_in_batch * n_nodes], ptr=[n_samples_in_batch + 1]
                 batch = Batch.from_data_list(l)
                 self.batches[batch_size] = batch
 
             batch = self.batches[batch_size]
+            # reshape to n_samples_in_batch * n_nodes, n_features
             x = x.reshape(-1, self.in_features)
 
             if self.activ_funcs_graphconv[0].lower() == 'relu':
@@ -295,10 +298,10 @@ def objective(trial):
     edge_index = torch.LongTensor(edge_index) #.to(device)
 
 
-    for i in range(num_features):
-        train_data[:,:,i] = normalize_by_row(train_data[:,:,i])
-        val_data[:,:,i] = normalize_by_row(val_data[:,:,i])
-        test_data[:,:,i] = normalize_by_row(test_data[:,:,i])
+ #   for i in range(num_features):
+  #      train_data[:,:,i] = normalize_by_row(train_data[:,:,i])
+  #      val_data[:,:,i] = normalize_by_row(val_data[:,:,i])
+  #      test_data[:,:,i] = normalize_by_row(test_data[:,:,i])
 
     # Transforms for PyCox
     train_surv = (train_duration, train_event)

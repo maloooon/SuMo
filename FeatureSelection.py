@@ -293,7 +293,7 @@ class PPI():
         # turn into tensor
         features_used = torch.tensor(features_used)
 
-
+        checker = []
         interactions1 = []
         interactions2 = []
         with gzip.open('/Users/marlon/Desktop/Project/9606.protein.links.v11.5.txt.gz', 'rt') as f:
@@ -305,9 +305,15 @@ class PPI():
                     protein1 = protein1.split('.')[1]
                     protein2 = protein2.split('.')[1]
                     # First, check that both proteins in the interaction are in our mappings
+                    # Also check, that the current combination of proteins is not already in our interactions
                     if protein1 in proteins_used and protein2 in proteins_used:
+                     #   curr_edge = [proteins_used[protein1],proteins_used[protein2]]
+                     #   if curr_edge in checker or curr_edge.reverse() in checker:
+                     #       pass
+                     #   else:
                         interactions1.append(proteins_used[protein1])
                         interactions2.append(proteins_used[protein2])
+                       #     checker.append([proteins_used[protein1],proteins_used[protein2]])
 
         edge_index = [interactions1, interactions2]
 

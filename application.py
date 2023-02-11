@@ -53,7 +53,7 @@ if __name__ == '__main__':
 
     ############# AE FEATURE SELECTION HYPERPARAMETER OPTIMIZATION ##############
 
-    method = 'FCNN'
+    method = 'GCN'
 
 
     if method == 'GCN':

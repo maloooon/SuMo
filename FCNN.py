@@ -23,7 +23,7 @@ import optuna
 
 
 class NN_changeable(nn.Module):
-    def __init__(self,views,in_features, trial, n_hidden_layers_dims =None,
+    def __init__(self,views,in_features,n_hidden_layers_dims =None,
                  activ_funcs = None,dropout_prob = None, dropout_layers = None,
                  batch_norm = None, dropout_bool = None, batch_norm_bool = None,print_bool = False,
                  prelu_init = 0.25):
@@ -165,14 +165,22 @@ class NN_changeable(nn.Module):
         sum_dim_last_layers = sum([dim[-1] for dim in n_hidden_layers_dims])
 
         if activ_funcs[-1][0] != 'none':
-            self.final_out = nn.Sequential(nn.Linear(sum_dim_last_layers,1), activ_funcs[-1][0]) # TODO : add possible batchnorm
+            if batch_norm_bool == True and batch_norm[-1][0] == 'yes':
+                self.final_out = nn.Sequential(nn.Linear(sum_dim_last_layers,1),nn.BatchNorm1d(1), activ_funcs[-1][0])
+            else:
+                self.final_out = nn.Sequential(nn.Linear(sum_dim_last_layers,1), activ_funcs[-1][0])
+
         else:
-            self.final_out = nn.Sequential(nn.Linear(sum_dim_last_layers,1)) # TODO : add possible batchnorm
+            if batch_norm_bool == True and batch_norm[-1][0] == 'yes':
+                self.final_out = nn.Sequential(nn.Linear(sum_dim_last_layers,1),nn.BatchNorm1d(1))
+            else:
+                self.final_out = nn.Sequential(nn.Linear(sum_dim_last_layers,1))
 
 
 
-        # Dropout
-        self.dropout = nn.Dropout(self.dropout_prob) # TODO:  hier self.dropout_prob oder der trial. Ausdruck ? möglicher Fehler!
+
+                # Dropout
+        self.dropout = nn.Dropout(self.dropout_prob)
 
 
         if print_bool == True:
@@ -213,22 +221,25 @@ class NN_changeable(nn.Module):
 
         #order data by views for diff. hidden layers
 
-        data_ordered = x
+        data_ordered = list(x)
 
         batch_size = x[0].size(0) # take arbitrary view for batch size, since for each view same batch size
 
         for c,view in enumerate(self.hidden_layers):
             for c2,encoder in enumerate(view):
                 if c2 == 0: #first layer
-                    encoded_features[c].append(self.hidden_layers[c][c2](data_ordered[c]))
                     # Apply dropout layer
                     if self.dropout_bool == True and self.dropout_layers[c][c2] == 'yes':
-                        encoded_features[c][c2] = self.dropout(encoded_features[c][c2])
+                      #  encoded_features[c][c2] = self.dropout(encoded_features[c][c2])
+                        data_ordered[c] = self.dropout(data_ordered[c])
+                    encoded_features[c].append(self.hidden_layers[c][c2](data_ordered[c]))
+
 
                 else : # other layers
-                    encoded_features[c].append(self.hidden_layers[c][c2](encoded_features[c][c2-1]))
                     if self.dropout_bool == True and self.dropout_layers[c][c2] == 'yes':
-                        encoded_features[c][c2] = self.dropout(encoded_features[c][c2])
+                        encoded_features[c][c2-1] = self.dropout(encoded_features[c][c2-1])
+                    encoded_features[c].append(self.hidden_layers[c][c2](encoded_features[c][c2-1]))
+
 
 
 
@@ -236,8 +247,11 @@ class NN_changeable(nn.Module):
         final_in = torch.cat(tuple([dim[-1] for dim in encoded_features]), dim=-1)
 
 
+        if self.dropout_bool == True and self.dropout_layers[-1][0] == 'yes':
+            final_in = self.dropout(final_in)
 
-        predict = self.final_out(final_in)  # TODO : add possible dropout
+        predict = self.final_out(final_in)
+
 
 
 
@@ -345,8 +359,8 @@ def objective(trial):
     if 'MRNA' in view_names:
         layers_1_mRNA = trial.suggest_int('layers_1_mRNA', 5, 512)
         layers_2_mRNA = trial.suggest_int('layers_2_mRNA', 5, 512)
-        layers_1_mRNA_activfunc = trial.suggest_categorical('layers_1_mRNA_activfunc', ['relu','sigmoid'])
-        layers_2_mRNA_activfunc = trial.suggest_categorical('layers_2_mRNA_activfunc', ['relu','sigmoid'])
+        layers_1_mRNA_activfunc = trial.suggest_categorical('layers_1_mRNA_activfunc', ['relu','sigmoid','prelu'])
+        layers_2_mRNA_activfunc = trial.suggest_categorical('layers_2_mRNA_activfunc', ['relu','sigmoid','prelu'])
         layers_1_mRNA_dropout = trial.suggest_categorical('layers_1_mRNA_dropout', ['yes','no'])
         layers_2_mRNA_dropout = trial.suggest_categorical('layers_2_mRNA_dropout', ['yes','no'])
         layers_1_mRNA_batchnorm = trial.suggest_categorical('layers_1_mRNA_batchnorm', ['yes', 'no'])
@@ -360,8 +374,8 @@ def objective(trial):
     if 'DNA' in view_names:
         layers_1_DNA = trial.suggest_int('layers_1_DNA', 5, 512)
         layers_2_DNA = trial.suggest_int('layers_2_DNA', 5, 512)
-        layers_1_DNA_activfunc = trial.suggest_categorical('layers_1_DNA_activfunc', ['relu','sigmoid'])
-        layers_2_DNA_activfunc = trial.suggest_categorical('layers_2_DNA_activfunc', ['relu','sigmoid'])
+        layers_1_DNA_activfunc = trial.suggest_categorical('layers_1_DNA_activfunc', ['relu','sigmoid','prelu'])
+        layers_2_DNA_activfunc = trial.suggest_categorical('layers_2_DNA_activfunc', ['relu','sigmoid','prelu'])
         layers_1_DNA_dropout = trial.suggest_categorical('layers_1_DNA_dropout', ['yes','no'])
         layers_2_DNA_dropout = trial.suggest_categorical('layers_2_DNA_dropout', ['yes','no'])
         layers_1_DNA_batchnorm = trial.suggest_categorical('layers_1_DNA_batchnorm', ['yes', 'no'])
@@ -373,9 +387,9 @@ def objective(trial):
 
     if 'MICRORNA' in view_names:
         layers_1_microRNA = trial.suggest_int('layers_1_microRNA', 5, 512)
-        layers_2_microRNA = trial.suggest_int('layers_1_microRNA', 5, 512)
-        layers_1_microRNA_activfunc = trial.suggest_categorical('layers_1_microRNA_activfunc', ['relu','sigmoid'])
-        layers_2_microRNA_activfunc = trial.suggest_categorical('layers_2_microRNA_activfunc', ['relu','sigmoid'])
+        layers_2_microRNA = trial.suggest_int('layers_2_microRNA', 5, 512)
+        layers_1_microRNA_activfunc = trial.suggest_categorical('layers_1_microRNA_activfunc', ['relu','sigmoid','prelu'])
+        layers_2_microRNA_activfunc = trial.suggest_categorical('layers_2_microRNA_activfunc', ['relu','sigmoid','prelu'])
         layers_1_microRNA_dropout = trial.suggest_categorical('layers_1_microRNA_dropout', ['yes','no'])
         layers_2_microRNA_dropout = trial.suggest_categorical('layers_2_microRNA_dropout', ['yes','no'])
         layers_1_microRNA_batchnorm = trial.suggest_categorical('layers_1_microRNA_batchnorm', ['yes', 'no'])
@@ -388,8 +402,8 @@ def objective(trial):
     if 'RPPA' in view_names:
         layers_1_RPPA = trial.suggest_int('layers_1_microRNA', 5, 512)
         layers_2_RPPA = trial.suggest_int('layers_1_microRNA', 5, 512)
-        layers_1_RPPA_activfunc = trial.suggest_categorical('layers_1_RPPA_activfunc', ['relu','sigmoid'])
-        layers_2_RPPA_activfunc = trial.suggest_categorical('layers_2_RPPA_activfunc', ['relu','sigmoid'])
+        layers_1_RPPA_activfunc = trial.suggest_categorical('layers_1_RPPA_activfunc', ['relu','sigmoid','prelu'])
+        layers_2_RPPA_activfunc = trial.suggest_categorical('layers_2_RPPA_activfunc', ['relu','sigmoid','prelu'])
         layers_1_RPPA_dropout = trial.suggest_categorical('layers_1_RPPA_dropout', ['yes','no'])
         layers_2_RPPA_dropout = trial.suggest_categorical('layers_2_RPPA_dropout', ['yes','no'])
         layers_1_RPPA_batchnorm = trial.suggest_categorical('layers_1_RPPA_batchnorm', ['yes', 'no'])
@@ -399,7 +413,15 @@ def objective(trial):
         dropouts.append([layers_1_RPPA_dropout, layers_2_RPPA_dropout])
         batchnorms.append([layers_1_RPPA_batchnorm, layers_2_RPPA_batchnorm])
 
-    activation_functions.append(['none'])
+
+    # Last layer
+    layer_final_activfunc = trial.suggest_categorical('layers_final_activfunc', ['relu','sigmoid','prelu','none'])
+    layer_final_dropout = trial.suggest_categorical('layer_final_dropout', ['yes','no'])
+    layer_final_batchnorm = trial.suggest_categorical('layer_final_batchnorm', ['yes','no'])
+    activation_functions.append([layer_final_activfunc])
+    dropouts.append([layer_final_dropout])
+    batchnorms.append([layer_final_batchnorm])
+
 
 
 
@@ -407,7 +429,6 @@ def objective(trial):
 
     net = NN_changeable(views=view_names,
                               in_features=dimensions,
-                              trial=trial,
                               n_hidden_layers_dims=layers,
                               activ_funcs=activation_functions,
                               dropout_prob=dropout_prob,
@@ -480,17 +501,6 @@ def objective(trial):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
 def optuna_optimization(fold = 1):
 
 
@@ -508,42 +518,23 @@ def optuna_optimization(fold = 1):
 
 
 
-def train(train_data,
-          val_data,
-          test_data,
-          train_duration,
-          train_event,
-          val_duration,
-          val_event,
-          test_duration,
-          test_event,
-          learning_rate = 0.0001,
-          batch_size =128,
-          n_epochs = 512,
-          l2_regularization = False,
-          l2_regularization_rate = 0.000001,
-          batchnorm = False,
-          batchnorm_layers = None,
-          dropout_layers = None,
-          val_batch_size = 16,
-          dropout_rate = 0.1,
-          dropout = False,
-          activation_layers = None,
-          view_names = None):
-    """
-
-    :param module: basically the dataset to be used
-    :param batch_size: batch size for training
-    :param n_epochs: number of epochs
-    :param lr_scheduler_type: type of lr_scheduler : 'lambda','mulitplicative','step','multistep','exponential',...
-    """
-
-
-  #  # Setup all the data
-  #  n_train_samples, n_test_samples,n_val_samples, view_names = module.setup()
-
-
-
+def train(train_data,val_data,test_data,
+          train_duration,val_duration,test_duration,
+          train_event,val_event,test_event,
+          n_epochs,
+          batch_size,
+          l2_regularization,
+          l2_regularization_rate,
+          learning_rate,
+          prelu_rate,
+          layers,
+          activation_layers,
+          dropout,
+          dropout_rate,
+          dropout_layers,
+          batchnorm,
+          batchnorm_layers,
+          view_names):
 
 
     # Cast to numpy arrays if necessary(if we get an error, we already have numpy arrays --> no need to cast)
@@ -579,11 +570,7 @@ def train(train_data,
         val_data[c] = tuple(val_data[c])
         test_data[c] = tuple(test_data[c])
 
-    best_concordance_folds = []
-    best_config_folds = []
-    concordances = []
-    all_concordances = [[] for _ in range(len(train_data))]
-    configs_for_good_concordances = [[] for _ in range(len(train_data))]
+
     ############################# FOLD X ###################################
     for c_fold,fold in enumerate(train_data):
 
@@ -608,14 +595,7 @@ def train(train_data,
         val_data_full = (val_data[c_fold], (val_duration[c_fold], val_event[c_fold]))
 
 
-        curr_concordance = 0
-
-
-
-
-
-
-        layers_u = [[64,32]]#copy.deepcopy(layers)
+        layers_u = copy.deepcopy(layers)
         activation_layers_u = copy.deepcopy(activation_layers)
         dropout_layers_u = copy.deepcopy(dropout_layers)
         batchnorm_layers_u = copy.deepcopy(batchnorm_layers)
@@ -623,7 +603,6 @@ def train(train_data,
 
         net = NN_changeable(views=view_names,
                             in_features=dimensions,
-                            trial= None,
                             n_hidden_layers_dims= layers_u,
                             activ_funcs=activation_layers_u,
                             dropout_bool= dropout,
@@ -631,14 +610,9 @@ def train(train_data,
                             dropout_layers= dropout_layers_u,
                             batch_norm_bool= batchnorm,
                             batch_norm= batchnorm_layers_u,
-                            print_bool=False)
+                            print_bool=False,
+                            prelu_init= prelu_rate)
 
-
-
-
-        # Set parameters for NN
-        # set optimizer
-      #  lr = trial.suggest_float("lr", 1e-5,1e-1, log=True)
 
 
         if l2_regularization == True:
@@ -649,7 +623,6 @@ def train(train_data,
         callbacks = [tt.callbacks.EarlyStopping(patience=10)]
 
 
-        # TODO : validation & train batch size same size
         # Call model
         model = models.CoxPH(net,optimizer)
         print_loss = False
@@ -703,43 +676,6 @@ def train(train_data,
         print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
                                                                                                            brier_score,
                                                                                                            binomial_score))
-        concordances.append(concordance_index)
-
-
-
-
-
-
-       #     print("With config : ")
-       #     print("Layers : ", curr_config[0])
-       #     print("Batch Size : ", curr_config[1])
-       #     print("Validation Batch Size : ", curr_config[2])
-       #     print("Learning Rate : ", curr_config[3])
-        #    print("Dropout Bool : ", curr_config[4])
-        #    print("BatchNorm Bool : ", curr_config[5])
-
-
-    #    if concordance_index >= 0.6:
-          #  configs_for_good_concordances[c_fold].append(curr_config)
-
-
-     #   if concordance_index > curr_concordance:
-          #  best_config = curr_config
-     #       curr_concordance = concordance_index
-
-    #    all_concordances[c_fold].append(concordance_index)
-
-    #best_concordance_folds.append(curr_concordance)
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -775,33 +711,6 @@ def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/"):
     return trainset, trainset_feat, valset, valset_feat, testset, testset_feat
 
 
-
-"""
-def objective(trial):
-
-    params = {
-        'learning_rate': trial.suggest_loguniform('learning_rate', 1e-5,1e-1),
-        'n_hidden_layers_mRNA_1' : trial.suggest_int('n_hidden_layers_mRNA_1', 1, 1024),
-        'n_hidden_layers_mRNA_2' : trial.suggest_int('n_hidden_layers_mRNA_2', 1, 1024),
-        'n_hidden_layers_DNA_1' : trial.suggest_int('n_hidden_layers_DNA_1', 1, 1024),
-        'n_hidden_layers_DNA_2' : trial.suggest_int('n_hidden_layers_DNA_2', 1, 1024),
-        'n_hidden_layers_microRNA_1' : trial.suggest_int('n_hidden_layers_microRNA_1', 1, 1024),
-        'n_hidden_layers_microRNA_2' : trial.suggest_int('n_hidden_layers_microRNA_2', 1, 1024),
-        'n_hidden_layers_RPPA_1' : trial.suggest_int('n_hidden_layers_RPPA_1', 1, 1024),
-        'n_hidden_layers_RPPA_2' : trial.suggest_int('n_hidden_layers_RPPA_2', 1, 1024),
-        'activ_funcs_mRNA_1' : trial.suggest_categorical('activ_funcs_mRNA_1', ['relu', 'sigmoid']),
-        'activ_funcs_mRNA_2' : trial.suggest_categorical('activ_funcs_mRNA_2', ['relu', 'sigmoid']),
-        'activ_funcs_DNA_1' : trial.suggest_categorical('activ_funcs_DNA_1', ['relu', 'sigmoid']),
-        'activ_funcs_DNA_2' : trial.suggest_categorical('activ_funcs_DNA_2', ['relu', 'sigmoid']),
-        'activ_funcs_microRNA_1' : trial.suggest_categorical('activ_funcs_microRNA_1', ['relu', 'sigmoid']),
-        'activ_funcs_microRNA_2' : trial.suggest_categorical('activ_funcs_microRNA_2', ['relu', 'sigmoid']),
-        'activ_funcs_RPPA_1' : trial.suggest_categorical('activ_funcs_RPPA_1', ['relu', 'sigmoid']),
-        'activ_funcs_RPPA_2' : trial.suggest_categorical('activ_funcs_RPPA_2', ['relu', 'sigmoid']),
-        'dropout_prob' : trial.suggest_loguniform('dropout_prob', 0,1)
-    }
-
-    model = NN_changeable(params)
-"""
 
 
 

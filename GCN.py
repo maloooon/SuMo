@@ -27,7 +27,7 @@ class GCN(nn.Module):
     def __init__(self, num_nodes, edge_index, in_features, n_hidden_layer_dims, activ_funcs,
                  dropout_prob = 0.1, ratio = 0.4, dropout_bool = False, batchnorm_bool = False,
                  dropout_layers = None, batchnorm_layers = None,
-                 activ_funcs_graphconv = None, graphconvs = None, prelu_init = 0.25):
+                 activ_funcs_graphconv = None, graphconvs = None, prelu_init = 0.25, print_bool = False):
         super(GCN, self).__init__()
         self.num_nodes = num_nodes # number of proteins
         self.edge_index = edge_index
@@ -45,14 +45,16 @@ class GCN(nn.Module):
         self.activ_funcs_graphconv = activ_funcs_graphconv
         self.graphconvs = graphconvs # 1 or 2 graph conv layers ; inputs are the wanted out_features
         self.prelu_init = prelu_init
+        self.print_bool = print_bool
 
-        for c,afunc in enumerate(activ_funcs):
-            if afunc.lower() == 'relu':
-                activ_funcs[c] = nn.ReLU()
-            elif afunc.lower() == 'sigmoid':
-                activ_funcs[c] = nn.Sigmoid()
-            elif afunc.lower() == 'prelu':
-                activ_funcs[c] = nn.PReLU(init= prelu_init)
+        for c,afunclst in enumerate(activ_funcs):
+            for c2, afunc in enumerate(afunclst):
+                if afunc.lower() == 'relu':
+                    activ_funcs[c][c2] = nn.ReLU()
+                elif afunc.lower() == 'sigmoid':
+                    activ_funcs[c][c2] = nn.Sigmoid()
+                elif afunc.lower() == 'prelu':
+                    activ_funcs[c][c2] = nn.PReLU(init= prelu_init)
 
 
 
@@ -73,7 +75,7 @@ class GCN(nn.Module):
 
 
         else: # In this case pooling layer last layer before we apply FCNN
-            self.first_in = math.ceil(ratio * (graphconvs[0] * num_nodes)) # TODO : führt zu rundungsfehlern
+            self.first_in = math.ceil(ratio * (graphconvs[0] * num_nodes))
 
 
 
@@ -82,44 +84,55 @@ class GCN(nn.Module):
 
         for c in range(len(n_hidden_layer_dims) +1):
             if c == 0: # first layer
-                if batchnorm_bool == True and batchnorm_layers[c] == 'yes':
+                if batchnorm_bool == True and batchnorm_layers[0][c] == 'yes':
                     self.hidden_layers.append(nn.Sequential(nn.Linear(self.first_in, n_hidden_layer_dims[0]),
                                                             nn.BatchNorm1d(n_hidden_layer_dims[0]),
-                                                            activ_funcs[0]))
+                                                            activ_funcs[0][0]))
                     self.params_for_print.append(self.hidden_layers[-1])
                 else:
                     self.hidden_layers.append(nn.Sequential(nn.Linear(self.first_in, n_hidden_layer_dims[0]),
-                                                            activ_funcs[0]))
+                                                            activ_funcs[0][0]))
                     self.params_for_print.append(self.hidden_layers[-1])
 
-            elif c == len(n_hidden_layer_dims): # last layer (no activation function)
-                if batchnorm_bool == True and batchnorm_layers[c] == 'yes':
-                    self.hidden_layers.append(nn.Sequential(nn.Linear(n_hidden_layer_dims[-1], 1),
-                                                            nn.BatchNorm1d(1),
-                                                            ))
-                    self.params_for_print.append(self.hidden_layers[-1])
+            elif c == len(n_hidden_layer_dims): # last layer (possibly no activation)
+                if batchnorm_bool == True and batchnorm_layers[-1][0] == 'yes':
+                    if activ_funcs[-1][0] != 'none':
+                        self.hidden_layers.append(nn.Sequential(nn.Linear(n_hidden_layer_dims[-1], 1),
+                                                                nn.BatchNorm1d(1), activ_funcs[-1][0]
+                                                                ))
+                        self.params_for_print.append(self.hidden_layers[-1])
+                    else:
+                        self.hidden_layers.append(nn.Sequential(nn.Linear(n_hidden_layer_dims[-1], 1),
+                                                                nn.BatchNorm1d(1)
+                                                                ))
+                        self.params_for_print.append(self.hidden_layers[-1])
                 else:
-                    self.hidden_layers.append(nn.Sequential(nn.Linear(n_hidden_layer_dims[-1], 1),
-                                                            nn.BatchNorm1d(1),
-                                                            ))
-                    self.params_for_print.append(self.hidden_layers[-1])
+                    if activ_funcs[-1][0] != 'none':
+                        self.hidden_layers.append(nn.Sequential(nn.Linear(n_hidden_layer_dims[-1], 1)
+                                                                ,activ_funcs[-1][0]
+                                                                ))
+                        self.params_for_print.append(self.hidden_layers[-1])
+                    else:
+                        self.hidden_layers.append(nn.Sequential(nn.Linear(n_hidden_layer_dims[-1], 1)
+
+                                                                ))
+                        self.params_for_print.append(self.hidden_layers[-1])
             else: # other layers
-                if batchnorm_bool == True and batchnorm_layers == 'yes':
+                if batchnorm_bool == True and batchnorm_layers[0][c] == 'yes':
                      self.hidden_layers.append(nn.Sequential(nn.Linear(n_hidden_layer_dims[c-1], n_hidden_layer_dims[c]),
                                                             nn.BatchNorm1d(n_hidden_layer_dims[c]),
-                                                            activ_funcs[c]))
+                                                            activ_funcs[0][c]))
                      self.params_for_print.append(self.hidden_layers[-1])
 
                 else:
                     self.hidden_layers.append(nn.Sequential(nn.Linear(n_hidden_layer_dims[c-1], n_hidden_layer_dims[c]),
-                                                            nn.BatchNorm1d(n_hidden_layer_dims[c]),
-                                                            activ_funcs[c]))
+                                                            activ_funcs[0][c]))
                     self.params_for_print.append(self.hidden_layers[-1])
 
 
 
-
-        print("Model: ", self.params_for_print)
+        if print_bool == True:
+            print("Model: ", self.params_for_print)
 
 
         self.batches = {}
@@ -160,9 +173,16 @@ class GCN(nn.Module):
             x = x.view(batch_size, -1)
 
             for layer_c, layer in enumerate(self.hidden_layers):
+                # Last Layer
+                if layer_c == len(self.hidden_layers) - 1:
+                    if self.dropout_bool == True and self.dropout_layers[-1][0] == 'yes':
+                        x = self.dropout(x)
+                # Other Layers
+                else:
+                    if self.dropout_bool == True and self.dropout_layers[0][layer_c] == 'yes':
+                        x = self.dropout(x)
                 x = layer(x)
-                if self.dropout_bool == True and self.dropout_layers[layer_c] == 'yes':
-                    x = self.dropout(x)
+
 
 
 
@@ -298,10 +318,26 @@ def objective(trial):
     edge_index = torch.LongTensor(edge_index) #.to(device)
 
 
- #   for i in range(num_features):
-  #      train_data[:,:,i] = normalize_by_row(train_data[:,:,i])
-  #      val_data[:,:,i] = normalize_by_row(val_data[:,:,i])
-  #      test_data[:,:,i] = normalize_by_row(test_data[:,:,i])
+    processing_type = trial.suggest_categorical('processing_type', ['normalize','normalizebyrow','normalizebycolumn','none'])
+
+
+    if processing_type.lower() == 'normalize':
+        for i in range(num_features):
+            train_data[:,:,i] = normalize(train_data[:,:,i])
+            val_data[:,:,i] = normalize(val_data[:,:,i])
+            test_data[:,:,i] = normalize(test_data[:,:,i])
+    elif processing_type.lower() == 'normalizebyrow':
+        for i in range(num_features):
+            train_data[:,:,i] = normalize_by_row(train_data[:,:,i])
+            val_data[:,:,i] = normalize_by_row(val_data[:,:,i])
+            test_data[:,:,i] = normalize_by_row(test_data[:,:,i])
+    elif processing_type.lower() == 'normalizebycolumn':
+        for i in range(num_features):
+            train_data[:,:,i] = normalize_by_column(train_data[:,:,i])
+            val_data[:,:,i] = normalize_by_column(val_data[:,:,i])
+            test_data[:,:,i] = normalize_by_column(test_data[:,:,i])
+
+
 
     # Transforms for PyCox
     train_surv = (train_duration, train_event)
@@ -333,32 +369,42 @@ def objective(trial):
     prelu_rate = trial.suggest_float('prelu_rate',0,1,step=0.05)
 
 
+
+
     layers_1_FCNN = trial.suggest_int('layers_1_FCNN', 5, 300)
     layers_2_FCNN = trial.suggest_int('layers_2_FCNN', 5, 300)
 
     layers_FCNN = [layers_1_FCNN,layers_2_FCNN]
 
-    # TODO : Sigmoid just for classification tasks which we dont have here, better to learn with relu or perhaps leaky/parametric relu
+
     layers_1_FCNN_activfunc = trial.suggest_categorical('layers_1_FCNN_activfunc', ['relu','prelu','sigmoid'])
   #  layers_1_FCNN_activfunc = 'relu'
     layers_2_FCNN_activfunc = trial.suggest_categorical('layers_2_FCNN_activfunc', ['relu','prelu', 'sigmoid'])
   #  layers_2_FCNN_activfunc = 'relu'
 
-    FCNN_activation_functions = [layers_1_FCNN_activfunc, layers_2_FCNN_activfunc]
+    FCNN_activation_functions = [[layers_1_FCNN_activfunc, layers_2_FCNN_activfunc]]
 
 
     layers_1_FCNN_dropout = trial.suggest_categorical('layers_1_FCNN_dropout', ['yes','no'])
     layers_2_FCNN_dropout = trial.suggest_categorical('layers_2_FCNN_dropout', ['yes','no'])
-    layers_3_FCNN_dropout = trial.suggest_categorical('layers_3_FCNN_dropout', ['yes','no'])
+ #   layers_3_FCNN_dropout = trial.suggest_categorical('layers_3_FCNN_dropout', ['yes','no'])
 
-    FCNN_dropouts = [layers_1_FCNN_dropout, layers_2_FCNN_dropout, layers_3_FCNN_dropout]
+    FCNN_dropouts = [[layers_1_FCNN_dropout, layers_2_FCNN_dropout]]
 
 
     layers_1_FCNN_batchnorm = trial.suggest_categorical('layers_1_FCNN_batchnorm', ['yes', 'no'])
     layers_2_FCNN_batchnorm = trial.suggest_categorical('layers_2_FCNN_batchnorm', ['yes', 'no'])
-    layers_3_FCNN_batchnorm = trial.suggest_categorical('layers_3_FCNN_batchnorm', ['yes', 'no'])
+ #   layers_3_FCNN_batchnorm = trial.suggest_categorical('layers_3_FCNN_batchnorm', ['yes', 'no'])
 
-    FCNN_batchnorms = [layers_1_FCNN_batchnorm, layers_2_FCNN_batchnorm, layers_3_FCNN_batchnorm]
+    FCNN_batchnorms = [[layers_1_FCNN_batchnorm, layers_2_FCNN_batchnorm]]
+
+    # Last Layer
+    layer_final_activfunc = trial.suggest_categorical('layers_final_activfunc', ['relu','sigmoid','prelu','none'])
+    layer_final_dropout = trial.suggest_categorical('layer_final_dropout', ['yes','no'])
+    layer_final_batchnorm = trial.suggest_categorical('layer_final_batchnorm', ['yes','no'])
+    FCNN_activation_functions.append([layer_final_activfunc])
+    FCNN_dropouts.append([layer_final_dropout])
+    FCNN_batchnorms.append([layer_final_batchnorm])
 
  #   out_1_graphconv = trial.suggest_int('out_1_graphconv', 5, 300)
     out_1_graphconv = 2 # constant bc of some float error
@@ -390,12 +436,13 @@ def objective(trial):
               n_hidden_layer_dims=layers_FCNN,
               activ_funcs=FCNN_activation_functions,
               dropout_bool= dropout_bool,
-              dropout_layers=FCNN_dropouts, # Testing if dropout & batchnorm in last layer is effective ; TODO : implement possibility in NN
+              dropout_layers=FCNN_dropouts,
               batchnorm_bool=batchnorm_bool,
               batchnorm_layers=FCNN_batchnorms,
               activ_funcs_graphconv= graphconvs_activation_functions,
               graphconvs=graphconvs,
-              prelu_init= prelu_rate) #.to(device)
+              prelu_init= prelu_rate,
+              print_bool= False)
 
 
 
@@ -472,48 +519,38 @@ def optuna_optimization(fold = 1):
 
 
 
-def train(module,
-          device,
-          batch_size =128,
-          n_epochs = 512,
-          l2_regularization = False,
-          val_batch_size=20,
-          number_folds = 5,
-          feature_names = None,
-          n_train_samples = 0,
-          n_test_samples = 0,
-          n_val_samples = 0,
-          view_names = None,
-          processing_bool = False):
-    """
-
-    :param module: basically the dataset to be used
-    :param batch_size: batch size for training
-    :param n_epochs: number of epochs
-    :param lr_scheduler_type: type of lr_scheduler : 'lambda','mulitplicative','step','multistep','exponential',...
-    :param l2_regularization : bool whether should be applied or not
-    :param cross_validation_bool : bool whether cross validation is to be applied ; False means that we just have cross
-                                   validation with one split (one validation set)
-    """
-
-
-
-    #Select method for feature selection
-    edge_index, proteins_used, train_data, val_data, test_data, \
-    train_duration, train_event, \
-    val_duration, val_event, \
-    test_duration, test_event = module.feature_selection('ppi', feature_names)
-
+def train(train_data,val_data,test_data,
+          train_duration,val_duration,test_duration,
+          train_event,val_event,test_event,
+          n_epochs,
+          batch_size,
+          l2_regularization,
+          l2_regularization_rate,
+          learning_rate,
+          prelu_rate,
+          layers,
+          activation_layers,
+          dropout,
+          dropout_rate,
+          dropout_layers,
+          batchnorm,
+          batchnorm_layers,
+          view_names,
+          feature_names,
+          processing_type,
+          edge_index,
+          proteins_used,
+          activation_layers_graphconv,
+          layers_graphconv):
 
 
     # As we use PPI feature selection in GCN, we don't have multiple views structure : we don't need numpy transforms
 
 
-
     ############################# FOLD X ###################################
     for c_fold,fold in enumerate(train_data):
 
-        print("Split {} : ".format(c_fold))
+        print("Split {} : ".format(c_fold + 1))
         print("Train data has shape : {} ".format(train_data[c_fold].shape))
         print("Validation data has shape : {} ".format(val_data[c_fold].shape))
         print("Test data has shape : {} ".format(test_data[c_fold].shape))
@@ -533,20 +570,27 @@ def train(module,
         # Needed for GCN
         num_features = views_with_proteins
         num_nodes = len(proteins_used)
-        edge_index = torch.LongTensor(edge_index).to(device)
+        edge_index = torch.LongTensor(edge_index)
 
 
 
-
-
-
-
-
-        if processing_bool == True: # only normalize when we dont do preprocessing on data before feature selection
+        if processing_type.lower() == 'normalize':
             for i in range(num_features):
                 train_data[c_fold][:,:,i] = normalize(train_data[c_fold][:,:,i])
                 val_data[c_fold][:,:,i] = normalize(val_data[c_fold][:,:,i])
                 test_data[c_fold][:,:,i] = normalize(test_data[c_fold][:,:,i])
+        elif processing_type.lower() == 'normalizebyrow':
+            for i in range(num_features):
+                train_data[c_fold][:,:,i] = normalize_by_row(train_data[c_fold][:,:,i])
+                val_data[c_fold][:,:,i] = normalize_by_row(val_data[c_fold][:,:,i])
+                test_data[c_fold][:,:,i] = normalize_by_row(test_data[c_fold][:,:,i])
+        elif processing_type.lower() == 'normalizebycolumn':
+            for i in range(num_features):
+                train_data[c_fold][:,:,i] = normalize_by_column(train_data[c_fold][:,:,i])
+                val_data[c_fold][:,:,i] = normalize_by_column(val_data[c_fold][:,:,i])
+                test_data[c_fold][:,:,i] = normalize_by_column(test_data[c_fold][:,:,i])
+
+
 
 
         # Transforms for PyCox
@@ -568,26 +612,37 @@ def train(module,
         net = GCN(num_nodes = len(proteins_used),
                   edge_index = edge_index,
                   in_features=num_features,
-                  n_hidden_layer_dims=[512,256],
-                  activ_funcs=['relu','relu'],
-                  dropout_bool= True,
-                  dropout_layers=['yes','yes','yes'], # Testing if dropout & batchnorm in last layer is effective ; TODO : implement possibility in NN
-                  batchnorm_bool=True,
-                  batchnorm_layers=['yes','yes','yes'],
-                  activ_funcs_graphconv= ['relu'],
-                  graphconvs=[5]).to(device)
+                  n_hidden_layer_dims=layers,
+                  activ_funcs=activation_layers,
+                  dropout_bool= dropout,
+                  dropout_prob= dropout_rate,
+                  dropout_layers=dropout_layers,
+                  batchnorm_bool=batchnorm,
+                  batchnorm_layers=batchnorm_layers,
+                  activ_funcs_graphconv= activation_layers_graphconv,
+                  graphconvs=layers_graphconv,
+                  prelu_init= prelu_rate,
+                  print_bool= False)
 
 
 
         if l2_regularization == True:
-            optimizer = Adam(net.parameters(), lr=0.0005, weight_decay=0.000001)
+            optimizer = Adam(net.parameters(), lr=learning_rate, weight_decay=l2_regularization_rate)
         else:
-            optimizer = Adam(net.parameters(), lr=0.0005)
+            optimizer = Adam(net.parameters(), lr=learning_rate)
 
         model = CoxPH(net, optimizer)
 
-        log = model.fit(train_data[c_fold],train_surv, batch_size, n_epochs, callbacks, verbose=True,
-                        val_data=val_data_full, val_batch_size= val_batch_size)
+        print_train = False
+
+        log = model.fit(train_data[c_fold],
+                        train_surv,
+                        batch_size,
+                        n_epochs,
+                        callbacks,
+                        verbose=print_train,
+                        val_data=val_data_full,
+                        val_batch_size= batch_size)
 
         # Plot it
         _ = log.plot()
@@ -608,9 +663,9 @@ def train(module,
 
 
         # Plot it
-        surv.iloc[:, :5].plot()
-        plt.ylabel('S(t | x)')
-        _ = plt.xlabel('Time')
+    #    surv.iloc[:, :5].plot()
+    #    plt.ylabel('S(t | x)')
+    #    _ = plt.xlabel('Time')
 
 
         ev = EvalSurv(surv, test_duration, test_event, censor_surv='km')

@@ -383,7 +383,7 @@ class AE(nn.Module):
 
 
                 elif c2 == len(view): # last layer
-                    if batch_norm_bool == True:
+                    if batch_norm_bool == True and batch_norm[c][-1] == 'yes':
                         self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][-1],
                                                                              in_features[c]),
                                                                    nn.BatchNorm1d(in_features[c]),
@@ -553,7 +553,7 @@ class AE(nn.Module):
 
         #order data by views for diff. hidden layers
 
-        data_ordered = x
+        data_ordered = list(x)
 
 
         batch_size = data_ordered[0].size(0)
@@ -565,21 +565,27 @@ class AE(nn.Module):
             for c2 in range(len(view)): # view contains all layers (also the last to recreate input dim, as we already have defined it in __init__
 
                 if c2 == 0: #first layer
-                    encoded_features[c].append(self.hidden_layers[c][c2](data_ordered[c]))
                     # Apply dropout layer
                     if self.dropout_bool == True and self.dropout_layers[c][c2] == 'yes':
-                        encoded_features[c][c2] = self.dropout(encoded_features[c][c2])
+                       # encoded_features[c][c2] = self.dropout(encoded_features[c][c2])
+                        data_ordered[c] = self.dropout(data_ordered[c])
+                    encoded_features[c].append(self.hidden_layers[c][c2](data_ordered[c]))
 
-                elif c2 == len(view) - 1: # last layer ; not same structure as in init, bc now the last layer is already in view!
+
+                elif c2 == len(view) - 1: # last layer (decoder); not same structure as in init, bc now the last layer is already in view!
+                    if self.dropout_bool == True and self.dropout_layers[c][-1] == 'yes':
+                        encoded_features[c][-1] =self.dropout(encoded_features[c][-1])
+
                     encoded_features[c].append(self.hidden_layers[c][-1](encoded_features[c][-1]))
-                    # no droput layer
+
 
 
                 else : # other layers
+                    if self.dropout_bool == True and self.dropout_layers[c][c2] == 'yes':
+                        encoded_features[c][c2-1] = self.dropout(encoded_features[c][c2-1])
                     encoded_features[c].append(self.hidden_layers[c][c2](encoded_features[c][c2-1]))
 
-                    if self.dropout_bool == True and self.dropout_layers[c][c2] == 'yes':
-                        encoded_features[c][c2] = self.dropout(encoded_features[c][c2])
+
 
         # The data we're interested in is in the middle of the encoding and decoding stage
 
@@ -1233,7 +1239,7 @@ def objective(trial):
 
     if 'MICRORNA' in view_names:
         layers_1_microRNA = trial.suggest_int('layers_1_microRNA', 5, 300)
-        layers_2_microRNA = trial.suggest_int('layers_1_microRNA', 5, 300)
+        layers_2_microRNA = trial.suggest_int('layers_2_microRNA', 5, 300)
         layers_1_microRNA_activfunc = trial.suggest_categorical('layers_1_microRNA_activfunc', ['relu','sigmoid','prelu'])
         layers_2_microRNA_activfunc = trial.suggest_categorical('layers_2_microRNA_activfunc', ['relu','sigmoid','prelu'])
         layers_1_microRNA_dropout = trial.suggest_categorical('layers_1_microRNA_dropout', ['yes','no'])
@@ -1395,7 +1401,6 @@ def objective(trial):
 
 
     all_models.append(FCNN.NN_changeable(views = ['AE'],
-                                       trial= trial,
                                        in_features = [in_feats_second_NN_concat],
                                        n_hidden_layers_dims= layers_FCNN,
                                        activ_funcs = [FCNN_activation_functions,['none']],

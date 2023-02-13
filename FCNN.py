@@ -5,20 +5,9 @@ from torch import nn
 import numpy as np
 from pycox import models
 import torchtuples as tt
-import matplotlib.pyplot as plt
 from pycox.evaluation import EvalSurv
 from torch.optim import Adam
-from functools import partial
 import os
-import torch.nn.functional as F
-import torch.optim as optim
-from torch.utils.data import random_split
-import torchvision
-import torchvision.transforms as transforms
-from ray import tune
-from ray.tune import CLIReporter
-import random
-from ray.tune.schedulers import ASHAScheduler
 import optuna
 
 
@@ -28,32 +17,30 @@ class NN_changeable(nn.Module):
                  batch_norm = None, dropout_bool = None, batch_norm_bool = None,print_bool = False,
                  prelu_init = 0.25):
         """
-        :param views: list of views (strings)
-        :param in_features: list of input features
-        :param feature_offsets: List of feature offsets over all views
-        :param n_hidden_layers_dims: List of lists containing output_dim of each hidden layer for each view,
-                                     where the length of each list is the amount of hidden layers for this view
-        :param activ_funcs: List of lists containing activation functions for each hidden layer. This list has
-                            one more list than n_hidden_layers_dim to determine the activation function for the final
-                            layer. If the sublist only contains one activation function , this is to be used
-                            for each hidden layer for this view. If the list only contains one value (no sublists), this
-                            activation function is to be used for each hidden layer and the output layer. Activation func
-                            are to be put in as strings. 'relu', 'sigmoid' , 'softmax' , ..
-        :param dropout : probability of neuron dropout ; int
-        :param dropout_layers : layers in n_hidden_layers_dims where dropout is to be applied ; str ('yes'/'no')
-        :param batch_norm : layers in n_hidden_layers_dims where batch normalization is to be applied ; str ('yes'/'no')
-        :param dropout_bool : Decide wether dropout is applied or not ; bool (True/False)
-        :param batch_norm_bool : Decide wether batch normalization is applied or not ; bool (True/False)
-        :param ae_bool : Check whether we pass data from AE (concatenated or element wise avg)
-        :param print_bool : Decide whether the model is to be printed (needed so we don't get a print for each validation set in cross validation
-
+        Fully Connected Neural Net with changeable hyperparameters. Each view has a FCNN itself, finally the output of
+        each view is concatenated and passed through a final layer, which compresses values to a single dimensional
+        value.
+        :param views: Views (Omes) ; dtype : List of Strings
+        :param in_features: Input dimensions for each view : List of Int
+        :param n_hidden_layers_dims: Hidden layers for each view : List of Lists of Int
+        :param activ_funcs: Activation Functions (for each view) aswell as for the last layer
+                           ; dtype : List of Lists of Strings ['relu', 'sigmoid', 'prelu']
+        :param dropout : Probability of Neuron Dropouts ; dtype : Int
+        :param dropout_layers : Layers in which to apply Dropout ; dtype : List of Lists of Strings ['yes','no']
+        :param batch_norm : Layers in which to apply Batch Normalization ; dtype : List of Lists of Strings ['yes','no']
+        :param dropout_bool : Decide whether Dropout is to be applied or not ; dtype : Boolean
+        :param batch_norm_bool : Decide whether Batch Normalization is to be applied or not ; dtype : Boolean
+        :param ae_bool : Check if data input comes from an Autoencoder [needed because of different data structure]
+                         ; dtype : Boolean
+        :param print_bool : Decide whether to print the model ; dtype : Boolean
+        :param prelu_init : Initial Value for PreLU activation ; dtype : Int
         """
+
+
         super().__init__()
         self.views =views
         self.in_features = in_features
-        #self.feature_offsets = feature_offsets
         self.n_hidden_layers_dims = n_hidden_layers_dims
-
         self.activ_funcs = activ_funcs
         self.dropout_prob = dropout_prob
         self.dropout_layers = dropout_layers
@@ -67,12 +54,7 @@ class NN_changeable(nn.Module):
 
 
 
-
-
-
-        # Produce activation functions list of lists
-
-
+        # If we just input one activation function, use this activation function for each view and also the final layer
         if len(activ_funcs) == 1 and type(activ_funcs[0]) is not list:
 
             func = activ_funcs[0]
@@ -83,8 +65,7 @@ class NN_changeable(nn.Module):
         if len(activ_funcs) == len(views) + 1:
 
             for c,view in enumerate(activ_funcs):
-                # if only one activ function given in sublist, use this for each layer
-                # if we look at the output layer activ function, we only have the last layer (otherwise index error)
+                # If only one activ function given in sublist, use this for each layer
                 if len(activ_funcs[c]) == 1 and c != len(views):
                     # -1 because we already have one activ func in our activ funcs list
                     for x in range(len(n_hidden_layers_dims[c]) -1):
@@ -104,50 +85,61 @@ class NN_changeable(nn.Module):
                              " sublist for each view and one list for the output layer or just a single activation function"
                              " value in a list")
 
-        # Produce hidden layer list of lists
+        # Assign Layers
         for c,view in enumerate(n_hidden_layers_dims):
             for c2 in range(len(view)):
-                if c2 == 0: # first layer
+                if c2 == 0: # First Layer
+                    # Batch Normalization
                     if batch_norm_bool == True and batch_norm[c][c2] == 'yes':
+                        # Use an activation function
                         if activ_funcs[c][c2] != 'none':
                             self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
                                                                                  n_hidden_layers_dims[c][c2]),
                                                                                  nn.BatchNorm1d(n_hidden_layers_dims[c][c2]),
                                                                                  activ_funcs[c][c2]))
+                        # Use no activation function
                         else:
                             self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
                                                                                  n_hidden_layers_dims[c][c2]),
                                                                        nn.BatchNorm1d(n_hidden_layers_dims[c][c2])
                                                                        ))
-
+                    # No Batch Normalization
                     else:
+                        # Use an activation function
                         if activ_funcs[c][c2] != 'none':
                             self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
                                                                                  n_hidden_layers_dims[c][c2]),
                                                                                  activ_funcs[c][c2]))
+                        # Use no activation function
                         else:
                             self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
                                                                                  n_hidden_layers_dims[c][c2])
                                                                        ))
 
 
-                else: # other layers
+                else: # Other Layers
+                    # Batch Normalization
                     if batch_norm_bool == True and batch_norm[c][c2] == 'yes':
+                        # Use an activation function
                         if activ_funcs[c][c2] != 'none':
                             self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][c2-1],
                                                                                  n_hidden_layers_dims[c][c2]),
                                                                                  nn.BatchNorm1d(n_hidden_layers_dims[c][c2]),
                                                                                  activ_funcs[c][c2]))
+                        # Use no activation function
                         else:
                             self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][c2-1],
                                                                                  n_hidden_layers_dims[c][c2]),
                                                                        nn.BatchNorm1d(n_hidden_layers_dims[c][c2])
                                                                        ))
+                    # No Batch Normalization
                     else:
+                        # Use an activation function
                         if activ_funcs[c][c2] != 'none':
                             self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][c2-1],
                                                                                  n_hidden_layers_dims[c][c2]),
                                                                                  activ_funcs[c][c2]))
+                        # Use no activation function
                         else:
                             self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][c2-1],
                                                                                  n_hidden_layers_dims[c][c2])
@@ -160,17 +152,23 @@ class NN_changeable(nn.Module):
 
 
 
-        # The final layer takes each output from each hidden layer sequence of each view, concatenates them together
-        # and reduces them to output dim of 1
+
         sum_dim_last_layers = sum([dim[-1] for dim in n_hidden_layers_dims])
 
+        # Final Layer
+
+
         if activ_funcs[-1][0] != 'none':
+            # Activation function
             if batch_norm_bool == True and batch_norm[-1][0] == 'yes':
+                # Batch Normalization
                 self.final_out = nn.Sequential(nn.Linear(sum_dim_last_layers,1),nn.BatchNorm1d(1), activ_funcs[-1][0])
             else:
+                # No Batch Normalization
                 self.final_out = nn.Sequential(nn.Linear(sum_dim_last_layers,1), activ_funcs[-1][0])
 
         else:
+            # No activation function
             if batch_norm_bool == True and batch_norm[-1][0] == 'yes':
                 self.final_out = nn.Sequential(nn.Linear(sum_dim_last_layers,1),nn.BatchNorm1d(1))
             else:
@@ -179,7 +177,7 @@ class NN_changeable(nn.Module):
 
 
 
-                # Dropout
+        # Dropout
         self.dropout = nn.Dropout(self.dropout_prob)
 
 
@@ -208,23 +206,24 @@ class NN_changeable(nn.Module):
 
     def forward(self,*x):
         """
-
-        :param x: data input
-        :return: hazard
+        Forward function of the Fully Connected Neural Net
+        :param x: Data Input (for each view) ; dtype Tuple of a List (--> Datentypen ist glaube ich bei Eingabe nach AE anders als direkt nur FCNN)
+        :return: "Risk ratio" TODO : Namen finden, den man auch in der BA dann benutzt
         """
-        # Needed for concat first, none second AE implementation bc. somehow a tuple of a lsit of our data is given
-        # back instead of just a tuple of the data
-        if type(x[0]) is list: # CHECK
+
+        if type(x[0]) is list:
             x = tuple(x[0])
-        # list of lists to store encoded features for each view
+        # List of lists to store encoded features for each view
         encoded_features = [[] for x in range(len(self.views))]
 
-        #order data by views for diff. hidden layers
 
+        # Data ordered by view
         data_ordered = list(x)
 
-        batch_size = x[0].size(0) # take arbitrary view for batch size, since for each view same batch size
+        # Take arbitrary view for batch size, since for each view same batch size
+        batch_size = x[0].size(0)
 
+        # Pass data through layers and apply Dropout if wanted
         for c,view in enumerate(self.hidden_layers):
             for c2,encoder in enumerate(view):
                 if c2 == 0: #first layer
@@ -243,7 +242,7 @@ class NN_changeable(nn.Module):
 
 
 
-
+        # Concatenate output for final layer
         final_in = torch.cat(tuple([dim[-1] for dim in encoded_features]), dim=-1)
 
 
@@ -251,8 +250,6 @@ class NN_changeable(nn.Module):
             final_in = self.dropout(final_in)
 
         predict = self.final_out(final_in)
-
-
 
 
         return predict
@@ -264,10 +261,14 @@ class NN_changeable(nn.Module):
 
 
 def objective(trial):
+    """
+    Optuna Optimization for Hyperparameters.
+    :param trial: Settings of the current trial of Hyperparameters
+    :return: Concordance Index ; dtype : Float
+    """
 
 
-    # Load in data (##### For testing for first fold, later on
-
+    # Load in data
     trainset, trainset_feat, valset, valset_feat, testset, testset_feat = load_data()
 
     trainset_feat = list(trainset_feat.values)
@@ -283,6 +284,7 @@ def objective(trial):
         testset_feat[idx] = testset_feat[idx].item()
 
 
+    # Split data in feature values, duration, event
     train_data = []
     for c,feat in enumerate(trainset_feat):
         if c < len(trainset_feat) - 3: # train data views
@@ -342,7 +344,7 @@ def objective(trial):
     l2_regularization_rate = trial.suggest_float("l2_regularization_rate", 1e-6,1e-3, log=True)
  #   batch_size = trial.suggest_int("batch_size", 5, 200)
     batch_size = trial.suggest_categorical("batch_size", [8,16,32,64,128,256])
-  #  n_epochs = trial.suggest_int("n_epochs", 10,100) # TODO : fest
+  #  n_epochs = trial.suggest_int("n_epochs", 10,100)
     n_epochs = 100
     dropout_prob = trial.suggest_float("dropout_prob", 0,0.5,step=0.1)
     dropout_bool = trial.suggest_categorical('dropout_bool', [True,False])
@@ -423,10 +425,6 @@ def objective(trial):
     batchnorms.append([layer_final_batchnorm])
 
 
-
-
-
-
     net = NN_changeable(views=view_names,
                               in_features=dimensions,
                               n_hidden_layers_dims=layers,
@@ -441,7 +439,6 @@ def objective(trial):
                               )
 
 
-
     if l2_regularization_bool == True:
         optimizer = Adam(net.parameters(), lr=learning_rate, weight_decay=l2_regularization_rate)
     else:
@@ -451,7 +448,7 @@ def objective(trial):
 
 
     model = models.CoxPH(net,optimizer)
-    print_loss = False
+    print_loss = True
 
     # Fit model
     log = model.fit(train_data,
@@ -463,6 +460,9 @@ def objective(trial):
                     val_batch_size= batch_size,
                     verbose=print_loss)
 
+
+    # Plot it
+    _ = log.plot()
 
     # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
     _ = model.compute_baseline_hazards()
@@ -477,23 +477,23 @@ def objective(trial):
     #     _ = plt.xlabel('Time')
 
 
-
-
     # Evaluate with concordance, brier score and binomial log-likelihood
     ev = EvalSurv(surv, test_duration, test_event, censor_surv='km') # censor_surv : Kaplan-Meier
 
-    # concordance
+    # Concordance Index ; Used for Optimization
     concordance_index = ev.concordance_td()
 
     if concordance_index < 0.5:
         concordance_index = 1 - concordance_index
 
-    #brier score
+
+    # These two scores can also be used for Optimization if wanted
+    #Brier score
     time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
     _ = ev.brier_score(time_grid).plot
     brier_score = ev.integrated_brier_score(time_grid)
 
-    #binomial log-likelihood
+    #Binomial log-likelihood
     binomial_score = ev.integrated_nbll(time_grid)
 
 
@@ -501,20 +501,21 @@ def objective(trial):
 
 
 
-def optuna_optimization(fold = 1):
+def optuna_optimization():
+    """
+    Optuna Optimization for Hyperparameters.
+    """
 
 
-    EPOCHS = 150
+    # Set amount of different trials
+    EPOCHS = 500
     study = optuna.create_study(direction='maximize',sampler=optuna.samplers.TPESampler(),pruner=optuna.pruners.MedianPruner())
     study.optimize(objective, n_trials = EPOCHS)
 
     trial = study.best_trial
 
     print("Best Concordance", trial.value)
-    print("Best Hyperparamters : {}".format(trial.params))
-
-
-
+    print("Best Hyperparameters : {}".format(trial.params))
 
 
 
@@ -535,6 +536,36 @@ def train(train_data,val_data,test_data,
           batchnorm,
           batchnorm_layers,
           view_names):
+    """
+    Training Function for the Fully Connected Neural Net, which connects the FCNN with the PH-Model.
+    TODO : check dtypes
+    :param train_data: Training Data for each fold for each view  ; dtype : List of Lists of Lists of Floats
+    :param val_data: Validation Data for each fold for each view  ; dtype : List of Lists of Lists of Floats
+    :param test_data: Test Data for each fold for each view  ; dtype : List of Lists of Lists of Floats
+    :param train_duration: Training Duration for each fold  ; dtype : List of Lists of Floats
+    :param val_duration: Validation Duration for each fold  ; dtype : List of Lists of Floats
+    :param test_duration: Test Duration for each fold  ; dtype : List of Lists of Floats
+    :param train_event: Training Event for each fold  ; dtype : List of Lists of Floats
+    :param val_event: Validation Event for each fold  ; dtype : List of Lists of Floats
+    :param test_event: Test Event for each fold  ; dtype : List of Lists of Floats
+    :param n_epochs: Number of Epochs ; dtype : Int
+    :param batch_size: Batch Size ; dtype : Int
+    :param l2_regularization: Decide whether to apply L2 regularization ; dtype : Boolean
+    :param l2_regularization_rate: L2 regularization rate ; dtype : Float
+    :param learning_rate: Learning rate ; dtype : Float
+    :param prelu_rate: Initial Value for PreLU activation ; dtype : Float [between 0 and 1]
+    :param layers: Dimension of Layers for each view ; dtype : List of lists of Ints
+    :param activation_layers: Activation Functions (for each view) aswell as for the last layer
+                              ; dtype : List of Lists of Strings ['relu', 'sigmoid', 'prelu']
+    :param dropout: Decide whether Dropout is to be applied or not ; dtype : Boolean
+    :param dropout_rate: Probability of Neuron Dropouts ; dtype : Int
+    :param dropout_layers:  Layers in which to apply Dropout ; dtype : List of Lists of Strings ['yes','no']
+    :param batchnorm: Decide whether Batch Normalization is to be applied or not ; dtype : Boolean
+    :param batchnorm_layers: Layers in which to apply Batch Normalization ; dtype : List of Lists of Strings ['yes','no']
+    :param view_names: Names of used views ; dtype : List of Strings
+    :return:
+    """
+
 
 
     # Cast to numpy arrays if necessary(if we get an error, we already have numpy arrays --> no need to cast)
@@ -687,6 +718,11 @@ def train(train_data,val_data,test_data,
 
 
 def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/"):
+    """
+    Function to load data. Needed for Optuna Optimization.
+    :param data_dir: Directory in which data is stored.
+    :return: data and feature offsets (for feature values, duration and event)
+    """
 
     trainset = pd.read_csv(
         os.path.join(data_dir + "TrainData.csv"), index_col=0)

@@ -37,7 +37,7 @@ if __name__ == '__main__':
                                                         cancer_name= cancer_name,
                                                         which_views = which_views,
                                                         n_folds = n_folds,
-                                                        type_preprocess= 'none')
+                                                        type_preprocess= 'standardize')
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -57,7 +57,7 @@ if __name__ == '__main__':
     ############################################ HYPERPARAMETER OPTIMIZATION ##########################################
 
     # Hyperparameter Optimization NN method
-    method_tune = 'none'
+    method_tune = 'GCN'
 
     if method_tune == 'GCN':
 
@@ -161,7 +161,7 @@ if __name__ == '__main__':
     elif method_tune == 'FCNN' or method_tune == 'AE':
 
         # Choose feature selection method (PCA,Variance,AE,Eigengenes)
-        feature_select_method = 'pca'
+        feature_select_method = 'eigengenes'
         # Choose PCA components for each view (None : take all possible PC components for this view)
         components = [100,100,100,100]
         # Choose Variance thresholds for each view
@@ -238,8 +238,8 @@ if __name__ == '__main__':
             AE.optuna_optimization()
 
 
-
-    method_train = 'GCN'
+    # Train NN method
+    method_train = 'none'
 
     ######## SET OWN SETTINGS FOR NN CALL ############
 
@@ -256,17 +256,29 @@ if __name__ == '__main__':
     # PRELU INIT VALUE
     PRELU_RATE = 0.1
     # LAYER SIZES DIFFERENT VIEWS
-    layers_1_mRNA = 112
-    layers_2_mRNA = 453
-    layers_1_DNA = 336
-    layers_2_DNA = 338
-    layers_1_microRNA = 10
-    layers_2_microRNA = 10
+    layers_1_mRNA = 64
+    layers_2_mRNA = 16
+    layers_1_DNA = 64
+    layers_2_DNA = 16
+    layers_1_microRNA = 64
+    layers_2_microRNA = 16
     layers_1_RPPA = 200
     layers_2_RPPA = 200
     # LAYER SIZES INTEGRATED
-    layers_1 = 200
-    layers_2 = 200
+    layers_1 = 16
+    layers_2 = 8
+    # LAYER SIZES INTEGRATED 2 (for Hierachical AE)
+    layers_c_1 = 16
+    layers_c_2 = 8
+    # LAYER SIZES INTEGRATED ALL VIEWS
+    layers_1_mRNA_integrated = 100
+    layers_2_mRNA_integrated = 100
+    layers_1_DNA_integrated = 100
+    layers_2_DNA_integrated = 100
+    layers_1_microRNA_integrated = 100
+    layers_2_microRNA_integrated = 100
+    layers_1_RPPA_integrated = 100
+    layers_2_RPPA_integrated = 100
     # ACTIVATION FUNCTIONS
     layers_1_mRNA_activfunc = 'sigmoid'
     layers_2_mRNA_activfunc = 'sigmoid'
@@ -279,6 +291,19 @@ if __name__ == '__main__':
     # ACTIVATION FUNCTIONS INTEGRATED
     layers_1_integrated_activfunc = 'relu'
     layers_2_integrated_activfunc = 'relu'
+    # ACTIVATION FUNCTIONS INTEGRATED 2
+    layers_c_1_integrated_activfunc = 'relu'
+    layers_c_2_integrated_activfunc = 'relu'
+
+    # ACTIVATION FUNCTIONS INTEGRATED ALL VIEWS
+    layers_1_mRNA_activfunc_integrated = 'sigmoid'
+    layers_2_mRNA_activfunc_integrated = 'sigmoid'
+    layers_1_DNA_activfunc_integrated = 'relu'
+    layers_2_DNA_activfunc_integrated = 'sigmoid'
+    layers_1_microRNA_activfunc_integrated = 'relu'
+    layers_2_microRNA_activfunc_integrated = 'sigmoid'
+    layers_1_RPPA_activfunc_integrated = 'relu'
+    layers_2_RPPA_activfunc_integrated = 'relu'
     # DROPOUT
     DROPOUT_BOOL = True
     DROPOUT_PROB = 0.2
@@ -288,9 +313,29 @@ if __name__ == '__main__':
     layers_2_DNA_dropout = 'yes'
     layers_1_microRNA_dropout = 'yes'
     layers_2_microRNA_dropout = 'no'
+    layers_1_RPPA_dropout = 'no'
+    layers_2_RPPA_dropout = 'no'
     # DROPOUT FUNCTIONS INTEGRATED
+    DROPOUT_BOOL_INTEGRATED = True
+    DROPOUT_PROB_INTEGRATED = 0.2
     layers_1_integrated_dropout = 'yes'
     layers_2_integrated_dropout = 'yes'
+    # DROPOUT FUNCTIONS INTEGRATED 2
+    DROPOUT_C_BOOL_INTEGRATED = True
+    DROPOUT_C_PROB_INTEGRATED = 0.2
+    layers_c_1_integrated_dropout = 'yes'
+    layers_c_2_integrated_dropout = 'yes'
+    # DROPOUT FUNCTIONS INTEGRATED ALL VIEWS
+    DROPOUT_BOOL_INTEGRATED_VIEWS = True
+    DROPOUT_PROB_INTEGRATED_VIEWS = 0.2
+    layers_1_mRNA_dropout_integrated = 'no'
+    layers_2_mRNA_dropout_integrated = 'no'
+    layers_1_DNA_dropout_integrated = 'no'
+    layers_2_DNA_dropout_integrated = 'yes'
+    layers_1_microRNA_dropout_integrated = 'yes'
+    layers_2_microRNA_dropout_integrated = 'no'
+    layers_1_RPPA_dropout_integrated = 'no'
+    layers_2_RPPA_dropout_integrated = 'no'
     # BATCH NORMALIZATION
     BATCHNORM_BOOL = False
     layers_1_mRNA_batchnorm = 'no'
@@ -302,18 +347,38 @@ if __name__ == '__main__':
     layers_1_RPPA_batchnorm = 'no'
     layers_2_RPPA_batchnorm = 'no'
     # BATCH NORMALIZATION INTEGRATED
+    BATCHNORM_BOOL_INTEGRATED = True
     layers_1_integrated_batchnorm = 'yes'
     layers_2_integrated_batchnorm = 'yes'
+    # BATCH NORMALIZATION INTEGRATED 2
+    BATCHNORM_C_BOOL_INTEGRATED = True
+    layers_c_1_integrated_batchnorm = 'yes'
+    layers_c_2_integrated_batchnorm = 'yes'
+    # BATCH NORMALIZATION INTEGRATED ALL VIEWS
+    BATCHNORM_BOOL_INTEGRATED_VIEWS = True
+    layers_1_mRNA_batchnorm_integrated = 'no'
+    layers_2_mRNA_batchnorm_integrated = 'no'
+    layers_1_DNA_batchnorm_integrated = 'no'
+    layers_2_DNA_batchnorm_integrated = 'no'
+    layers_1_microRNA_batchnorm_integrated = 'yes'
+    layers_2_microRNA_batchnorm_integrated = 'yes'
+    layers_1_RPPA_batchnorm_integrated = 'no'
+    layers_2_RPPA_batchnorm_integrated = 'no'
     # FINAL LAYER
     layer_final_activfunc = 'none'
     layer_final_dropout = 'yes'
     layer_final_batchnorm = 'yes'
-    # GRAPHCONV LAYERS
+    # CROSS MUTATION (AE)
+    cross_mutation = [0,1,2]
+    # MODEL TYPES (AE)
+    model_types = ['concat','concat']
+    # GRAPHCONV LAYERS (GCN)
     layer_1_graphconv = 2 # best to take the same amount as the views we are looking at (normally DNA & mRNA) because of float errors otherwise
     layer_2_graphconv = 5
-    # GRAPHCONV ACTIVATION LAYERS
+    # GRAPHCONV ACTIVATION LAYERS (GCN)
     layer_1_graphconv_activfunc = 'relu'
     layer_2_graphconv_activfunc = 'relu'
+
 
 
     LAYERS = [[layers_1_mRNA, layers_2_mRNA],[layers_1_DNA,layers_2_DNA],[layers_1_microRNA, layers_2_microRNA]]
@@ -325,18 +390,49 @@ if __name__ == '__main__':
     BATCHNORM_LAYERS = [[layers_1_mRNA_batchnorm, layers_2_mRNA_batchnorm],[layers_1_DNA_batchnorm, layers_2_DNA_batchnorm],
                         [layers_1_microRNA_batchnorm,layers_2_microRNA_batchnorm], [layer_final_batchnorm]]
 
-    INTEGRATED_LAYERS = [layers_1,layers_2]
+
+    # Used for GCN input or final FCNN input in AE construction
+    INTEGRATED_LAYERS = [[layers_1, layers_2]]
     INTEGRATED_ACTIV_FUNCS = [[layers_1_integrated_activfunc, layers_2_integrated_activfunc], [layer_final_activfunc]]
     INTEGRATED_DROPOUT_LAYERS = [[layers_1_integrated_dropout, layers_2_integrated_dropout], [layer_final_dropout]]
     INTEGRATED_BATCHNORM_LAYERS = [[layers_1_integrated_batchnorm, layers_2_integrated_batchnorm], [layer_final_batchnorm]]
 
+
+    ACTIV_FUNCS_AE =[[layers_1_mRNA_activfunc, layers_2_mRNA_activfunc], [layers_1_DNA_activfunc, layers_2_DNA_activfunc],
+                     [layers_1_microRNA_activfunc, layers_2_microRNA_activfunc]]
+    DROPOUT_LAYERS_AE = [[layers_1_mRNA_dropout, layers_2_mRNA_dropout], [layers_1_DNA_dropout, layers_2_DNA_dropout],
+                      [layers_1_microRNA_dropout, layers_2_microRNA_dropout]]
+    BATCHNORM_LAYERS_AE = [[layers_1_mRNA_batchnorm, layers_2_mRNA_batchnorm],[layers_1_DNA_batchnorm, layers_2_DNA_batchnorm],
+                    [layers_1_microRNA_batchnorm,layers_2_microRNA_batchnorm]]
+
+    # Second Integrated (Hierachical AE, Input into second AE)
+    INTEGRATED_LAYERS_C_AE = [[layers_c_1,layers_c_2]]
+    INTEGRATED_ACTIV_C_FUNCS_AE = [[layers_c_1_integrated_activfunc, layers_c_2_integrated_activfunc]]
+    INTEGRATED_DROPOUT_C_LAYERS_AE = [[layers_c_1_integrated_dropout, layers_c_2_integrated_dropout]]
+    INTEGRATED_BATCHNORM_C_LAYERS_AE = [[layers_c_1_integrated_batchnorm, layers_c_2_integrated_batchnorm]]
+
+    # AE Hierarichal with 'none' setting as first model
+    INTEGRATED_LAYERS_VIEWS = [[layers_1_mRNA_integrated, layers_2_mRNA_integrated],[layers_1_DNA_integrated, layers_2_DNA_integrated],
+                             [layers_1_microRNA_integrated, layers_2_microRNA_integrated]]
+    INTEGRATED_ACTIV_FUNCS_VIEWS = [[layers_1_mRNA_activfunc_integrated, layers_2_mRNA_activfunc_integrated],
+                                    [layers_1_DNA_activfunc_integrated, layers_2_DNA_activfunc_integrated],
+                                    [layers_1_microRNA_activfunc_integrated, layers_2_microRNA_activfunc_integrated]]
+    INTEGRATED_DROPOUT_LAYERS_VIEWS = [[layers_1_mRNA_dropout_integrated, layers_2_RPPA_dropout_integrated],
+                                       [layers_1_DNA_dropout_integrated, layers_2_DNA_dropout_integrated],
+                                       [layers_1_microRNA_dropout_integrated, layers_2_microRNA_dropout_integrated]]
+    INTEGRATED_BATCHNORM_LAYERS_VIEWS = [[layers_1_mRNA_batchnorm_integrated, layers_2_mRNA_batchnorm_integrated],
+                                         [layers_1_DNA_batchnorm_integrated, layers_2_DNA_batchnorm_integrated],
+                                         [layers_1_microRNA_batchnorm_integrated, layers_2_microRNA_batchnorm_integrated]]
+
+    # GCN
+    INTEGRATED_LAYERS_GCN = [layers_1,layers_2]
     GRAPHCONV_LAYERS = [layer_1_graphconv]
     GRAPHCONV_ACTIV_FUNCS = [layer_1_graphconv_activfunc]
 
 
 
     # Choose feature selection method (PCA,Variance,AE,Eigengenes)
-    feature_select_method = 'ppi'
+    feature_select_method = 'pca'
     # Choose PCA components for each view (None : take all possible PC components for this view)
     components = [None,None,None,None]
     # Choose Variance thresholds for each view
@@ -395,7 +491,7 @@ if __name__ == '__main__':
                   l2_regularization_rate= L2_REGULARIZATION_RATE,
                   learning_rate= LEARNING_RATE,
                   prelu_rate = PRELU_RATE,
-                  layers=INTEGRATED_LAYERS,
+                  layers=INTEGRATED_LAYERS_GCN,
                   activation_layers= INTEGRATED_ACTIV_FUNCS,
                   dropout = DROPOUT_BOOL,
                   dropout_rate= DROPOUT_PROB,
@@ -419,21 +515,43 @@ if __name__ == '__main__':
 
 
 
-    #    AE.train(train_data, val_data, test_data, train_duration, train_event, val_duration, val_event, test_duration,test_event,
-    #      batch_size=batch_size_AE,
-    #      n_epochs=n_epochs_AE,
-    #      learning_rate= learning_rate_AE,
-    #      l2_regularization=l2_regularization_bool_AE,
-    #      l2_regularization_rate=l2_regularization_rate_AE,
-    #      val_batch_size=val_batch_size_AE,
-    #      dropout=dropout_bool_AE,
-    #      dropout_rate=dropout_rate_AE,
-    #      batchnorm = batchnorm_bool_AE,
-    #      activation_layers = activations_AE,
-    #      batchnorm_layers = batchnorm_layers_AE,
-    #      dropout_layers = dropout_layers_AE,
-    #      view_names = view_names_fix,
-    #      layers = layers_AE)
+        AE.train(train_data, val_data, test_data,
+                 train_duration, val_duration, test_duration,
+                 train_event, val_event, test_event,
+          n_epochs = N_EPOCHS,
+          batch_size= BATCH_SIZE,
+          l2_regularization=L2_REGULARIZATION_BOOL,
+          l2_regularization_rate=L2_REGULARIZATION_RATE,
+          learning_rate= LEARNING_RATE,
+          prelu_rate= PRELU_RATE,
+          layers=LAYERS,
+          activation_layers= ACTIV_FUNCS_AE,
+          dropout = DROPOUT_BOOL,
+          dropout_rate= DROPOUT_PROB,
+          dropout_layers= DROPOUT_LAYERS_AE,
+          batchnorm= BATCHNORM_BOOL,
+          batchnorm_layers= BATCHNORM_LAYERS_AE,
+          view_names = view_names_fix,
+          cross_mutation= cross_mutation,
+          model_types =  model_types,
+          dropout_second = DROPOUT_C_BOOL_INTEGRATED,
+          dropout_rate_second = DROPOUT_C_PROB_INTEGRATED,
+          batchnorm_second = BATCHNORM_C_BOOL_INTEGRATED,
+          layers_second = INTEGRATED_LAYERS_C_AE,
+          activation_layers_second = INTEGRATED_ACTIV_C_FUNCS_AE,
+          dropout_layers_second = INTEGRATED_DROPOUT_C_LAYERS_AE,
+          batchnorm_layers_second = INTEGRATED_BATCHNORM_C_LAYERS_AE,
+          dropout_third = DROPOUT_BOOL_INTEGRATED,
+          dropout_rate_third = DROPOUT_PROB_INTEGRATED,
+          batchnorm_third= BATCHNORM_BOOL_INTEGRATED,
+          layers_third = INTEGRATED_LAYERS,
+          activation_layers_third = INTEGRATED_ACTIV_FUNCS,
+          dropout_layers_third = INTEGRATED_DROPOUT_LAYERS,
+          batchnorm_layers_third = INTEGRATED_BATCHNORM_LAYERS)
+
+
+
+
 
 
         print("######################## AUTOENCODER FINISHED ####################################")

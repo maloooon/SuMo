@@ -1441,7 +1441,7 @@ def objective(trial):
     model = models.CoxPH(full_net,
                          optimizer,
                          loss=loss_concat)
-    print_loss = False
+    print_loss = True
 
     log = model.fit(train_data,
                     train_surv,
@@ -1453,7 +1453,7 @@ def objective(trial):
                     callbacks=callbacks)
 
     # Plot it
-    #      _ = log.plot()
+    _ = log.plot()
 
     # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
     _ = model.compute_baseline_hazards()
@@ -1508,43 +1508,39 @@ def optuna_optimization(fold = 1):
     print("Best Hyperparamters : {}".format(trial.params))
 
 
-
-
-
-def train(train_data,
-          val_data,
-          test_data,
-          train_duration,
-          train_event,
-          val_duration,
-          val_event,
-          test_duration,
-          test_event,
-          learning_rate = 0.0001,
-          batch_size =128,
-          n_epochs = 512,
-          l2_regularization = False,
-          l2_regularization_rate = 0.000001,
-          batchnorm = False,
-          batchnorm_layers = None,
-          dropout_layers = None,
-          val_batch_size = 16,
-          dropout_rate = 0.1,
-          dropout = False,
-          activation_layers = None,
-          view_names = None,
-          layers = None):
-    """
-
-    :param module: basically the dataset to be used
-    :param batch_size: batch size for training
-    :param n_epochs: number of epochs
-    :param lr_scheduler_type: type of lr_scheduler : 'lambda','mulitplicative','step','multistep','exponential',...
-    :param l2_regularization : bool whether should be applied or not
-    """
-
-
-
+def train(train_data,val_data,test_data,
+          train_duration,val_duration,test_duration,
+          train_event,val_event,test_event,
+          n_epochs,
+          batch_size,
+          l2_regularization,
+          l2_regularization_rate,
+          learning_rate,
+          prelu_rate,
+          layers,
+          activation_layers,
+          dropout,
+          dropout_rate,
+          dropout_layers,
+          batchnorm,
+          batchnorm_layers,
+          view_names,
+          cross_mutation,
+          model_types,
+          dropout_second,
+          dropout_rate_second,
+          batchnorm_second,
+          layers_second,
+          activation_layers_second,
+          dropout_layers_second,
+          batchnorm_layers_second,
+          dropout_third,
+          dropout_rate_third,
+          batchnorm_third,
+          layers_third,
+          activation_layers_third,
+          dropout_layers_third,
+          batchnorm_layers_third):
 
 
     # Cast to numpy arrays if necessary(if we get an error, we already have numpy arrays --> no need to cast)
@@ -1609,17 +1605,26 @@ def train(train_data,
         all_models = nn.ModuleList()
 
 
-        model_types = ['concat','elementwisemax']
+     #   model_types = ['concat','elementwisemax']
 
         print("MODEL TYPES : ", model_types)
 
-        curr_concordance = 0
 
         out_sizes = []
         for c_layer in range(len(layers)):
             out_sizes.append(layers[c_layer][-1])
 
+
         in_feats_second_NN_concat = sum(out_sizes)
+        in_feats_second_NN_elementwise = max([i[-1] for i in layers])
+
+        out_sizes_second = []
+        for c_layer in range(len(layers_second)):
+            out_sizes_second.append(layers_second[c_layer][-1])
+
+
+        in_feats_third_NN_concat = sum(out_sizes_second)
+        in_feats_third_NN_elementwise = max([i[-1] for i in layers_second])
 
 
         # AE's
@@ -1637,16 +1642,32 @@ def train(train_data,
                              batch_norm_bool= batchnorm,
                              batch_norm= batchnorm_layers_u,
                              type_ae=model_types[0],
-                             cross_mutation=[1,0],
+                             cross_mutation=cross_mutation,
+                             print_bool=False,
+                             prelu_init= prelu_rate))
+
+
+        layers_u_2 = copy.deepcopy(layers_second)
+        activation_layers_u_2 = copy.deepcopy(activation_layers_second)
+        dropout_layers_u_2 = copy.deepcopy(dropout_layers_second)
+        batchnorm_layers_u_2 = copy.deepcopy(batchnorm_layers_second)
+        all_models.append(AE(views = ['AE'],
+                             in_features=[in_feats_second_NN_concat],
+                             n_hidden_layers_dims= layers_u_2,
+                             activ_funcs = activation_layers_u_2,
+                             dropout_prob= dropout_second,
+                             dropout_layers = dropout_layers_u_2,
+                             batch_norm = batchnorm_layers_u_2,
+                             dropout_bool=dropout_second,
+                             batch_norm_bool=batchnorm_second,
+                             type_ae =model_types[1],
+                             cross_mutation=[1,0,3,2],
+                             ae_hierarichcal_bool= True,
                              print_bool=False))
 
 
-        #    all_models.append(AE(views = ['AE'],in_features=[4], n_hidden_layers_dims= [[10,5,4]],
-        #                         activ_funcs = [['relu']],
-        #                         dropout_prob= 0.2,
-        #                         dropout_layers =[['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-        #                         batch_norm = [['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes'],['yes','yes','yes']],
-        #                         dropout_bool=False,batch_norm_bool=False,type=model_types[1], cross_mutation=[1,0,3,2], ae_hierarichcal_bool= True,print_bool=False))
+
+
 
 
         # NN
@@ -1657,21 +1678,21 @@ def train(train_data,
         #        For overall(mean/max/min), the in_feats for NN is 1 (as we take the overall average)
         #        For elementwise(mean/max/min), the in_feats for NN must be size of the largest output layer dim
 
-
-        dropout_layers_u = copy.deepcopy(dropout_layers)
-        batchnorm_layers_u = copy.deepcopy(batchnorm_layers)
+        layers_u_3 = copy.deepcopy(layers_third)
+        activation_layers_u_3 = copy.deepcopy(activation_layers_third)
+        dropout_layers_u_3 = copy.deepcopy(dropout_layers_third)
+        batchnorm_layers_u_3 = copy.deepcopy(batchnorm_layers_third)
         all_models.append(FCNN.NN_changeable(views = ['AE'],
-                                           trial= None,
-                                           in_features = [in_feats_second_NN_concat],
-                                           n_hidden_layers_dims= [[64,32]],
-                                           activ_funcs = [['relu'],['none']],
-                                           dropout_prob=dropout_rate,
-                                           dropout_layers=[dropout_layers_u[0]],
-                                           batch_norm = [batchnorm_layers_u[0]],
-                                           dropout_bool=dropout,
-                                           batch_norm_bool=batchnorm,
-                                           print_bool=False))
-
+                                           in_features = [in_feats_third_NN_concat],
+                                           n_hidden_layers_dims= layers_u_3,
+                                           activ_funcs = activation_layers_u_3,
+                                           dropout_prob=dropout_third,
+                                           dropout_layers=dropout_layers_u_3,
+                                           batch_norm =batchnorm_layers_u_3,
+                                           dropout_bool=dropout_third,
+                                           batch_norm_bool=batchnorm_third,
+                                           print_bool=False,
+                                           prelu_init= prelu_rate))
 
 
 
@@ -1685,9 +1706,9 @@ def train(train_data,
 
 
 
-        #    full_net = AE_Hierarichal(all_models, types=model_types)
+        full_net = AE_Hierarichal(all_models, types=model_types)
 
-        full_net = AE_NN(all_models, type=model_types[0])
+   #     full_net = AE_NN(all_models, type=model_types[0])
 
 
         # set optimizer
@@ -1704,8 +1725,8 @@ def train(train_data,
         # loss : alpha * surv_loss + (1-alpha) * ae_loss
         model = models.CoxPH(full_net,
                              optimizer,
-                             loss=LossAEConcatHazard(0.6))
-        print_loss = False
+                             loss=LossHierarichcalAE(alpha=[0.4,0.4,0.2], decoding_bool=True))
+        print_loss = True
         print("Split {} : ".format(c_fold + 1))
         log = model.fit(train_data[c_fold],
                         train_surv,
@@ -1713,11 +1734,11 @@ def train(train_data,
                         n_epochs,
                         verbose=print_loss,
                         val_data= val_data_full,
-                        val_batch_size= val_batch_size,
+                        val_batch_size= batch_size,
                         callbacks=callbacks)
 
         # Plot it
-  #      _ = log.plot()
+        _ = log.plot()
 
         # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
         _ = model.compute_baseline_hazards()

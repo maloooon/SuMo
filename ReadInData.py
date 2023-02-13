@@ -1,13 +1,6 @@
 import os
 import pandas as pd
 import HelperFunctions as HF
-#def flatten(l):
-#    """
-#    :param l: list input
-#    :return: flattened list (removal of one inner list layer)
-#    """
-#    return [item for sublist in l for item in sublist]
-
 
 
 def readcancerdata(cancer_name):
@@ -58,12 +51,3 @@ def readcancerdata(cancer_name):
 
     return cancer_data
 
-
-
-        # Call module for each cancer type
-    #  multimodules = []
-
-    #  for c,_ in enumerate(cancer_names):
-    #      multimodules.append(SurvMultiOmicsDataModule(cancer_data[c][0],cancer_data[c][1],cancer_data[c][2]))
-
-    #  multimodules[0].setup()

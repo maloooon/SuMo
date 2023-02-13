@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import torch
-from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.preprocessing import StandardScaler
@@ -12,7 +11,6 @@ from torch.utils.data import DataLoader, Dataset
 import FeatureSelection
 from torch.optim import Adam
 from torch import nn
-from pycox import models
 import AE as featAE
 from sklearn.model_selection import StratifiedKFold
 import optuna
@@ -1112,23 +1110,27 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
 
-def tensor_helper(tensor_list):
-    #Turns a list of size (x) of tensors with dimensions (y,z) into a tensor of dimension (x,y,z)
-    x = len(tensor_list)
-    z, y = tensor_list[0].shape
+#def tensor_helper(tensor_list):
+#    #Turns a list of size (x) of tensors with dimensions (y,z) into a tensor of dimension (x,y,z)
+#    x = len(tensor_list)
+#    z, y = tensor_list[0].shape
 
-    tensor_new = torch.zeros((x, z, y))
-    for i, tensor in enumerate(tensor_list):
-        tensor_new[i, :, :] = tensor
+#    tensor_new = torch.zeros((x, z, y))
+#    for i, tensor in enumerate(tensor_list):
+#        tensor_new[i, :, :] = tensor
 
-    return tensor_new
+#    return tensor_new
 
-def flatten(l):
-    """
-    :param l: list input
-    :return: flattened list (removal of one inner list layer)
-    """
-    return [item for sublist in l for item in sublist]
+#def flatten(l):
+#    """
+#    :param l: list input
+#    :return: flattened list (removal of one inner list layer)
+#    """
+#    return [item for sublist in l for item in sublist]
+
+
+
+
 
 
 def objective(trial):
@@ -1449,10 +1451,6 @@ def objective(trial):
     full_loss = loss_train + loss_val + loss_test
 
     return full_loss
-
-
-
-
 
 
 def load_data(data_dir="/Users/marlon/Desktop/Project/ProcessedNotFeatSelectedData/"):

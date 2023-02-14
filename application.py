@@ -11,6 +11,9 @@ import copy
 
 if __name__ == '__main__':
 
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(device)
+
     # Define Cancer to load
     # Possible Cancers are :
     #PRAD, ACC, BLCA, BRCA,CESC,CHOL,COAD,DLBC,ESCA,GBM, HNSC,KICH,KIRC,KIRP,LAML,LGG,
@@ -39,7 +42,6 @@ if __name__ == '__main__':
                                                         n_folds = n_folds,
                                                         type_preprocess= 'standardize')
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Setup all the data
     n_train_samples, n_test_samples,n_val_samples, view_names_fix = multimodule.setup()

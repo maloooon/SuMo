@@ -1,9 +1,4 @@
-
-# sk learn feature selection methods
-# https://scikit-learn.org/stable/modules/feature_selection.html
-
-
-from typing import Dict, List, Tuple
+from typing import List
 import torch
 from sklearn.decomposition import PCA
 import pandas as pd
@@ -19,114 +14,130 @@ import gzip
 
 class F_PCA():
 
-    input : List[torch.Tensor]
-    components : int
+    """
+    Principal Component based Feature Selection.
+    Based on : https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html
+    """
 
     def __init__(self, data, components = 10):
         """
-        :param data: dataset
-        :param components: choose number of components one wants to use
+        :param data: Data input of one view ; dtype : Tensor TODO :check if numpy array or tensor
+        :param components: Number of Principal Components ; dtype : Int
         """
         self.components = components
         self.data = data
 
     def apply_pca(self):
+        """
+        Apply PCA
+        :return: PCA object
+        """
         pca = PCA(n_components= self.components)
 
         return pca
 
 
     def fit_transform_pca(self,pca):
-        """ Fit and transform our training data"""
+        """
+        Fit and transform data with PCA ; This is used for training data
+        :param pca: PCA object
+        :return: data after fitting and transforming it using PCA ; dtype : Tensor TODO : check
+        """
         train_data = pca.fit_transform(self.data)
 
         return train_data
 
 
     def transform_pca(self,pca):
-        """Just transform the test data based on learnt train representation"""
+        """
+        Transform data with PCA ; This is used for validation and test data, as we transform the data based on the fitted
+                                  train representation
+        :param pca: PCA object
+        :return: data after transforming it using PCA ; dtype : Tensor TODO : check
+        """
         test_data = pca.transform(self.data)
 
         return test_data
 
 
 
-
-
 class F_VARIANCE():
-    """Removing features with low variance
-       https://scikit-learn.org/stable/modules/feature_selection.html
-       https://towardsdatascience.com/how-to-use-variance-thresholding-for-robust-feature-selection-a4503f2b5c3f
-       Unsupervised variance-based feature selection
+    """
+    Variance based Feature Selection.
+    Remove features based on a variance threshold
+    Based on : https://scikit-learn.org/stable/modules/feature_selection.html
     """
 
     def __init__(self, data, threshold = 0.5):
+        """
+
+        :param data: data: Data input of one view ; dtype : Tensor TODO :check if numpy array or tensor
+        :param threshold: Drop all features where 100 - threshold * 100 % of the values are similar; dtype : Float
+        """
         self.data = data
         self.threshold = threshold
 
 
 
     def apply_variance(self):
-        """Apply variance threshold"""
+        """
+        Apply Variance Threshold
+        :return: Variance threshold object
+        """
 
 
         vt = VarianceThreshold(self.threshold)
         return vt
 
     def fit_transform_variance(self, vt):
-        """ Fit and transform our training data"""
+        """
+        Fit and transform data with Variance threshold ; This is used for training data
+        :param vt: Variance threshold object
+        :return: data after fitting and transforming it using Variance threshold ; dtype : Tensor TODO : check
+        """
 
         train_data = vt.fit_transform(self.data)
         return train_data
 
 
     def transform_variance(self,vt):
-        """Just transform the test data based on learnt train representation"""
+        """
+        Transform data with Variance threshold ; This is used for validation and test data,
+                                                 as we transform the data based on the fitted
+                                                 train representation
+        :param vt: Variance threshold object
+        :return: data after transforming it using Variance threshold ; dtype : Tensor TODO : check
+        """
 
         test_data = vt.transform(self.data)
         return test_data
 
 
-
-
-        # get mask showing the features that were selected/not selected
-        # True : selected, False : not selected (variance 0)
-    #  mask = vt.get_support()
-
-    # Find features that were selected
-    #   index_list = []
-
-    #   index = 0
-    #   for x in mask:
-    #       if x == True:
-    #           index_list.append(index)
-    #       index += 1
-
-
-
-
-
 class PPI():
+    """Protein-Protein-Interaction Feature Selection.
+       Create matrices storing protein to feature value mappings sample wise.
+       Protein data from String DB.
+    """
 
-    def __init__(self,train, feature_names, view_names):
+    def __init__(self,data, feature_names, view_names):
         """
-
-        :param train:
-        :param feature_names: tuple : (view_name, list of lists containing feature names (original ones) for this view)
-        :param view_names: names of views
+        :param data: Data input ; dtype : List of Tensors TODO: dtype check
+        :param feature_names: Names of Features for all views ;
+                              dtype : Tuple(Name of View, List of Lists containing feature names for this view)
+        :param view_names: Names of Views ; dtype : List of Strings
         """
-        self.train = train
+        self.data = data
         self.feature_names = feature_names
-
         self.view_names = [x.upper() for x in view_names]
 
+        # Only DNA & mRNA data contains protein data
         if 'DNA' not in self.view_names and 'MRNA' not in self.view_names:
             raise Exception("neither DNA nor mRNA data in input : no protein data.")
 
 
 
-        # Check which view names we have and if needed, delete features from feature_names (bc view may have been
-        # deleted in preprocessing)
+        # Check which View names we have and if needed, delete features from feature_names (bc View may have been
+        # deleted in preprocessing due to too many missing values)
         temp = []
         for x in self.feature_names:
             view_name = x[0].upper()
@@ -139,6 +150,11 @@ class PPI():
 
 
     def get_matrices(self):
+        """
+        Create Feature Matrix A x B (A = proteins, B = Feature values) for each sample, Edge Indices mapping (store
+        protein pairs which have an interaction)
+        :return:
+        """
 
         # Read in protein data
         print("Reading in protein data...")
@@ -510,194 +526,6 @@ class F_AE(nn.Module):
 
 
 
-
-
-
-
-class F_PPI_NETWORK():
-    def __init__(self,train):
-        """
-
-        :param train: the PPI-network does feature selection and integration at the same time. Thus the input is the
-                      whole train set
-        """
-        self.train = train
-
-    def setup(self):
-        """
-        We first load the PPI edges & score , the feature spaces of all views to be looked at aswell as the feature
-        to protein mapping of all views. Based on these, we create the adjacency and feature (per sample) matrices
-        :return: adjacency matrix and blueprint for feature matrices (to be created in data loader)
-        """
-
-        ppi_edges_score = pd.read_csv(
-            os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
-                         "ppi_edges_score.csv"), index_col=0
-        )
-
-        features_mRNA = pd.read_csv(
-            os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
-                         "mRNA_feat_for_transf.csv"), index_col=0
-        )
-
-        features_proteins_mapping_mRNA = pd.read_csv(
-            os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
-                         "mRNA_feat_proteins.csv"), index_col=0
-        )
-
-        proteins = pd.read_csv(
-            os.path.join("/Users", "marlon", "DataspellProjects", "MuVAEProject", "MuVAE", "TCGAData",
-                        "proteins.csv"), index_col=0
-        )
-
-        # Converting data to right structures
-
-
-        features_mRNA = features_mRNA.iloc[:,0].values.tolist()
-
-
-        # mapping feature proteins mRNA
-        features_proteins_mapping_mRNA = features_proteins_mapping_mRNA.to_dict(orient='list')
-
-
-        # removing nan values
-        for key in features_proteins_mapping_mRNA:
-            for x in features_proteins_mapping_mRNA[key]:
-
-                if type(x) is not str:
-                    # since we only have strings in the list (proteins), nan values are the only non-strings
-
-                    features_proteins_mapping_mRNA[key].remove(x)
-
-
-        # ppi nodes & scores
-        nodes1 = (ppi_edges_score.iloc[0].values.tolist())
-        nodes2 = (ppi_edges_score.iloc[1].values.tolist())
-        score = (ppi_edges_score.iloc[2].values.tolist())
-
-        ppi_edges_score = torch.tensor([nodes1,nodes2,score])
-
-        keys = proteins.columns.values.tolist()
-        values = proteins.iloc[0].values.tolist()
-
-        proteins_indexed = dict(zip(keys,values))
-
-
-
-
-
-
-
-        #print("train ", data)
-        #print("train 0", data[0])
-        #print("sample 0", data[0][0])
-        #print("sample0 first value", data[0][0][0])
-
-
-        # Create a list of dictionaries, where each dictionary contains the mapping between proteins and feature
-        # values of all views (TO IMPLEMENT : OTHER FEATURES THAN mRNA)
-        # We use 389 as batch size, which are all training examples ; needs to be replaced with
-        # something like training_elements_size later on
-
-
-        # For each sample, make a dictionary with protein : feature value ; save list of dictionaries
-        features_values_proteins_mapping_mRNA = []
-
-
-
-
-        # Go through each mRNA sample
-        for sample in self.train[0]:
-            # for each sample dictionary
-            dict_features_proteins_mRNA_values = {}
-            # Through each feature (for mRNA)
-            for feature_idx in range(len(sample)): # len = 6000 features
-                # If the feature has a mapping in feature to protein
-                # features_mRNA[feature_idx] : feature name at index
-                if features_mRNA[feature_idx] in features_proteins_mapping_mRNA:
-
-
-                    # take the proteins at the current index which correspond to the feature we are looking at
-                    protein_list = features_proteins_mapping_mRNA[features_mRNA[feature_idx]]
-
-                    # create dictionary entries for it
-                    for protein in protein_list:
-                        #if key already exists, just append values to protein
-                        if protein in dict_features_proteins_mRNA_values:
-                            dict_features_proteins_mRNA_values[protein].append(sample[feature_idx])
-                        #else create a key entry
-                        else:
-
-                            dict_features_proteins_mRNA_values[protein] = [sample[feature_idx]]
-
-
-            # for each sample, append to list
-            features_values_proteins_mapping_mRNA.append(dict_features_proteins_mRNA_values)
-
-
-            # Create graph representation
-
-        # feature matrix X |A| x |B| A : number of nodes (proteins), B : number of features per node (value features diff. views)
-        # adjacency matrix Z : |A| x |A|
-
-        #adjacency matrix for protein-protein-network
-        adjacency_matrix_ppi = torch.zeros(len(proteins_indexed), len(proteins_indexed))
-
-
-        for protein_idx in range(len(proteins_indexed)):
-            # for each edge between two nodes, fill in a 1 in adjacency matrix
-            adjacency_matrix_ppi[int((ppi_edges_score[0, protein_idx]).item()), int((ppi_edges_score[1, protein_idx]).item())] = torch.tensor(1)
-
-        # todo : adjazenz mit gewichten ?
-
-
-        # feature matrix for each sample
-        #torch tensor with A x B : rows x columns
-
-
-        n_samples = len(features_values_proteins_mapping_mRNA)
-        n_proteins = len(proteins_indexed)
-
-        # take protein (node) which has the most features (values from diff views) for matrix column size over all samples
-        # so that we have the same structure for each sample
-        n_features_matrix = 0
-        for sample_idx in range(n_samples):
-            for key, value in features_values_proteins_mapping_mRNA[sample_idx].items():
-                if len(value) > n_features_matrix:
-                    n_features_matrix = len(value)
-
-
-        # Intialize empty tensor in the beginning :
-        feature_matrices_mRNA = torch.empty(size=(n_samples,n_proteins,n_features_matrix))
-
-        for sample_idx in range(n_samples):
-
-            # As rows, we just use all the proteins ; matrix for one sample
-            feature_matrix_mRNA = torch.zeros(len(proteins_indexed), n_features_matrix)
-
-            # fill with data
-
-            # go through each protein
-            for protein in proteins_indexed:
-                # check if protein in protein :feature values dict
-                if protein in features_values_proteins_mapping_mRNA[sample_idx]:
-
-                    # fill row with according data ; find right row by accesing dict protein data (find the right index)
-
-                    # Find index by accessing dict which saves pairs of protein : index
-                    index = proteins_indexed[protein]
-                    feature_matrix_mRNA[index, 0:len(features_values_proteins_mapping_mRNA[sample_idx][protein])] = \
-                        torch.tensor(features_values_proteins_mapping_mRNA[sample_idx][protein])
-
-            #   TODO : normalization before adding into matrices (see DeepMOCCA)
-
-                #else : we leave it as it is (filled with 0s)
-
-            feature_matrices_mRNA[sample_idx] = (feature_matrix_mRNA)
-
-
-
-        return adjacency_matrix_ppi, feature_matrices_mRNA
 
 
 

@@ -10,6 +10,8 @@ import copy
 
 
 if __name__ == '__main__':
+    """ Main function ; Decide cancer and views to analyze, number of folds for cross validation, preprocessing type,
+                               whether to apply hyperparameter optimization, which neural network method"""
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(device)
@@ -59,7 +61,7 @@ if __name__ == '__main__':
     ############################################ HYPERPARAMETER OPTIMIZATION ##########################################
 
     # Hyperparameter Optimization NN method
-    method_tune = 'GCN'
+    method_tune = 'FCNN'
 
     if method_tune == 'GCN':
 

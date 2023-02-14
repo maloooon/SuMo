@@ -1,16 +1,14 @@
 import pandas as pd
 import os
-import torch
 import numpy as np
 
 
 
 if __name__ == '__main__':
+    """Load in all Cancer Types and concatenate their views, duration and event respectively by samples"""
 
 
-    # Count amount of cancer types we have
-
-
+    # Path where initial cancer data is stored
     dir_path = '/Users/marlon/Desktop/Project/TCGAData'
     cancer_types = 0
 
@@ -19,26 +17,29 @@ if __name__ == '__main__':
             cancer_types += 1
 
 
-    # different types
+    # Different Cancer Types
     cancers = ['PRAD', 'ACC', 'BLCA', 'BRCA', 'CESC', 'CHOL', 'COAD', 'DLBC', 'ESCA', 'GBM', 'HNSC', 'KICH',
                'KIRC','KIRP','LAML','LGG','LIHC','LUAD','LUSC','MESO','PAAD','PCPG','READ','SARC','SKCM',
                'STAD','TGCT','THCA','THYM','UCEC' ,'UCS', 'UVM']
-    # store all cancer data (each in a sublist)
+    # Store all cancer data (each in a sublist)
     cancer_data = [[] for x in range(len(cancers))]
-    # store feature sizes per view
+    # store Feature sizes per view
     n_features = [[] for x in range(len(cancers))]
-    # store which views we have for the data (at most mRNA, DNA, microRNA and RPPA
+    # Store which iews we have for the data (at most mRNA, DNA, microRNA and RPPA)
     views = [[] for x in range(len(cancers))]
-    # amount of samples
+    # Amount of samples per cancer
     samples = [[] for x in range(len(cancers))]
-    # features per cancer per view (needed for PPI network construction)
+    # Features per cancer per view (needed for PPI network construction)
     features_per_cancer_per_view = [[] for x in range(len(cancers))]
 
 
-    # Track non dropped indices, which are these that have atleast 100 not NaN feature values in a sample for each view
+    # Track non dropped indices (In case we want to delete some, not implemented currently)
     not_dropped_indices = [set() for x in range(len(cancers))]
 
+
+
     for c, cancer_name in enumerate(cancers):
+        # Read mRNA data if it exists
         if os.path.exists(os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
                                        "TCGA_" + cancer_name + "_1_mRNA.csv")):
             data_mRNA = pd.read_csv(
@@ -48,8 +49,7 @@ if __name__ == '__main__':
             # We need to reset indices bc meta data and view data have different index names
             data_mRNA.reset_index(drop=True,inplace=True)
 
-            temp = data_mRNA.dropna(thresh=100) # TODO : prozentual , wv werden entfernt ?
-            indices = list(temp.index.values)
+            indices = list(data_mRNA.index.values)
 
             not_dropped_indices[c].update(indices)
 
@@ -58,7 +58,7 @@ if __name__ == '__main__':
             features_per_cancer_per_view[c].append(list(data_mRNA.columns.values))
             views[c].append('mRNA')
 
-
+        # Read DNA data if it exists
         if os.path.exists(os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
                                        "TCGA_" + cancer_name + "_2_DNA.csv")):
             data_DNA = pd.read_csv(
@@ -68,8 +68,7 @@ if __name__ == '__main__':
             samples[c].append(len(data_DNA))
             data_DNA.reset_index(drop=True, inplace=True)
 
-            temp = data_DNA.dropna(thresh=100)
-            indices = list(temp.index.values)
+            indices = list(data_DNA.index.values)
 
             not_dropped_indices[c].update(indices)
 
@@ -78,7 +77,7 @@ if __name__ == '__main__':
             features_per_cancer_per_view[c].append(list(data_DNA.columns.values))
             views[c].append('DNA')
 
-
+        # Read microRNA data if it exists
         if os.path.exists(os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
                                        "TCGA_" + cancer_name + "_3_miRNA.csv")):
             data_miRNA = pd.read_csv(
@@ -87,8 +86,7 @@ if __name__ == '__main__':
             samples[c].append(len(data_miRNA))
             data_miRNA.reset_index(drop=True, inplace=True)
 
-            temp = data_miRNA.dropna(thresh=10)
-            indices = list(temp.index.values)
+            indices = list(data_miRNA.index.values)
 
             not_dropped_indices[c].update(indices)
 
@@ -97,7 +95,7 @@ if __name__ == '__main__':
             features_per_cancer_per_view[c].append(list(data_miRNA.columns.values))
             views[c].append('microRNA')
 
-
+        # Read RPPA data if it exists
         if os.path.exists(os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
                                        "TCGA_" + cancer_name + "_4_RPPA.csv")):
             data_RPPA = pd.read_csv(
@@ -109,9 +107,7 @@ if __name__ == '__main__':
             samples[c].append(len(data_RPPA))
             data_RPPA.reset_index(drop=True, inplace=True)
 
-
-            temp = data_RPPA.dropna(thresh=10)
-            indices = list(temp.index.values)
+            indices = list(data_RPPA.index.values)
 
             not_dropped_indices[c].update(indices)
 
@@ -121,16 +117,20 @@ if __name__ == '__main__':
             views[c].append('RPPA')
 
 
-        # Meta data needs to be available for each type, otherwise we can't do survival analysis
+        # Duration & Event data, which is stored in meta file,
+        # needs to be available for each type, otherwise we can't do survival analysis
         meta_data = pd.read_csv(
             os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
                          "TCGA_" + cancer_name + "_meta.csv"), index_col=0, keep_default_na=False)
+        # Rename vital status to event
         meta_data.rename(
             {"clin:vital_status": "event"}, axis="columns", inplace=True
         )
 
         meta_data.reset_index(drop=True, inplace=True)
 
+        # For event = 0, we have days to last followup, for event = 1 days to death ; we store this data in a single
+        # column called duration
         for co,x in enumerate(meta_data['clin:days_to_last_followup'].values):
             if x == '':
                 meta_data['clin:days_to_last_followup'].iloc[co] = meta_data['clin:days_to_death'].iloc[co]
@@ -141,14 +141,7 @@ if __name__ == '__main__':
         meta_data.rename(columns = {'clin:days_to_last_followup':'duration'}, inplace = True)
 
 
-
-        # TODO : how to include other meta data like smoking time ?
-
         survival = meta_data[["event","duration"]]
-
-
-
-
 
 
         cancer_data[c].append(survival)
@@ -166,8 +159,7 @@ if __name__ == '__main__':
 
 
 
-    # Dataframes, so we can send to csv files and not load all cancer data each time
-
+    # Create dataframes, so we can create csv files for each cancer
     feature_offsets_dfs = []
     cancer_data_dfs = []
     view_names_dfs = []
@@ -193,7 +185,7 @@ if __name__ == '__main__':
 
 
     drop_indices = [[] for x in range(len(cancers))]
-    # Indices to be dropped bc. of too many missing values :
+    # Indices to be dropped (currently we keep all data):
     for c,_ in enumerate(not_dropped_indices):
         # Go through all samples for the cancer type
         for x in range(samples[c][0]):
@@ -224,7 +216,7 @@ if __name__ == '__main__':
 
     features_df = pd.DataFrame(features)
 
-    # Load all to csv's
+    # Create csv files
     for c,_ in enumerate(cancers):
         cancer_data_dfs[c].to_csv("/Users/marlon/Desktop/Project/TCGAData/" + _ + "/" + _ + "Data.csv")
         feature_offsets_dfs[c].to_csv("/Users/marlon/Desktop/Project/TCGAData/" + _ +"/" + _ + "DataFeatOffsets.csv")

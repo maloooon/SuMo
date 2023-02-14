@@ -4,14 +4,17 @@ import HelperFunctions as HF
 
 
 def readcancerdata(cancer_name):
+    """
+    Read in cancer data of a particular cancer for analysis.
+    :param cancer_name: abbreviation of the cancer name ; dtype : String
+    :return: Cancer data, which contains feature values for each view, duration, event,
+     data offsets, view names, feature names and the cancer name to be analyzed
+    """
     # Load in cancer data, its feature offsets and views used
     # different types
-    cancer_names = ['PRAD', 'ACC', 'BLCA', 'BRCA', 'CESC', 'CHOL', 'COAD', 'DLBC', 'ESCA', 'GBM', 'HNSC', 'KICH',
-                    'KIRC','KIRP','LAML','LGG','LIHC','LUAD','LUSC','MESO','PAAD','PCPG','READ','SARC','SKCM',
-                    'STAD','TGCT','THCA','THYM','UCEC' ,'UCS', 'UVM']
-
-    # Testing purposes :
-    cancer_names = ['SKCM']
+    # cancer_names 'PRAD', 'ACC', 'BLCA', 'BRCA', 'CESC', 'CHOL', 'COAD', 'DLBC', 'ESCA', 'GBM', 'HNSC', 'KICH',
+    #                'KIRC','KIRP','LAML','LGG','LIHC','LUAD','LUSC','MESO','PAAD','PCPG','READ','SARC','SKCM',
+    #                'STAD','TGCT','THCA','THYM','UCEC' ,'UCS', 'UVM'
 
     # With input variant
     cancer_names = [cancer_name]

@@ -20,19 +20,16 @@ import os
 
 class MultiOmicsDataset(Dataset):
 
-    # [tensor von allen samples view 1,  tensor von allen samples view 2, ... ]
-    # in dem tensor jeweils features sample1, features sample 2, ...
 
-    def __init__(self, X, duration, event, type= 'new'):
+
+    def __init__(self, X, duration, event, type= 'temp'):
         """
-        TODO : überarbeiten, nachdem unnötige types entfernt wurden --> für cross validation die Sachen beschreiben
-        :param X: Data input ; dtype : List of Tensors of Floats (n_samples,n_features) , one for each view
+        :param X: Data input ; dtype : List of Tensors or Numpy Arraya of Floats (n_samples,n_features) , one for each view
         :param duration: duration (time-to-event or time-to-censorship) ; dtype : Tensor of Int (n_samples,1 [duration value])
         :param event: event (1 : not censored, 0 : censored) ; dtype : Tensor of Int (n_samples, 1 [event value])
-        :param type:
+        :param type: Type of the Data Input X (Tensors or Numpy Arrays) ; dtype : String ['temp', 'np'] TODO : change temp to tensor
         """
 
-        # TODO : glaub alles bis auf "temp" kann weg, da nur das im AE für feature selection benutzt wird
         self.type = type
         self.duration = duration
         self.event = event
@@ -49,30 +46,27 @@ class MultiOmicsDataset(Dataset):
             self.n_samples = X[0].shape[0]
 
 
-
     def __len__(self):
         """Return the amount of samples"""
         return self.n_samples
 
 
     def __getitem__(self, index):
-        """return the whole sample (all views)"""
+        """Return the whole sample with all views and duration & event value"""
 
         return [self.X[m][index, :] for m in range(self.n_views)], \
                self.duration[index], self.event[index]
 
 
-
 def preprocess_features(
-        df_train: pd.DataFrame, # train dataset
-        df_test: pd.DataFrame, # test dataset
-        df_val: pd.DataFrame, # validation dataset
-        cols_std: List[str], # feature names, numeric variables
-        cols_leave: List[str], # feature names, binary variables
-        feature_offset : List[int],
+        df_train,
+        df_test,
+        df_val,
+        cols_std,
+        cols_leave,
+        feature_offset,
         mode,
-        preprocess_type# set mode to 0 for first fold, then 1 so we don't preprocess test values each time
-) -> Tuple[torch.Tensor]:
+        preprocess_type):
     """
     Preprocessing data by standardizing it
     :param df_train: Current train data ; dtype : (pandas) Dataframe (rows : samples, columns : features)
@@ -145,10 +139,16 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
     """Input is the whole dataframce : We merge all data types together, with the feature offsets we can access
        certain data types ; dataframe also contains duration and event !"""
     def __init__(
-            self, df, feature_offsets, view_names, n_durations = 10,
-            cancer_name=None, which_views = [], n_folds = 2, type_preprocess = 'standardize'):
+            self,
+            df,
+            feature_offsets,
+            view_names,
+            n_durations = 10,
+            cancer_name=None,
+            which_views = [],
+            n_folds = 2,
+            type_preprocess = 'standardize'):
         """
-
         :param df: Complete data (feature values each view, duration, event)
                    ; dtype : (pandas) Dataframe (n_samples, (n_features,1 [duration], 1 [event]))
         :param feature_offsets: Feature Offsets for different views aswell as duration & event [List ends with [..,x,x+1,x+2]
@@ -178,16 +178,13 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             cols_std=None,
            # cols_leave=None, #binary feature names TODO : für Vollständigkeit drin lassen ?
             col_duration="duration",
-            col_event="event",
-            stage=None,
+            col_event="event"
     ):
         """
-
         :param test_size: Size of test set in train/test split ; dtype : Flaot
         :param cols_std: Feature names with numeric feature values (across all views) ; dtype : List of Strings
         :param col_duration: Column name for duration values in datas Dataframe ; dtype : String
         :param col_event: Column name for event values in datas Dataframe ; dtype : String
-        :param stage: TODO : not needed I think
         :return: Sample sizes for train/validation/test, view names
         """
 
@@ -229,8 +226,8 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                 self.feature_offsets = sorted(list(self.feature_offsets))
 
 
-        """Split data into test and training set and training into training and validation set
-           , preprocess this data with preprocess_features."""
+        # Split data into test and training set and training
+        # into training and validation set, preprocess this data with preprocess_features
         event_values = list(self.df[col_event].values)
         df_train_temp, df_test = train_test_split(self.df, test_size=test_size, stratify= event_values)
 
@@ -256,13 +253,13 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
         cols_leave = [col for col in self.df
                      if np.isin(self.df[col].dropna().unique(), [0, 1]).all()]
-        # remove event from binary column values (we are only interested in feature values from views)
+        # Remove event from binary column values (we are only interested in feature values from views)
         if 'event' in cols_leave:
             cols_leave.remove('event')
 
 
-
-        cols_survival = [col_duration, col_event] # columns we don't want to standardize
+        # Columns we don't want to standardize
+        cols_survival = [col_duration, col_event]
         cols_drop = cols_survival
 
 
@@ -321,9 +318,11 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             self.train_folds.append(self.x_train)
             self.val_folds.append(self.x_val)
 
+            # We preprocess the test set only for the first fold (bc it stays the same across all folds)
             if fold == 0: # if mode is set to 0
                 self.x_test = self.x_test_actual
 
+        # Features mapped to True/False, where True means the feature value is NaN
         self.train_mask_folds = []
         self.val_mask_folds = []
 
@@ -340,9 +339,9 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         self.x_test = [torch.nan_to_num(x_view) for x_view in self.x_test]
         self.x_test_mask = [torch.isnan(x_view) for x_view in self.x_test]
 
-        # For the purpose of finding views which have only 0 data, we don't go through each fold, but rather look at
-        # uncrossvalidated full train/test data
-
+        # For the purpose of finding views which nearly have only NaN data,
+        # we don't go through each fold, but rather look at uncrossvalidated full train/test data
+        # temp/temp2 not needed
         self.x_train_complete, temp, temp2 = preprocess_features(
             df_train=df_train_temp.drop(cols_drop, axis = 1), # drop duration/event from df, as we don't want these
             df_test=df_test.drop(cols_drop, axis = 1), # this also doesnt matter
@@ -351,14 +350,13 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             cols_leave=cols_leave,
             feature_offset= self.feature_offsets,
             mode= 1,
-            preprocess_type= 'standardize' # using 'none' somehow doesnt delete RPPA data
+            preprocess_type= 'standardize')
 
-        )
-
+        # Conversion NaN to 0
         self.x_train_complete = [torch.nan_to_num(x_view) for x_view in self.x_train_complete]
 
 
-        # We check for each view how many 0s this view contains
+        # We check for each view how many 0s this view contains (which previously were NaN values)
         train_zeros = []
         test_zeros = []
 
@@ -386,6 +384,8 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                 print("{} has nearly only 0 values. We don't take this data into consideration.".format(self.view_names[x]))
                 removed_views_index.append(x)
 
+
+        # Adjust data in case we delete something
         for index in sorted(removed_views_index, reverse=True):
             for c,fold in enumerate(self.train_folds):
                 del self.train_folds[c][index]
@@ -404,13 +404,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         self.n_views = self.n_views - len(removed_views_index)
 
 
-
-
-
-
-
-
-        ############################ CASTING NEEDED FOR NEURAL NETS ##########################################
+        # Casting needed for neural nets
         for c in range(self.n_folds):
             # Cast all elements to torch.float32
             self.train_folds_durations[c] = torch.from_numpy(self.train_folds_durations[c]).to(torch.float32)
@@ -576,19 +570,22 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                     if c_fold == 0:
                         eg_view_test.preprocess()
 
-
-                if c_fold == 0: # We also need to tell the R program to only calculate the test eigengenes in the first fold
+                # We also need to set the R program to only calculate the test eigengenes in the first fold
+                # as the test set is the same across all folds
+                if c_fold == 0:
+                    # Train/Val/Test data
                     mode = "all"
                     with open('/Users/marlon/Desktop/Project/TCGAData/eigengene_mode.txt', 'w') as f:
                         f.write(mode)
                 else:
+                    # Train/Val data
                     mode = "folds"
                     with open('/Users/marlon/Desktop/Project/TCGAData/eigengene_mode.txt', 'w') as f:
                         f.write(mode)
 
 
                 eg_view.eigengene_multiplication()
-                # If the mode is just folds, we'll return an empty list for the test matrices
+                # If the mode is folds, we'll return an empty list for the test matrices
                 eigengene_matrices,eigengene_matrices_val, eigengene_matrices_test = eg_view.get_eigengene_matrices(self.view_names)
 
                 # as list as each eigengene matrix is of a different size
@@ -665,7 +662,8 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
         if method.lower() == 'pca':
             """ Principal Component Analysis Feature Selection
-                Selecting n components for each view individually"""
+                Selecting n components for each view individually.
+            """
             PCA_train_tensors = [[] for i in range(len(self.train_folds))]
             PCA_val_tensors = [[] for i in range(len(self.train_folds))]
             PCA_test_tensors = [[] for i in range(len(self.train_folds))]
@@ -692,6 +690,8 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                     PCA_train_tensors[c].append(torch.tensor(train_data))
                     PCA_val_tensors[c].append(torch.tensor(val_data))
                     PCA_test_tensors[c].append(torch.tensor(test_data))
+
+
                 feat_offs[c] = components
 
 
@@ -718,7 +718,8 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
         if method.lower() == 'variance':
             """ Variance based feature selection
-                Removing low-variance features based on a threshold for each view individually"""
+                Removing low-variance features based on a threshold for each view individually.
+                Based on : https://scikit-learn.org/stable/modules/generated/sklearn.feature_selection.VarianceThreshold.html"""
             variance_train_tensors = [[] for i in range(len(self.train_folds))]
             variance_val_tensors = [[] for i in range(len(self.train_folds))]
             variance_test_tensors = [[] for i in range(len(self.train_folds))]
@@ -763,6 +764,8 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
         if method.lower() == 'ae':
+            """Autoencoder Feature Selection. Train an AE for each view and store the bottleneck representation
+               as selected features. This AE can be tuned with Optuna."""
 
 
             # Define learning rate
@@ -777,14 +780,16 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
             #Define number of epochs
-            n_epochs = 5
+            n_epochs = 100
 
 
-            # Get amount samples
-
+            # Batch Sizes
             batch_size_train = 64
             batch_size_val = 64
             batch_size_test = 16
+
+            # Decide whether to print losses
+            print_bool = False
 
 
             # List of lists to save output for each fold
@@ -799,19 +804,20 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                 dimensions_val = [x.shape[1] for x in self.val_folds[c_fold]]
                 dimensions_test = [x.shape[1] for x in self.x_test]
 
-
+                # Layer Sizes
                 layers_train = [[512,256] for x in range(self.n_views)]
                 layers_val = [[512,256] for x in range(self.n_views)]
                 layers_test = [[256,128] for x in range(self.n_views)]
 
+                # Activation Functions
                 activation_functions_train = [['relu'] for i in range(self.n_views)]
                 activation_functions_val = [['relu'] for i in range(self.n_views)]
                 activation_functions_test = [['relu'] for i in range(self.n_views)]
-
+                # Batch Normalization
                 batch_normalization_train = [[] for i in range(self.n_views)]
                 batch_normalization_val = [[] for i in range(self.n_views)]
                 batch_normalization_test = [[] for i in range(self.n_views)]
-
+                # Dropout Layers
                 dropout_layers_train = [[] for i in range(self.n_views)]
                 dropout_layers_val = [[] for i in range(self.n_views)]
                 dropout_layers_test = [[] for i in range(self.n_views)]
@@ -826,7 +832,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                         dropout_layers_test[c].append('no')
 
 
-                # Call train net
+                # Call train net ; we use none as type, as we want to keep the structure of multiple views
                 net_train = featAE.AE(self.view_names,
                                       dimensions_train, layers_train,
                                       activ_funcs= activation_functions_train,
@@ -915,8 +921,8 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
                     loss_train = loss_train / len(ae_trainloader)
-
-                    print("epoch : {}/{}, loss = {:.6f} for training data".format(epoch + 1, n_epochs, loss_train))
+                    if print_bool == True:
+                        print("epoch : {}/{}, loss = {:.6f} for training data".format(epoch + 1, n_epochs, loss_train))
 
 
                     ###################### VALIDATION SET ##########################
@@ -949,8 +955,8 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
                     loss_val = loss_val / len(ae_valloader)
-
-                    print("epoch : {}/{}, loss = {:.6f} for validation data".format(epoch + 1, n_epochs, loss_val))
+                    if print_bool == True:
+                        print("epoch : {}/{}, loss = {:.6f} for validation data".format(epoch + 1, n_epochs, loss_val))
 
 
 
@@ -982,14 +988,13 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
                     loss_test = loss_test / len(ae_testloader)
-
-                    print("epoch : {}/{}, loss = {:.6f} for test data".format(epoch + 1, n_epochs, loss_test))
+                    if print_bool == True:
+                        print("epoch : {}/{}, loss = {:.6f} for test data".format(epoch + 1, n_epochs, loss_test))
 
 
 
             # We need to concatenate the output data of each batch for each fold for each view respectively
             # so we can pass all of it to our neural survival nets
-
             ae_train_tensors = [[] for  _ in range(self.n_folds)]
             ae_val_tensors = [[] for _ in range(self.n_folds)]
             ae_test_tensors = [[] for _ in range(self.n_folds)]
@@ -1040,6 +1045,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
         if method.lower() == 'ppi':
+            """Protein-Protein Feature Selection"""
 
             # simpler structure, bc we just have folds, but no different views anymore
             ppi_train_tensors = []
@@ -1085,7 +1091,6 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
     def train_dataloader(self, batch_size):
         """
         Build training dataloader
-        num_workers set to 0 by default because of some thread issue
         """
         train_loader = DataLoader(
             dataset=self.train_set,
@@ -1098,7 +1103,6 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
     def test_dataloader(self,batch_size):
         """
         Build test dataloader
-        num_workers set to 0 by default because of some thread issue
         """
         test_loader = DataLoader(
             dataset=self.test_set,
@@ -1110,30 +1114,15 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
 
-#def tensor_helper(tensor_list):
-#    #Turns a list of size (x) of tensors with dimensions (y,z) into a tensor of dimension (x,y,z)
-#    x = len(tensor_list)
-#    z, y = tensor_list[0].shape
-
-#    tensor_new = torch.zeros((x, z, y))
-#    for i, tensor in enumerate(tensor_list):
-#        tensor_new[i, :, :] = tensor
-
-#    return tensor_new
-
-#def flatten(l):
-#    """
-#    :param l: list input
-#    :return: flattened list (removal of one inner list layer)
-#    """
-#    return [item for sublist in l for item in sublist]
-
-
-
 
 
 
 def objective(trial):
+    """
+    Optuna Optimization for Hyperparameters.
+    :param trial: Settings of the current trial of Hyperparameters
+    :return: MSELoss (sum of train- & val- & test loss) ; dtype : Float
+    """
     # Load in data (##### For testing for first fold, later on
 
     # List of lists to save output for each fold
@@ -1187,7 +1176,7 @@ def objective(trial):
 
     dimensions = dimensions_train
 
-
+    ####################################### DEFINE HYPERPARAMETERS #######################################
     l2_regularization_bool = trial.suggest_categorical('l2_regularization_bool', [True,False])
     learning_rate = trial.suggest_float("learning_rate", 1e-5,1e-1,log=True)
     l2_regularization_rate = trial.suggest_float("l2_regularization_rate", 1e-6,1e-3, log=True)
@@ -1454,6 +1443,11 @@ def objective(trial):
 
 
 def load_data(data_dir="/Users/marlon/Desktop/Project/ProcessedNotFeatSelectedData/"):
+    """
+    Function to load data. Needed for Optuna Optimization.
+    :param data_dir: Directory in which data is stored.
+    :return: data and feature offsets (for feature values, duration and event)
+    """
     trainset = pd.read_csv(
         os.path.join(data_dir + "TrainData.csv"), index_col=0)
 
@@ -1471,6 +1465,9 @@ def load_data(data_dir="/Users/marlon/Desktop/Project/ProcessedNotFeatSelectedDa
 
 
 def optuna_optimization(fold = 1):
+    """
+    Optuna Optimization for Hyperparameters.
+    """
 
 
     EPOCHS = 150
@@ -1481,3 +1478,4 @@ def optuna_optimization(fold = 1):
 
     print("Lowest MSE-Loss", trial.value)
     print("Best Hyperparamters : {}".format(trial.params))
+

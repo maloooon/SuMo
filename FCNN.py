@@ -19,7 +19,7 @@ class NN_changeable(nn.Module):
         """
         Fully Connected Neural Net with changeable hyperparameters. Each view has a FCNN itself, finally the output of
         each view is concatenated and passed through a final layer, which compresses values to a single dimensional
-        value.
+        value used for the Proportional Hazards Model.
         :param views: Views (Omes) ; dtype : List of Strings
         :param in_features: Input dimensions for each view : List of Int
         :param n_hidden_layers_dims: Hidden layers for each view : List of Lists of Int
@@ -207,8 +207,8 @@ class NN_changeable(nn.Module):
     def forward(self,*x):
         """
         Forward function of the Fully Connected Neural Net
-        :param x: Data Input (for each view) ; dtype Tuple of a List (--> Datentypen ist glaube ich bei Eingabe nach AE anders als direkt nur FCNN)
-        :return: "Risk ratio" TODO : Namen finden, den man auch in der BA dann benutzt
+        :param x: Data Input (for each view) ; dtype : Tuple/List of Tensor(n_samples_in_batch, n_features)
+        :return: "Risk ratio" ; dtype : Tensor(n_samples_in_batch,1) TODO : Namen finden, den man auch in der BA dann benutzt
         """
 
         if type(x[0]) is list:
@@ -538,16 +538,15 @@ def train(train_data,val_data,test_data,
           view_names):
     """
     Training Function for the Fully Connected Neural Net, which connects the FCNN with the PH-Model.
-    TODO : check dtypes
-    :param train_data: Training Data for each fold for each view  ; dtype : List of Lists of Lists of Floats
-    :param val_data: Validation Data for each fold for each view  ; dtype : List of Lists of Lists of Floats
-    :param test_data: Test Data for each fold for each view  ; dtype : List of Lists of Lists of Floats
-    :param train_duration: Training Duration for each fold  ; dtype : List of Lists of Floats
-    :param val_duration: Validation Duration for each fold  ; dtype : List of Lists of Floats
-    :param test_duration: Test Duration for each fold  ; dtype : List of Lists of Floats
-    :param train_event: Training Event for each fold  ; dtype : List of Lists of Floats
-    :param val_event: Validation Event for each fold  ; dtype : List of Lists of Floats
-    :param test_event: Test Event for each fold  ; dtype : List of Lists of Floats
+    :param train_data: Training Data for each fold for each view  ; dtype : List of Lists [for each view] of Tensors(n_samples,n_features)
+    :param val_data: Validation Data for each fold for each view  ; dtype : List of Lists [for each view] of Tensors(n_samples,n_features)
+    :param test_data: Test Data for each fold for each view  ; dtype : List of Lists [for each view] of Tensors(n_samples,n_features)
+    :param train_duration: Training Duration for each fold  ; dtype : List of Tensors(n_samples,)
+    :param val_duration: Validation Duration for each fold  ; dtype : List of Tensors(n_samples,)
+    :param test_duration: Test Duration for each fold  ; dtype : List of Tensors(n_samples,)
+    :param train_event: Training Event for each fold  ; dtype : List of Tensors(n_samples,)
+    :param val_event: Validation Event for each fold  ; dtype : List of Tensors(n_samples,)
+    :param test_event: Test Event for each fold  ; dtype : List of Tensors(n_samples,)
     :param n_epochs: Number of Epochs ; dtype : Int
     :param batch_size: Batch Size ; dtype : Int
     :param l2_regularization: Decide whether to apply L2 regularization ; dtype : Boolean
@@ -555,15 +554,14 @@ def train(train_data,val_data,test_data,
     :param learning_rate: Learning rate ; dtype : Float
     :param prelu_rate: Initial Value for PreLU activation ; dtype : Float [between 0 and 1]
     :param layers: Dimension of Layers for each view ; dtype : List of lists of Ints
-    :param activation_layers: Activation Functions (for each view) aswell as for the last layer
-                              ; dtype : List of Lists of Strings ['relu', 'sigmoid', 'prelu']
+    :param activation_layers: Activation Functions (for each view) aswell as for the last layer, the last layer can
+    have no activation function ['none'] ; dtype : List of Lists of Strings ['relu', 'sigmoid', 'prelu']
     :param dropout: Decide whether Dropout is to be applied or not ; dtype : Boolean
     :param dropout_rate: Probability of Neuron Dropouts ; dtype : Int
     :param dropout_layers:  Layers in which to apply Dropout ; dtype : List of Lists of Strings ['yes','no']
     :param batchnorm: Decide whether Batch Normalization is to be applied or not ; dtype : Boolean
     :param batchnorm_layers: Layers in which to apply Batch Normalization ; dtype : List of Lists of Strings ['yes','no']
     :param view_names: Names of used views ; dtype : List of Strings
-    :return:
     """
 
 

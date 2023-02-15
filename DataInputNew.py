@@ -1,4 +1,3 @@
-from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
@@ -136,8 +135,10 @@ def preprocess_features(
 
 
 class SurvMultiOmicsDataModule(pl.LightningDataModule):
-    """Input is the whole dataframce : We merge all data types together, with the feature offsets we can access
-       certain data types ; dataframe also contains duration and event !"""
+    """
+    Input is the whole dataframce : We merge all data types together, with the feature offsets we can access
+    certain data types ; dataframe also contains duration and event.
+    """
     def __init__(
             self,
             df,
@@ -539,7 +540,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
 
-                    eg_view = FeatureSelection.F_eigengene_matrices(train=self.train_folds[c_fold][view],
+                    eg_view = FeatureSelection.F_eigengene_matrices(data=self.train_folds[c_fold][view],
                                                                     mask=self.train_mask_folds[c_fold][view],
                                                                     view_name=self.view_names[view],
                                                                     duration=self.train_folds_durations[c_fold],
@@ -547,7 +548,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                                                                     stage= 'train',
                                                                     cancer_name= self.cancer_name)
 
-                    eg_view_val = FeatureSelection.F_eigengene_matrices(train=self.val_folds[c_fold][view],
+                    eg_view_val = FeatureSelection.F_eigengene_matrices(data=self.val_folds[c_fold][view],
                                                                         mask=self.val_mask_folds[c_fold][view],
                                                                         view_name=self.view_names[view],
                                                                         duration=self.val_folds_durations[c_fold],
@@ -556,7 +557,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                                                                         cancer_name= self.cancer_name)
 
                     if c_fold == 0: # as our training data has no multiple folds, we just do the eigengene matrix calculation for the first fold
-                        eg_view_test = FeatureSelection.F_eigengene_matrices(train=self.x_test[view],
+                        eg_view_test = FeatureSelection.F_eigengene_matrices(data=self.x_test[view],
                                                                              mask=self.x_test_mask[view],
                                                                              view_name=self.view_names[view],
                                                                              duration=self.duration_test,
@@ -717,9 +718,10 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
         if method.lower() == 'variance':
-            """ Variance based feature selection
-                Removing low-variance features based on a threshold for each view individually.
-                Based on : https://scikit-learn.org/stable/modules/generated/sklearn.feature_selection.VarianceThreshold.html"""
+            """ 
+            Variance based feature selection
+            Removing low-variance features based on a threshold for each view individually.
+            """
             variance_train_tensors = [[] for i in range(len(self.train_folds))]
             variance_val_tensors = [[] for i in range(len(self.train_folds))]
             variance_test_tensors = [[] for i in range(len(self.train_folds))]
@@ -764,8 +766,10 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
         if method.lower() == 'ae':
-            """Autoencoder Feature Selection. Train an AE for each view and store the bottleneck representation
-               as selected features. This AE can be tuned with Optuna."""
+            """
+            Autoencoder Feature Selection. Train an AE for each view and store the bottleneck representation
+            as selected features. This AE can be tuned with Optuna.
+            """
 
 
             # Define learning rate

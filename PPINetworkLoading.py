@@ -1,10 +1,10 @@
 import pandas as pd
-import torch
 import os
-import numpy
 import gzip
 
 
+
+# Read in Protein pairs with interactions
 proteins = {}
 interactions1 = []
 interactions2 = []
@@ -28,7 +28,8 @@ proteins_features = {}
 fields = ['converted_alias', 'name']
 
 data = pd.read_csv(
-    os.path.join("/Users", "marlon", "Desktop", "Project", "gProfiler_hsapiens_09-01-2023_11-01-49.csv"), usecols=fields ,index_col=0)
+    os.path.join("/Users", "marlon", "Desktop", "Project", "gProfiler_hsapiens_09-01-2023_11-01-49.csv"),
+    usecols=fields ,index_col=0)
 
 
 # Drop None values
@@ -36,16 +37,15 @@ data = data.mask(data.eq('None')).dropna()
 data = data.reset_index()
 
 
-# Remove proteins for which we have no interaction information and
 
-# remove features (and therefore proteins) that are not included in any of the cancer types views
 
+# Read in all features across all cancer types
 features = pd.read_csv(
     os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", "AllFeatures.csv"), index_col=0)
 
 features = list(features.iloc[:,0].values)
 
-# First, get feature names into the right structure
+# Get feature names into the right structure
 features_fix = []
 
 for idx,feat in enumerate(features):
@@ -69,7 +69,8 @@ for idx,feat in enumerate(features):
 
 
 
-
+# Remove proteins for which we have no interaction information and
+# remove features (and therefore proteins) that are not included in any of the cancer types views
 # Start deleting ...
 
 to_delete_ = []
@@ -77,9 +78,10 @@ for index, row in data.iterrows():
 
     curr_protein = row['converted_alias']
     curr_feature = row['name']
-    # TODO : nearly all duplicates of features (mapped to multiple proteins) get deleted bc not in proteins (interactions)
+    # no interaction proteins...
     if str(curr_protein) not in proteins:
         to_delete_.append(index)
+    # feature not included in any cancer type ...
     if str(curr_feature) not in features_fix:
         if index not in to_delete_:
             to_delete_.append(index)
@@ -89,9 +91,7 @@ data = data.drop(index=to_delete_)
 
 
 
-
 # Based on this data, we can create matrices
-
 data_df = pd.DataFrame(data)
 
 data_df.to_csv("/Users/marlon/Desktop/Project/ProteinToFeature.csv")

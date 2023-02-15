@@ -10,8 +10,10 @@ import copy
 
 
 if __name__ == '__main__':
-    """ Main function ; Decide cancer and views to analyze, number of folds for cross validation, preprocessing type,
-                               whether to apply hyperparameter optimization, which neural network method"""
+    """ 
+    Main function ; Decide cancer and views to analyze, number of folds for cross validation, preprocessing type,
+    whether to apply hyperparameter optimization, which neural network method.
+    """
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(device)
@@ -20,7 +22,7 @@ if __name__ == '__main__':
     # Possible Cancers are :
     #PRAD, ACC, BLCA, BRCA,CESC,CHOL,COAD,DLBC,ESCA,GBM, HNSC,KICH,KIRC,KIRP,LAML,LGG,
     #LIHC,LUAD,LUSC,MESO,PAAD,PCPG,READ,SARC,SKCM,STAD,TGCT,THCA,THYM,UCEC,UCS,UVM
-    cancer_data = ReadInData.readcancerdata('LUAD')
+    cancer_data = ReadInData.readcancerdata('PRAD')
     data = cancer_data[0][0]
     feature_offsets = cancer_data[0][1]
     view_names = cancer_data[0][2]
@@ -29,7 +31,7 @@ if __name__ == '__main__':
     # Decide which views to use
     # Cancers can have DNA, mRNA, microRNA, RPPA data (not all have all of them though)
     # Leaving which_views empty will take all views into consideration will take all possible views into consideration
-    which_views = []
+    which_views = ['DNA']
     # Decide number of folds for Cross-Validation. For Optuna Optimization, use just one fold.
     n_folds = 1
     # needed for R, cant read in cancer name directly for some reason
@@ -42,7 +44,7 @@ if __name__ == '__main__':
                                                         cancer_name= cancer_name,
                                                         which_views = which_views,
                                                         n_folds = n_folds,
-                                                        type_preprocess= 'standardize')
+                                                        type_preprocess= 'normalize')
 
 
     # Setup all the data
@@ -61,7 +63,7 @@ if __name__ == '__main__':
     ############################################ HYPERPARAMETER OPTIMIZATION ##########################################
 
     # Hyperparameter Optimization NN method
-    method_tune = 'FCNN'
+    method_tune = 'none'
 
     if method_tune == 'GCN':
 
@@ -243,7 +245,7 @@ if __name__ == '__main__':
 
 
     # Train NN method
-    method_train = 'none'
+    method_train = 'GCN'
 
     ######## SET OWN SETTINGS FOR NN CALL ############
 
@@ -432,11 +434,12 @@ if __name__ == '__main__':
     INTEGRATED_LAYERS_GCN = [layers_1,layers_2]
     GRAPHCONV_LAYERS = [layer_1_graphconv]
     GRAPHCONV_ACTIV_FUNCS = [layer_1_graphconv_activfunc]
+    ratio = 0.2
 
 
 
     # Choose feature selection method (PCA,Variance,AE,Eigengenes)
-    feature_select_method = 'pca'
+    feature_select_method = 'ppi'
     # Choose PCA components for each view (None : take all possible PC components for this view)
     components = [None,None,None,None]
     # Choose Variance thresholds for each view
@@ -502,11 +505,10 @@ if __name__ == '__main__':
                   dropout_layers= INTEGRATED_DROPOUT_LAYERS,
                   batchnorm= BATCHNORM_BOOL,
                   batchnorm_layers= INTEGRATED_BATCHNORM_LAYERS,
-                  view_names = view_names_fix,
-                  feature_names=feature_names,
                   processing_type= 'none',
                   edge_index= edge_index,
                   proteins_used= proteins_used,
+                  ratio=ratio,
                   activation_layers_graphconv= GRAPHCONV_ACTIV_FUNCS,
                   layers_graphconv= GRAPHCONV_LAYERS)
 

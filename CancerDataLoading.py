@@ -5,7 +5,9 @@ import numpy as np
 
 
 if __name__ == '__main__':
-    """Load in all Cancer Types and concatenate their views, duration and event respectively by samples"""
+    """
+    Load in all Cancer Types and concatenate their views, duration and event respectively by samples.
+    """
 
 
     # Path where initial cancer data is stored

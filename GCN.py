@@ -3,14 +3,11 @@ import torch
 import torchtuples as tt
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data.sampler import SubsetRandomSampler
 from pycox.models import CoxPH
 from pycox.evaluation import EvalSurv
-from torch_geometric.data import Data, DataLoader, Batch
-from torch_geometric.nn import GCNConv, SAGEConv, GraphConv, SAGPooling
+from torch_geometric.data import Data,Batch
+from torch_geometric.nn import GraphConv, SAGPooling
 import math
-import matplotlib.pyplot as plt
-from sklearn.model_selection import KFold
 from torch.optim import Adam
 import pandas as pd
 import os
@@ -19,15 +16,35 @@ from torch_geometric.nn import global_max_pool as gmp
 
 
 
-
-
-
 class GCN(nn.Module):
-    """https://pytorch-geometric.readthedocs.io/en/latest/modules/nn.html#torch_geometric.nn.conv.GraphConv"""
+    """
+    GCN with changeable hyperparameters. The input is passed through Graph Convolutional Layer(s) and Self Attention
+    Pooling. Finally, it is connected to a FCNN which compresses values to a single dimensional
+    value, used for the Proportional Hazards Model.
+    """
     def __init__(self, num_nodes, edge_index, in_features, n_hidden_layer_dims, activ_funcs,
                  dropout_prob = 0.1, ratio = 0.4, dropout_bool = False, batchnorm_bool = False,
                  dropout_layers = None, batchnorm_layers = None,
                  activ_funcs_graphconv = None, graphconvs = None, prelu_init = 0.25, print_bool = False):
+        """
+
+        :param num_nodes: Number of nodes (proteins) ; dtype : Int
+        :param edge_index: Protein Pairs with Interactions ; dtype : List of Lists of Ints [Indices]
+        :param in_features: Number of features per proteins ; dtype : Int
+        :param n_hidden_layer_dims: Hidden layers dimensions of the FCNN ; dtype : List of Ints
+        :param activ_funcs: Activation Functions aswell as for the last layer, the last layer can have no activation
+         function ['none‘]  ; dtype : List of Lists of Strings ['relu', 'sigmoid', 'prelu']
+        :param dropout_prob: Probability of Neuron Dropouts ; dtype : Int
+        :param ratio: Graph pooling ratio for self attention pooling layer ; dtype : Float
+        :param dropout_bool: Decide whether Dropout is to be applied or not ; dtype : Boolean
+        :param batchnorm_bool: Decide whether Batch Normalization is to be applied or not ; dtype : Boolean
+        :param dropout_layers: Layers in which to apply Dropout ; dtype : List of Lists of Strings ['yes','no']
+        :param batchnorm_layers: Layers in which to apply Batch Normalization ; dtype : List of Lists of Strings ['yes','no']
+        :param activ_funcs_graphconv: Activation Functions for the Graph Convolutional Layers ; dtype : List of Strings ['relu', 'sigmoid']
+        :param graphconvs: Dimensions of Layers for the Graph Convolutional Layers ; dtype : List of Ints
+        :param prelu_init: Initial Value for PreLU activation ; dtype : Float [between 0 and 1]
+        :param print_bool: Decide whether to print the models structure ; dtype : Boolean
+        """
         super(GCN, self).__init__()
         self.num_nodes = num_nodes # number of proteins
         self.edge_index = edge_index
@@ -47,6 +64,7 @@ class GCN(nn.Module):
         self.prelu_init = prelu_init
         self.print_bool = print_bool
 
+        # Replace strings with actual activation functions
         for c,afunclst in enumerate(activ_funcs):
             for c2, afunc in enumerate(afunclst):
                 if afunc.lower() == 'relu':
@@ -83,47 +101,60 @@ class GCN(nn.Module):
 
 
         for c in range(len(n_hidden_layer_dims) +1):
-            if c == 0: # first layer
+            # First layer
+            if c == 0:
+                # Batch normalization
                 if batchnorm_bool == True and batchnorm_layers[0][c] == 'yes':
                     self.hidden_layers.append(nn.Sequential(nn.Linear(self.first_in, n_hidden_layer_dims[0]),
                                                             nn.BatchNorm1d(n_hidden_layer_dims[0]),
                                                             activ_funcs[0][0]))
                     self.params_for_print.append(self.hidden_layers[-1])
+                # No Batch normalization
                 else:
                     self.hidden_layers.append(nn.Sequential(nn.Linear(self.first_in, n_hidden_layer_dims[0]),
                                                             activ_funcs[0][0]))
                     self.params_for_print.append(self.hidden_layers[-1])
 
-            elif c == len(n_hidden_layer_dims): # last layer (possibly no activation)
+            # Last layer
+            elif c == len(n_hidden_layer_dims):
+                # Batch normalization
                 if batchnorm_bool == True and batchnorm_layers[-1][0] == 'yes':
+                    # Activation function
                     if activ_funcs[-1][0] != 'none':
                         self.hidden_layers.append(nn.Sequential(nn.Linear(n_hidden_layer_dims[-1], 1),
                                                                 nn.BatchNorm1d(1), activ_funcs[-1][0]
                                                                 ))
                         self.params_for_print.append(self.hidden_layers[-1])
+                    # No activation function
                     else:
                         self.hidden_layers.append(nn.Sequential(nn.Linear(n_hidden_layer_dims[-1], 1),
                                                                 nn.BatchNorm1d(1)
                                                                 ))
                         self.params_for_print.append(self.hidden_layers[-1])
+                # No batch normalization
                 else:
+                    # Activation function
                     if activ_funcs[-1][0] != 'none':
                         self.hidden_layers.append(nn.Sequential(nn.Linear(n_hidden_layer_dims[-1], 1)
                                                                 ,activ_funcs[-1][0]
                                                                 ))
                         self.params_for_print.append(self.hidden_layers[-1])
+                    # No activation function
                     else:
                         self.hidden_layers.append(nn.Sequential(nn.Linear(n_hidden_layer_dims[-1], 1)
 
                                                                 ))
                         self.params_for_print.append(self.hidden_layers[-1])
-            else: # other layers
+            # Other Layers
+            else:
+                # Batch normalization
                 if batchnorm_bool == True and batchnorm_layers[0][c] == 'yes':
                      self.hidden_layers.append(nn.Sequential(nn.Linear(n_hidden_layer_dims[c-1], n_hidden_layer_dims[c]),
                                                             nn.BatchNorm1d(n_hidden_layer_dims[c]),
                                                             activ_funcs[0][c]))
                      self.params_for_print.append(self.hidden_layers[-1])
 
+                # No batch normalization
                 else:
                     self.hidden_layers.append(nn.Sequential(nn.Linear(n_hidden_layer_dims[c-1], n_hidden_layer_dims[c]),
                                                             activ_funcs[0][c]))
@@ -140,10 +171,16 @@ class GCN(nn.Module):
 
 
     def forward(self, data):
+        """
+
+        :param data: Data Input ; dtype : Tuple/List of Tensor(n_samples_in_batch,n_proteins * n_features)
+        :return: "Risk ratio" ; dtype : Tensor(n_samples_in_batch,1) TODO : Namen finden, den man auch in der BA dann benutzt
+        """
         batch_size = data.shape[0]
         x = data[:, :self.num_nodes * self.in_features]
         input_size = self.num_nodes
 
+        # One Graph Convolutional Layer
         if len(self.graphconvs) == 1:
             x = x.reshape(batch_size, self.num_nodes, self.in_features)
             if batch_size not in self.batches:
@@ -151,7 +188,9 @@ class GCN(nn.Module):
                 # For each sample in the batch assign the edge indices to it
                 for i in range(batch_size):
                     l.append(Data(x=x[i], edge_index=self.edge_index))
-                # batch of form : DataBatch(x = [n_samples_in_batch * n_nodes , n_features], edge_index=[n_features, n_edge_indices * n_samples], batch = [n_samples_in_batch * n_nodes], ptr=[n_samples_in_batch + 1]
+                # batch of form : DataBatch(x = [n_samples_in_batch * n_nodes , n_features],
+                # edge_index=[n_features, n_edge_indices * n_samples],
+                # batch = [n_samples_in_batch * n_nodes], ptr=[n_samples_in_batch + 1]
                 batch = Batch.from_data_list(l)
                 self.batches[batch_size] = batch
 
@@ -163,7 +202,7 @@ class GCN(nn.Module):
                 x = F.relu(self.conv1(x=x, edge_index=batch.edge_index))
             elif self.activ_funcs_graphconv[0].lower() == 'sigmoid':
                 x = torch.sigmoid(self.conv1(x=x, edge_index=batch.edge_index))
-                #TODO : does not work here for some reason
+                # PreLU doesn't work here for some reason
         #    elif self.activ_funcs_graphconv[0].lower() == 'prelu':
         #        x = nn.PReLU(self.conv1(x=x, edge_index=batch.edge_index))
 
@@ -185,7 +224,7 @@ class GCN(nn.Module):
 
 
 
-
+        # 2 Graph Convolutional Layers
         else:
             x = x.reshape(-1, self.in_features)
             batches = []
@@ -220,6 +259,10 @@ class GCN(nn.Module):
 
 # https://github.com/bio-ontology-research-group/DeepMOCCA/blob/master/step-by-step/deepmocca_training.ipynb
 def normalize(data, minx=None, maxx=None):
+    """
+    Normalizing Function from :
+    https://github.com/bio-ontology-research-group/DeepMOCCA/blob/master/step-by-step/deepmocca_training.ipynb
+    """
     if minx is None:
         minx = np.min(data)
         maxx = np.max(data)
@@ -228,11 +271,19 @@ def normalize(data, minx=None, maxx=None):
     return (data - minx) / (maxx - minx)
 
 def normalize_by_row(data):
+    """
+    Normalizing Function from :
+    https://github.com/bio-ontology-research-group/DeepMOCCA/blob/master/step-by-step/deepmocca_training.ipynb
+    """
     for i in range(data.shape[0]):
         data[i, :] = normalize(data[i, :])
     return data
 
 def normalize_by_column(data):
+    """
+    Normalizing Function from :
+    https://github.com/bio-ontology-research-group/DeepMOCCA/blob/master/step-by-step/deepmocca_training.ipynb
+    """
     for i in range(data.shape[1]):
         data[:, i] = normalize(data[:, i])
     return data
@@ -242,6 +293,12 @@ def normalize_by_column(data):
 
 
 def objective(trial):
+    """
+    Optuna Optimization for Hyperparameters.
+    :param trial: Settings of the current trial of Hyperparameters
+    :return: Concordance Index ; dtype : Float
+    """
+
     trainset, trainset_feat, valset,valset_feat, testset,testset_feat, num_nodes, num_features, edge_index = load_data()
 
 
@@ -367,6 +424,7 @@ def objective(trial):
     dropout_bool = trial.suggest_categorical('dropout_bool', [True,False])
     batchnorm_bool = trial.suggest_categorical('batchnorm_bool',[True,False])
     prelu_rate = trial.suggest_float('prelu_rate',0,1,step=0.05)
+    ratio = trial.suggest_float('ratio', 0,1,step=0.1)
 
 
 
@@ -441,6 +499,7 @@ def objective(trial):
               batchnorm_layers=FCNN_batchnorms,
               activ_funcs_graphconv= graphconvs_activation_functions,
               graphconvs=graphconvs,
+              ratio=ratio,
               prelu_init= prelu_rate,
               print_bool= False)
 
@@ -505,7 +564,9 @@ def objective(trial):
 
 
 def optuna_optimization(fold = 1):
-
+    """
+    Optuna Optimization for Hyperparameters.
+    """
 
     EPOCHS = 150
     study = optuna.create_study(direction='maximize',sampler=optuna.samplers.TPESampler(),pruner=optuna.pruners.MedianPruner())
@@ -535,17 +596,47 @@ def train(train_data,val_data,test_data,
           dropout_layers,
           batchnorm,
           batchnorm_layers,
-          view_names,
-          feature_names,
           processing_type,
           edge_index,
           proteins_used,
           activation_layers_graphconv,
-          layers_graphconv):
+          layers_graphconv,
+          ratio):
+    """
+
+    :param train_data: Training data for each fold ; dtype : List of Tensors(n_samples,n_proteins,n_feature_values)
+    :param val_data: Validation data for each fold ; dtype : List of Tensors(n_samples,n_proteins,n_feature_values)
+    :param test_data: Test data for each fold ; dtype : List of Tensors(n_samples,n_proteins,n_feature_values)
+    :param train_duration: Training Duration for each fold  ; dtype : List of Tensors(n_samples,)
+    :param val_duration: Validation Duration for each fold  ; dtype : List of Tensors(n_samples,)
+    :param test_duration: Test Duration for each fold  ; dtype : List of Tensors(n_samples,)
+    :param train_event: Training Event for each fold  ; dtype : List of Tensors(n_samples,)
+    :param val_event: Validation Event for each fold  ; dtype : List of Tensors(n_samples,)
+    :param test_event: Test Event for each fold  ; dtype : List of Tensors(n_samples,)
+    :param n_epochs: Number of Epochs ; dtype : Int
+    :param batch_size: Batch Size ; dtype : Int
+    :param l2_regularization: Decide whether to apply L2 regularization ; dtype : Boolean
+    :param l2_regularization_rate: L2 regularization rate ; dtype : Float
+    :param learning_rate: Learning rate ; dtype : Float
+    :param prelu_rate: Initial Value for PreLU activation ; dtype : Float [between 0 and 1]
+    :param layers: Dimension of Layers ; dtype : List of Ints
+    :param activation_layers: Activation Functions aswell as for the last layer, the last layer can have no activation
+    function ['none‘]         ; dtype : List of Lists of Strings ['relu', 'sigmoid', 'prelu']
+    :param dropout: Decide whether Dropout is to be applied or not ; dtype : Boolean
+    :param dropout_rate: Probability of Neuron Dropouts ; dtype : Int
+    :param dropout_layers:  Layers in which to apply Dropout ; dtype : List of Lists of Strings ['yes','no']
+    :param batchnorm: Decide whether Batch Normalization is to be applied or not ; dtype : Boolean
+    :param batchnorm_layers: Layers in which to apply Batch Normalization ; dtype : List of Lists of Strings ['yes','no']
+    :param processing_type: Type of processing on feature values mapped to proteins
+                            ; dtype : String ['normalize', 'normalizebyrow', 'normalizebycolumn']
+    :param edge_index: Protein Pairs with Interactions ; dtype : List of Lists of Ints [Indices]
+    :param proteins_used: Protein to Indices mapping ; dtype : Dictionary(Proteins,Indices)
+    :param activation_layers_graphconv: Activation Functions for the Graph Convolutional Layers ; dtype : List of Strings ['relu', 'sigmoid']
+    :param layers_graphconv: Dimensions of Layers for the Graph Convolutional Layers ; dtype : List of Ints
+    """
 
 
     # As we use PPI feature selection in GCN, we don't have multiple views structure : we don't need numpy transforms
-
 
     ############################# FOLD X ###################################
     for c_fold,fold in enumerate(train_data):
@@ -620,6 +711,7 @@ def train(train_data,val_data,test_data,
                   batchnorm_bool=batchnorm,
                   batchnorm_layers=batchnorm_layers,
                   activ_funcs_graphconv= activation_layers_graphconv,
+                  ratio=ratio,
                   graphconvs=layers_graphconv,
                   prelu_init= prelu_rate,
                   print_bool= False)
@@ -695,6 +787,12 @@ def train(train_data,val_data,test_data,
 
 
 def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/"):
+
+    """
+    Function to load data. Needed for Optuna Optimization.
+    :param data_dir: Directory in which data is stored.
+    :return: data and feature offsets (for feature values, duration and event), number of nodes, features and edge_index
+    """
 
     trainset = pd.read_csv(
         os.path.join(data_dir + "TrainData.csv"), index_col=0)

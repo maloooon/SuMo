@@ -5,11 +5,7 @@ from torch.optim import Adam
 from pycox import models
 import torchtuples as tt
 import FCNN
-import matplotlib.pyplot as plt
 from pycox.evaluation import EvalSurv
-from sklearn.model_selection import KFold
-from torch.utils.data.sampler import SubsetRandomSampler
-import random
 import copy
 import optuna
 import pandas as pd
@@ -17,15 +13,19 @@ import os
 
 
 class AE_Hierarichal(nn.Module):
-    """Wrapper for hierarichal AE implementation : AE followed by another AE followed by NN for survival analysis.
-       The second AE may be used without an additional Decoder."""
+    """
+    Wrapper for Hierarichal AE implementation : AE followed by another AE followed by FCNN.
+       The second AE may be used without an decoder.
+    """
     def __init__(self,models,types):
-        """
 
-        :param models: models to be used (AE, AE, NN)
-        :param types: different types of integration methods for the AE implementations (none = take
-                      middle layer of each view); input as list
-        :param decoding_bool: bool whether decoder should be used for the second AE or not
+        """
+        :param models: Models to be used ; dtype : ModuleList
+        :param type: Bottlneck manipulation
+        ; dtype : String ['concat','elementwisemax','elementwisemin',elementwiseavg','overallmax',
+                          'overallmin','overallavg', 'cross' or 'cross_k' where k is on of the
+                           mentionted types]
+        :param decoding_bool: bool whether decoder should be used for the second AE or not ; dtype : Boolean
         """
 
         super().__init__()
@@ -41,6 +41,15 @@ class AE_Hierarichal(nn.Module):
 
 
     def forward(self, *x):
+
+        """
+
+        :param x: Data input (for each view) ; dtype : Tuple of Tensors(n_samples_in_batch, n_features)
+        :return: final_out : Decoded output from AE ; dtype : Tuple of Tensors(n_samples_in_batch, n_features)
+                 hazard : "Risk ratio" ; dtype : Tensor(n_samples_in_batch, 1)
+                 input data : Data input (same as x) ; dtype : Tuple of Tensors(n_samples_in_batch, n_features)
+                 final_out_cross : Cross decoded output from AE ; dtype : Tuple of Tensors(n_samples_in_batch, n_features)
+        """
 
 
         if self.types[0] == 'cross' \
@@ -116,8 +125,11 @@ class AE_Hierarichal(nn.Module):
 
 
     def predict(self,*x):
-        # Will be used by model.predict later.
-
+        """
+         Predict function which will be used by model.predict later.
+         :param x: Data input (for each view) ; dtype : Tuple of Tensors(n_samples_in_batch, n_features)
+         :return: hazard : "Risk ratio" ; dtype : Tensor(n_samples_in_batch, 1)
+         """
 
         if self.types[0] == 'cross' \
                 or self.types[0] == 'cross_concat' \
@@ -184,8 +196,19 @@ class AE_Hierarichal(nn.Module):
 
 
 class AE_NN(nn.Module):
-    """Wrapper so we can train AE & NN together by using Pycox PH model"""
+    """
+    Wrapper for Pipeline of AE followed by FCNN.
+    See :
+    """
     def __init__(self, models, type):
+        """
+
+        :param models: Models to be used ; dtype : ModuleList
+        :param type: Bottlneck manipulation
+                     ; dtype : String ['concat','elementwisemax','elementwisemin',elementwiseavg','overallmax',
+                                       'overallmin','overallavg', 'cross' or 'cross_k' where k is on of the
+                                        mentionted types]
+        """
         super().__init__()
         self.models = models
         self.type = type
@@ -196,7 +219,14 @@ class AE_NN(nn.Module):
 
 
     def forward(self, *x):
+        """
 
+        :param x: Data input (for each view) ; dtype : Tuple of Tensors(n_samples_in_batch, n_features)
+        :return: final_out : Decoded output from AE ; dtype : Tuple of Tensors(n_samples_in_batch, n_features)
+                 hazard : "Risk ratio" ; dtype : Tensor(n_samples_in_batch, 1)
+                 input data : Data input (same as x) ; dtype : Tuple of Tensors(n_samples_in_batch, n_features)
+                 final_out_cross : Cross decoded output from AE ; dtype : Tuple of Tensors(n_samples_in_batch, n_features)
+        """
 
         if self.type == 'cross' \
                 or self.type == 'cross_concat' \
@@ -218,7 +248,11 @@ class AE_NN(nn.Module):
 
 
     def predict(self,*x):
-        # Will be used by model.predict later.
+        """
+        Predict function which will be used by model.predict later.
+        :param x: Data input (for each view) ; dtype : Tuple of Tensors(n_samples_in_batch, n_features)
+        :return: hazard : "Risk ratio" ; dtype : Tensor(n_samples_in_batch, 1)
+        """
         if self.type == 'cross' \
                 or self.type == 'cross_concat' \
                 or self.type == 'cross_elementwiseavg' \
@@ -247,31 +281,33 @@ class AE(nn.Module):
                  ae_hierarichcal_bool = False, ae_hierarichcal_decoding_bool = False, print_bool = False,
                  prelu_init = 0.25):
         """
-        :param views: list of views (strings)
-        :param in_features: list of input features
-        :param feature_offsets: List of feature offsets over all views
-        :param n_hidden_layers_dims: List of lists containing output_dim of each hidden layer for each view,
-                                     where the length of each list is the amount of encoder layers. For the decoding
-                                     layers, the list will be read backwards.
-        :param activ_funcs: List of lists containing activation functions for each hidden layer. This list has
-                            one more list than n_hidden_layers_dim to determine the activation function for the final
-                            layer. If the sublist only contains one activation function , this is to be used
-                            for each hidden layer for this view. If the list only contains one value (no sublists), this
-                            activation function is to be used for each hidden layer and the output layer. Activation func
-                            are to be put in as strings. 'relu', 'sigmoid' , 'softmax' , ..
-        :param dropout : probability of neuron dropout ; int
-        :param dropout_layers : layers in n_hidden_layers_dims where dropout is to be applied ; str ('yes'/'no')
-        :param batch_norm : layers in n_hidden_layers_dims where batch normalization is to be applied ; str ('yes'/'no')
-        :param dropout_bool : Decide wether dropout is applied or not ; bool (True/False)
-        :param batch_norm_bool : Decide wether batch normalization is applied or not ; bool (True/False)
-        :param type_ae : concat, cross or both (concross)
-        :param cross_mutation : list of integers of length views, deciding which crosses should be applied,
-                                e.g [1,3,0,2] will cross hidden feats of view 1 with decoder of view 2,
-                                hidden of 4 with dec of view 2 etc..
-        :param ae_hierarichcal_bool : choose whether this AE call is to be in the manner of hierarichcal ae implementation
-                                      (for the second AE)
-        :param ae_hierarichcal_decoding_bool : choose whether in hierarichcal AE setting, the second AE has a decoder
-        :param print_bool : choose whether to print the models structure or not
+        Autoencoder with changeable hyperparameters. Each view has an AE itself. The bottleneck representations can be
+        maninpulated with different techniques (concaatenation, element-wise/overall average/minimum/maximum), the
+        decoding stage can be manipulated with cross decoding, meaning that we decode the input of a specific view
+        with an additional decoder. The bottleneck representation can be passed to another AE. Finally, we pass it to
+        a FCNN, where it will be passed through a final layer, which compresses values to a single dimensional
+        value used for the Proportional Hazards Model.
+
+        :param views: Views (Omes) ; dtype : List of Strings
+        :param in_features: Input dimensions for each view : List of Int
+        :param n_hidden_layers_dims: Hidden layers for each view : List of Lists of Int
+        :param activ_funcs: Activation Functions (for each view) aswell as for the last layer
+        ; dtype : List of Lists of Strings ['relu', 'sigmoid', 'prelu']
+        :param dropout : Probability of Neuron Dropouts ; dtype : Int
+        :param dropout_layers : Layers in which to apply Dropout ; dtype : List of Lists of Strings ['yes','no']
+        :param batch_norm : Layers in which to apply Batch Normalization ; dtype : List of Lists of Strings ['yes','no']
+        :param dropout_bool : Decide whether Dropout is to be applied or not ; dtype : Boolean
+        :param batch_norm_bool : Decide whether Batch Normalization is to be applied or not ; dtype : Boolean
+        :param type_ae : Bottlneck manipulation
+                         ; dtype : String ['concat','elementwisemax','elementwisemin',elementwiseavg','overallmax',
+                                           'overallmin','overallavg', 'cross' or 'cross_k' where k is on of the
+                                           mentionted types]
+        :param cross_mutation : Choose additional decoder for view ; dtype : List of Int [Indices of decoders for view,
+                                e.g [1,3,0,2] will decode features of view 1 with decoder of view 2 (and 1),
+                                features of view 2 with decoder of view 4 (and 2) ...] TODO: check
+        :param ae_hierarichcal_bool : Choose whether this AE is the second AE in the pipeline ; dtype : Boolean
+        :param ae_hierarichcal_decoding_bool : Choose whether the second AE has a decoder ; dtype : Boolean
+        :param print_bool : Choose whether to print the models structure or not ; dtype : Boolean
         """
         super().__init__()
         self.views =views
@@ -284,19 +320,19 @@ class AE(nn.Module):
         self.dropout_bool = dropout_bool
         self.batch_norm_bool = batch_norm_bool
         self.type_ae = type_ae
-        # Create list of lists which will store each hidden layer call for each view (encoding & decoding stage)
-        self.hidden_layers = nn.ParameterList([nn.ParameterList([]) for x in range(len(in_features))])
-        self.middle_dims = []
         self.cross_mutation = cross_mutation
         self.ae_hierarichcal_bool = ae_hierarichcal_bool
         self.ae_hierarichcal_decoding_bool = ae_hierarichcal_decoding_bool
         self.prelu_init = prelu_init
+        # Create list of lists which will store each hidden layer call for each view (encoding & decoding stage)
+        self.hidden_layers = nn.ParameterList([nn.ParameterList([]) for x in range(len(in_features))])
+        self.middle_dims = []
 
 
 
-        # Produce activation functions list of lists
 
 
+        # If we just input one activation function, use this activation function for each view and also the final layer
         if len(activ_funcs) == 1 and type(activ_funcs[0]) is not list:
 
             func = activ_funcs[0]
@@ -306,20 +342,18 @@ class AE(nn.Module):
         if len(activ_funcs) == len(views): #  + 1:
 
             for c,view in enumerate(activ_funcs):
-                # if only one activ function given in sublist, use this for each layer
-                # if we look at the output layer activ function, we only have the last layer (otherwise index error)
+                # If only one activ function given in sublist, use this for each layer
                 if len(activ_funcs[c]) == 1 and c != len(views):
                     # -1 because we already have one activ func in our activ funcs list
                     for x in range(len(n_hidden_layers_dims[c]) -1):
                         activ_funcs[c].append(activ_funcs[c][0])
 
+                # Replace strings with actual activation functions
                 for c2,activfunc in enumerate(view):
                     if activfunc.lower() == 'relu':
                         activ_funcs[c][c2] = nn.ReLU()
                     elif activfunc.lower() == 'sigmoid':
                         activ_funcs[c][c2] = nn.Sigmoid()
-                    elif activfunc.lower() == 'softmax':
-                        activ_funcs[c][c2] = nn.Softmax()
                     elif activfunc.lower() == 'prelu':
                         activ_funcs[c][c2] = nn.PReLU(init=prelu_init)
 
@@ -330,8 +364,10 @@ class AE(nn.Module):
 
 
         # Produce hidden layer list of lists for encoding stage
-        # For each view, we add the dimensions of the hidden layers for the encoder backwards to the list (for decoding)
-        # Accordingly, we need to do the same for activation functions, batch norm and dropout layers (mirroring it for decoding)
+
+        # For each view, we add the dimensions of the hidden layers for the encoder backwards to the list for the
+        # decoding stage (as Decoder mirrors the Decoder and vice versa)
+        # We need to do the same for activation functions, batch norm and dropout layers
 
         decoding_hidden = [[] for x in range(len(in_features))]
         decoding_activation = [[] for x in range(len(in_features))]
@@ -341,7 +377,7 @@ class AE(nn.Module):
 
 
         for c,view in enumerate(n_hidden_layers_dims):
-            # For output purposes, we save dim of the last layer for the encoder in a list
+            # Save bottleneck layer size
             self.middle_dims.append(n_hidden_layers_dims[c][-1])
             # Create copy of hidden layer of current view
             temp_hidden = n_hidden_layers_dims[c].copy()
@@ -353,41 +389,43 @@ class AE(nn.Module):
             temp_activation.reverse()
             temp_batch.reverse()
             temp_dropout.reverse()
-            # For CrossAE, we'll need decoding informations
+
             decoding_hidden[c].append(temp_hidden)
             decoding_activation[c].append(temp_activation)
             decoding_batch[c].append(temp_batch)
             decoding_dropout[c].append(temp_dropout)
-            # concatenate temp to original list starting at first element (otherwise we would have the
-            # element in the middle 2 times
+            # Concatenate temp to original list starting at first element (otherwise we would have the bottleneck
+            # representation twice)
             n_hidden_layers_dims[c] += temp_hidden[1:]
             activ_funcs[c] += temp_activation[1:]
             batch_norm[c] += temp_batch[1:]
             dropout_layers[c] += temp_dropout[1:]
 
-            # Now we also need to add the final layer of the decoder, which produces the dimension of our original input
 
-
-
+            # Assign Layers
             for c2 in range(len(view) + 1):
-                if c2 == 0: # first layer
+                if c2 == 0: # First layer
+                    # Batch normalization
                     if batch_norm_bool == True and batch_norm[c][c2] == 'yes':
                         self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
                                                                              n_hidden_layers_dims[c][c2]),
                                                                    nn.BatchNorm1d(n_hidden_layers_dims[c][c2]),
                                                                    activ_funcs[c][c2]))
+                    # No batch normalization
                     else:
                         self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
                                                                              n_hidden_layers_dims[c][c2]),
                                                                              activ_funcs[c][c2]))
 
 
-                elif c2 == len(view): # last layer
+                elif c2 == len(view): # Last layer
+                    # Batch normalization
                     if batch_norm_bool == True and batch_norm[c][-1] == 'yes':
                         self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][-1],
                                                                              in_features[c]),
                                                                    nn.BatchNorm1d(in_features[c]),
                                                                    activ_funcs[c][-1]))
+                    # No batch normalization
                     else:
                         self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][-1],
                                                                              in_features[c]),
@@ -396,18 +434,20 @@ class AE(nn.Module):
 
 
                 else: # other layers
+                    # Batch normalization
                     if batch_norm_bool == True and batch_norm[c][c2] == 'yes':
                         self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][c2-1],
                                                                              n_hidden_layers_dims[c][c2]),
                                                                    nn.BatchNorm1d(n_hidden_layers_dims[c][c2]),
                                                                    activ_funcs[c][c2]))
+                    # No batch normalization
                     else:
                         self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][c2-1],
                                                                              n_hidden_layers_dims[c][c2]),
                                                                    activ_funcs[c][c2]))
 
 
-        # mean/max/min output dimension element wise
+        # Mean/Max/Min output dimension element wise
         mmm_output_dimension = max(self.middle_dims)
 
 
@@ -416,9 +456,7 @@ class AE(nn.Module):
 
 
         if type_ae.lower() == 'concat' or type_ae.lower() == 'cross_concat':
-            # Concatenate the output, which will then be passed to a NN for survival analysis
-            # the final output we're interested in (middle between encoder and decoder) was therefore already
-            # saved in middle_dims list
+            # Dimensions of concatenated bottleneck representation
 
             concatenated_features = sum([dim for dim in self.middle_dims])
 
@@ -433,48 +471,37 @@ class AE(nn.Module):
                 or type_ae.lower() == 'cross_overallmean' \
                 or type_ae.lower() =='cross_overallmax' \
                 or type_ae.lower() =='cross_overallmin':
-            # For the crossAE implementation, we now need to cross middle hidden features and encoders.
-            # for n views there are n! possible mutations (each view has n-1 possible encoder it can take for crossAE)
-            # To have the strongest learning effect, the user can choose which mutation he wants in the beginning
-            # or it is randomized and then kept for the remainder of all epochs of training.
+
 
             # We are only interested in the decoding stages, thus we only look at the hidden layers starting at the
-            # middle position
+            # bottleneck "layer"
             middle_pos = []
             for x in n_hidden_layers_dims:
                 middle_pos.append(len(x)//2)
 
-            # For crossAE implementation, we might need a helping layer to set the dimensions of the hidden feats of view
-            # i to the input dim of the first decoding layer of view j
+            # We might need a helping layer to set the dimensions of the hidden features of a view i
+            # to the input dimension of the first decoding layer of view j, if we want to decode view i with the decoder
+            # of view j
             self.helping_layer = nn.ParameterList(nn.ParameterList([]) for x in range(len(in_features)))
             # boolean list saving whether view needs additional helping layer or not
             self.needs_help_bool = [False for x in range(len(in_features))]
 
             for c, view in enumerate(n_hidden_layers_dims):
-                # if the middle hidden feat dim size of current view is not the same as the hidden feat dim size
-                # of view which decoder will be taken to decode the current view hidden dim feats
+                # If the bottleneck dimensional size of view i is not the same size as first decoding layer for view j,
+                # if we want to decode view i with decoder of view j...
                 if n_hidden_layers_dims[c][middle_pos[c]] != n_hidden_layers_dims[cross_mutation[c]][middle_pos[cross_mutation[c]]]:
                     self.needs_help_bool[c] = True
                     # In this case we need a helping layer
-                    # no activation func, no batch norm etc. --> only fit the data so it can be passed on to the chosen decoder
+                    # Fit the data so it can be passed on to the chosen decoder
                     self.helping_layer[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][middle_pos[c]],
                                                                          n_hidden_layers_dims[cross_mutation[c]][middle_pos[cross_mutation[c]]])))
-
-
-
-
-
-
 
         # Dropout
         self.dropout = nn.Dropout(dropout_prob)
 
 
-
-
-
-
         if print_bool == True:
+
             # Print the model
             print("Data input has the following views : {}, each containing {} features.".format(self.views,
                                                                                                  self.in_features[0]))
@@ -542,7 +569,7 @@ class AE(nn.Module):
 
 
 
-    def forward(self,*x): # x                                                                                                   # X
+    def forward(self,*x):
 
         # list of lists to store encoded features for each view
         # Note that encoded features will have BOTH features for encoding stage and decoding stage !
@@ -567,7 +594,6 @@ class AE(nn.Module):
                 if c2 == 0: #first layer
                     # Apply dropout layer
                     if self.dropout_bool == True and self.dropout_layers[c][c2] == 'yes':
-                       # encoded_features[c][c2] = self.dropout(encoded_features[c][c2])
                         data_ordered[c] = self.dropout(data_ordered[c])
                     encoded_features[c].append(self.hidden_layers[c][c2](data_ordered[c]))
 
@@ -795,10 +821,20 @@ class AE(nn.Module):
 
 
 class LossHierarichcalAESingleCross(nn.Module):
+    """
+    Loss function wrapper for AE & AE 2 & FCNN using a cross implementation for one AE.
+    The FCNN trains on negative partial lgo likelihood loss, the AEs on
+    MSE loss.
+    """
+
     def __init__(self,alpha, decoding_bool = True, cross_position = 1):
         """
-        :param alpha: alpha is a list of 3 values, need to be 1 in sum
-        :param cross_position : integer ; gives info whether first AE uses crossAE or second AE
+
+        :param alpha: Loss ratio [Negative partial log likelihood loss, MSE loss AE 1, MSE loss AE 2]
+                      ; dtype : List [3 values
+        :param decoding_bool : Choose whether the second AE has an decoder ; dtype : Boolean
+        :param cross_position : Choose whether first or second AE uses cross implementation
+                                ; dtype : Int [1 : first AE, 2 : second AE]
         """
         super().__init__()
         assert sum(alpha), 'alpha needs to be 1 in sum'
@@ -811,14 +847,14 @@ class LossHierarichcalAESingleCross(nn.Module):
 
     def forward(self, final_out_1, final_out_2, final_out_cross, hazard, element_wise_avg, input_data_1,duration, event):
         """
-
-        :param final_out: decoder output AE 1
-        :param final_out_2: decoder output AE 2
-        :param hazard: hazard
-        :param view_data: data between encoder and decoder of AE 1 (input of AE 2)
-        :param survival: duration,event
-        :param input_data: input_data for AE 1
-        :return:
+        :param final_out: Decoded output of the AE ; dtype : TupleTree of Tensor(n_samples_in_batch, n_features)
+        :param final_out_cross : Cross decoded output of the AE ; dtype : TupleTree of Tensor(n_samples_in_batch, n_features)
+        :param element_wise_avg : Input for the second AE ; dtype : List of Tensor(n_samples_in_batch, n_features) TODO : check dtype, name
+        :param duration: Duration value ; dtype : Tensor(n_samples_in_batch,)
+        :param event : Event value ; dtype : Tensor(n_samples_in_batch,)
+        :param input_data: Input for the AE ; dtype : TupleTree of Tensor(n_samples_in_batch, n_features)
+        :return: Combined Loss (survival (negative partial log likelihood) and sum of MSE loss (from the "normal" decoder
+                 and the cross decoder) ; dtype : Float
         """
         loss_surv = self.loss_surv(hazard, duration, event)
         views_1 = len(final_out_1)
@@ -837,19 +873,7 @@ class LossHierarichcalAESingleCross(nn.Module):
                 loss_ae_1_full += (loss_ae_1)
 
 
-     #   loss_ae_1_full = sum(loss_ae_1_full)
-
-        # check if we have list of tensors for each view or tensor as output of first AE
-        # as final_out_2 has structure of just one tensor, we
-        # need to change structure accordingly
-
-
-      #  if type(element_wise_avg) is list:
-      #      view_data = torch.cat(tuple(element_wise_avg), dim=1)
-      #  else:
-      #      view_data = element_wise_avg
         view_data = element_wise_avg
-
 
 
         if self.decoding_bool == True:
@@ -865,7 +889,6 @@ class LossHierarichcalAESingleCross(nn.Module):
                     loss_ae_cross_2 = self.loss_ae(final_out_cross[i], view_data[i])
                     loss_ae_2_full += (loss_ae_2)
                     loss_ae_2_full += (loss_ae_cross_2)
-              #  loss_ae_2_full = sum(loss_ae_2_full)
             else:
                 # Here we also need no check because if we didnt have a cross in the second AE, we surely had one
                 # in the first, thus our data is not of multiple view structure anymore
@@ -880,10 +903,16 @@ class LossHierarichcalAESingleCross(nn.Module):
 
 
 class LossHierarichcalAE(nn.Module):
+    """
+    Loss function wrapper for AE & AE 2 & FCNN using a non-cross implementation.
+    The FCNN trains on negative partial lgo likelihood loss, the AEs on
+    MSE loss.
+    """
     def __init__(self,alpha, decoding_bool = True):
         """
-
-        :param alpha: alpha is a list of 3 values, need to be 1 in sum
+        :param alpha: Loss ratio [Negative partial log likelihood loss, MSE loss AE 1, MSE loss AE 2]
+                      ; dtype : List [3 values
+        :param decoding_bool : Choose whether the second AE has an decoder ; dtype : Boolean
         """
         super().__init__()
         assert sum(alpha), 'alpha needs to be 1 in sum'
@@ -895,17 +924,16 @@ class LossHierarichcalAE(nn.Module):
 
     def forward(self, final_out_1, final_out_2, hazard, view_data, input_data_1,duration, event):
         """
-
-        :param final_out: decoder output AE 1
-        :param final_out_2: decoder output AE 2
-        :param hazard: hazard
-        :param view_data: data between encoder and decoder of AE 1 (input of AE 2)
-        :param survival: duration,event
-        :param input_data: input_data for AE 1
-        :return:
+        :param final_out: Decoded output of the AE ; dtype : TupleTree of Tensor(n_samples_in_batch, n_features)
+        :param view_data : Input for the second AE ; dtype : List of Tensor(n_samples_in_batch, n_features) TODO : check dtype
+        :param duration: Duration value ; dtype : Tensor(n_samples_in_batch,)
+        :param event : Event value ; dtype : Tensor(n_samples_in_batch,)
+        :param input_data: Input for the AE ; dtype : TupleTree of Tensor(n_samples_in_batch, n_features)
+        :return: Combined Loss (survival (negative partial log likelihood) and sum of MSE loss (from the "normal" decoder
+                 and the cross decoder) ; dtype : Float
         """
         loss_surv = self.loss_surv(hazard, duration, event)
-        # final_out_1 will always have multiple view structure as it is the decoder of the first AE, which takes
+        # Final_out_1 will always have multiple view structure as it is the decoder of the first AE, which takes
         # multiple views as input // TODO : check for one view ob richtig übergeben wird oder len(...) dann falsch liest
         views_1 = len(final_out_1)
         loss_ae_1_full = 0
@@ -914,11 +942,8 @@ class LossHierarichcalAE(nn.Module):
             loss_ae_1 = self.loss_ae(final_out_1[i], input_data_1[i])
             loss_ae_1_full += loss_ae_1
 
-       # loss_ae_1 = self.loss_ae(final_out_1, input_data_1)
-
-        # view data is a list of tensors for each view ; as final_out_2 has structure of just one tensor, we
+        # View data is a list of tensors for each view ; as final_out_2 has structure of just one tensor, we
         # need to change structure accordingly
-       # view_data = torch.cat(tuple(view_data), dim=1)
         if self.decoding_bool == True:
             loss_ae_2_full = 0
             # Second AE might not have multiple views as input, so we need to check that first
@@ -932,10 +957,9 @@ class LossHierarichcalAE(nn.Module):
             else:
                 # final_out_2[0] as it is a tuple tree
                 loss_ae_2_full = self.loss_ae(final_out_2[0], view_data[0])
-#            loss_ae_2 = self.loss_ae(final_out_2, view_data)
+
             return self.alpha[0] * loss_surv + self.alpha[1] * loss_ae_1_full + self.alpha[2] * loss_ae_2_full
         else:
-            # TODO : input vom loss darf hierfür nicht 3geteilt sein, nur 2 Zahlen
             if len(self.alpha) != 2:
                 raise Exception("Since the second AE has no decoder, alpha only contains 2 elements, not 3!")
             else:
@@ -943,10 +967,14 @@ class LossHierarichcalAE(nn.Module):
 
 
 class LossAEConcatHazard(nn.Module):
+    """Loss function wrapper for AE & FCNN using a non-cross implementation.
+       The FCNN trains on negative partial lgo likelihood loss, the AE on
+       MSE loss."""
     def __init__(self,alpha):
         """
 
-        :param alpha:
+        :param alpha: Loss ratio [alpha negative partial log likelihood loss, 1-alpha MSE loss]
+                      ; dtype : Float
         """
         super().__init__()
         assert (alpha >= 0) and (alpha <= 1), 'Need alpha in [0,1]'
@@ -960,15 +988,12 @@ class LossAEConcatHazard(nn.Module):
        dataset """
     def forward(self, final_out, hazard,input_data, duration,event):
         """
-
-        :param concatenated_features: Output of middle layer between encoded & decoded (x features from each view for one sample concatenated)
-        :param final_out: decoded final output
-        :param duration: duration
-        :param event : event
-        :param input_data: covariate input into AE
-        :return: combined loss
+        :param final_out: Decoded output of the AE ; dtype : TupleTree of Tensor(n_samples_in_batch, n_features)
+        :param duration: Duration value ; dtype : Tensor(n_samples_in_batch,)
+        :param event : Event value ; dtype : Tensor(n_samples_in_batch,)
+        :param input_data: Input for the AE ; dtype : TupleTree of Tensor(n_samples_in_batch, n_features)
+        :return: Combined Loss (survival (negative partial log likelihood) and MSE loss) ; dtype : Float
         """
-      #  duration,event = survival
         loss_surv = self.loss_surv(hazard, duration,event)
         views = len(final_out)
         loss_ae_full = 0
@@ -981,10 +1006,16 @@ class LossAEConcatHazard(nn.Module):
 
 
 class LossAECrossHazard(nn.Module):
+    """
+    Loss function wrapper for AE & FCNN using a cross implementation.
+   The FCNN trains on negative partial lgo likelihood loss, the AE on
+   MSE loss.
+   """
     def __init__(self,alpha):
         """
 
-        :param alpha:
+        :param alpha: Loss ratio [alpha negative partial log likelihood loss, 1-alpha MSE loss]
+                      ; dtype : Float
         """
         super().__init__()
         assert (alpha >= 0) and (alpha <= 1), 'Need alpha in [0,1]'
@@ -993,38 +1024,40 @@ class LossAECrossHazard(nn.Module):
         self.loss_ae = nn.MSELoss()
 
 
-    """First argument of output needs to be output of the net, second same structure as tuple structure of targets in
-       dataset """
     def forward(self, final_out, final_out_cross, hazard, input_data, duration, event):
         """
-
-        :param concatenated_features: Output of middle layer between encoded & decoded (x features from each view for one sample concatenated)
-        :param final_out: decoded final output
-        :param duration: duration
-        :param event : event
-        :param input_data: covariate input into AE
-        :return: combined loss
+        :param final_out: Decoded output of the AE ; dtype : TupleTree of Tensor(n_samples_in_batch, n_features)
+        :param final_out_cross : Cross decoded output of the AE ; dtype : TupleTree of Tensor(n_samples_in_batch, n_features)
+        :param duration: Duration value ; dtype : Tensor(n_samples_in_batch,)
+        :param event : Event value ; dtype : Tensor(n_samples_in_batch,)
+        :param input_data: Input for the AE ; dtype : TupleTree of Tensor(n_samples_in_batch, n_features)
+        :return: Combined Loss (survival (negative partial log likelihood) and sum of MSE loss (from the "normal" decoder
+                 and the cross decoder) ; dtype : Float
         """
         loss_surv = self.loss_surv(hazard, duration,event)
         views = len(final_out)
         loss_ae_full = 0
         loss_ae_cross_full = 0
-        # AE loss for each view
+
         for i in range(views):
             loss_ae = self.loss_ae(final_out[i], input_data[i])
             loss_ae_cross = self.loss_ae(final_out_cross[i], input_data[i])
             loss_ae_full += loss_ae
             loss_ae_cross_full += loss_ae_cross
 
-
         loss_ae_all = loss_ae_full + loss_ae_cross_full
-        #loss_ae = self.loss_ae(final_out, input_data) + self.loss_ae(final_out_cross, input_data)
+
         return self.alpha * loss_surv + (1- self.alpha) * loss_ae_all
 
 
 
 
 def objective(trial):
+    """
+    Optuna Optimization for Hyperparameters.
+    :param trial: Settings of the current trial of Hyperparameters
+    :return: Concordance Index ; dtype : Float
+    """
 
 
     # Load in data (##### For testing for first fold, later on
@@ -1489,13 +1522,10 @@ def objective(trial):
 
 
 
-
-
-
-
-
-
 def optuna_optimization(fold = 1):
+    """
+    Optuna Optimization for Hyperparameters.
+    """
 
 
     EPOCHS = 150
@@ -1647,23 +1677,23 @@ def train(train_data,val_data,test_data,
                              prelu_init= prelu_rate))
 
 
-        layers_u_2 = copy.deepcopy(layers_second)
-        activation_layers_u_2 = copy.deepcopy(activation_layers_second)
-        dropout_layers_u_2 = copy.deepcopy(dropout_layers_second)
-        batchnorm_layers_u_2 = copy.deepcopy(batchnorm_layers_second)
-        all_models.append(AE(views = ['AE'],
-                             in_features=[in_feats_second_NN_concat],
-                             n_hidden_layers_dims= layers_u_2,
-                             activ_funcs = activation_layers_u_2,
-                             dropout_prob= dropout_second,
-                             dropout_layers = dropout_layers_u_2,
-                             batch_norm = batchnorm_layers_u_2,
-                             dropout_bool=dropout_second,
-                             batch_norm_bool=batchnorm_second,
-                             type_ae =model_types[1],
-                             cross_mutation=[1,0,3,2],
-                             ae_hierarichcal_bool= True,
-                             print_bool=False))
+#        layers_u_2 = copy.deepcopy(layers_second)
+#        activation_layers_u_2 = copy.deepcopy(activation_layers_second)
+#        dropout_layers_u_2 = copy.deepcopy(dropout_layers_second)
+#        batchnorm_layers_u_2 = copy.deepcopy(batchnorm_layers_second)
+#        all_models.append(AE(views = ['AE'],
+#                             in_features=[in_feats_second_NN_concat],
+#                             n_hidden_layers_dims= layers_u_2,
+#                             activ_funcs = activation_layers_u_2,
+#                             dropout_prob= dropout_second,
+#                             dropout_layers = dropout_layers_u_2,
+#                             batch_norm = batchnorm_layers_u_2,
+#                             dropout_bool=dropout_second,
+#                             batch_norm_bool=batchnorm_second,
+##                             type_ae =model_types[1],
+#                             cross_mutation=[1,0,3,2],
+#                             ae_hierarichcal_bool= False,
+##                             print_bool=False))
 
 
 
@@ -1683,7 +1713,7 @@ def train(train_data,val_data,test_data,
         dropout_layers_u_3 = copy.deepcopy(dropout_layers_third)
         batchnorm_layers_u_3 = copy.deepcopy(batchnorm_layers_third)
         all_models.append(FCNN.NN_changeable(views = ['AE'],
-                                           in_features = [in_feats_third_NN_concat],
+                                           in_features = [in_feats_second_NN_concat],
                                            n_hidden_layers_dims= layers_u_3,
                                            activ_funcs = activation_layers_u_3,
                                            dropout_prob=dropout_third,
@@ -1706,9 +1736,9 @@ def train(train_data,val_data,test_data,
 
 
 
-        full_net = AE_Hierarichal(all_models, types=model_types)
+    #    full_net = AE_Hierarichal(all_models, types=model_types)
 
-   #     full_net = AE_NN(all_models, type=model_types[0])
+        full_net = AE_NN(all_models, type=model_types[0])
 
 
         # set optimizer
@@ -1725,7 +1755,7 @@ def train(train_data,val_data,test_data,
         # loss : alpha * surv_loss + (1-alpha) * ae_loss
         model = models.CoxPH(full_net,
                              optimizer,
-                             loss=LossHierarichcalAE(alpha=[0.4,0.4,0.2], decoding_bool=True))
+                             loss=LossAEConcatHazard(alpha=0.6))
         print_loss = True
         print("Split {} : ".format(c_fold + 1))
         log = model.fit(train_data[c_fold],
@@ -1779,6 +1809,15 @@ def train(train_data,val_data,test_data,
 
 
 def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/"):
+
+    """
+    Function to load data. Needed for Optuna Optimization.
+    :param data_dir: Directory in which data is stored.
+    :return: trainset/valset/testset : train/validation/test set ; dtype : TODO
+             trainset_feat/valset_feat/testset_feat : feature offsets for train/validation/test set including
+             duration & event ; dtype : TODO
+
+    """
 
     trainset = pd.read_csv(
         os.path.join(data_dir + "TrainData.csv"), index_col=0)

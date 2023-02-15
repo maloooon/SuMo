@@ -71,6 +71,7 @@ class NN_changeable(nn.Module):
                     for x in range(len(n_hidden_layers_dims[c]) -1):
                         activ_funcs[c].append(activ_funcs[c][0])
 
+                # Replace strings with actual activation functions
                 for c2,activfunc in enumerate(view):
                     if activfunc.lower() == 'relu':
                         activ_funcs[c][c2] = nn.ReLU()

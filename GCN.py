@@ -99,7 +99,7 @@ class GCN(nn.Module):
 
         self.params_for_print.append(self.pool1)
 
-
+        # Assign Layers
         for c in range(len(n_hidden_layer_dims) +1):
             # First layer
             if c == 0:

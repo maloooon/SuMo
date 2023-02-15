@@ -22,7 +22,7 @@ if __name__ == '__main__':
     # Possible Cancers are :
     #PRAD, ACC, BLCA, BRCA,CESC,CHOL,COAD,DLBC,ESCA,GBM, HNSC,KICH,KIRC,KIRP,LAML,LGG,
     #LIHC,LUAD,LUSC,MESO,PAAD,PCPG,READ,SARC,SKCM,STAD,TGCT,THCA,THYM,UCEC,UCS,UVM
-    cancer_data = ReadInData.readcancerdata('PRAD')
+    cancer_data = ReadInData.readcancerdata('LUAD')
     data = cancer_data[0][0]
     feature_offsets = cancer_data[0][1]
     view_names = cancer_data[0][2]
@@ -31,7 +31,7 @@ if __name__ == '__main__':
     # Decide which views to use
     # Cancers can have DNA, mRNA, microRNA, RPPA data (not all have all of them though)
     # Leaving which_views empty will take all views into consideration will take all possible views into consideration
-    which_views = ['DNA']
+    which_views = []
     # Decide number of folds for Cross-Validation. For Optuna Optimization, use just one fold.
     n_folds = 1
     # needed for R, cant read in cancer name directly for some reason
@@ -245,7 +245,7 @@ if __name__ == '__main__':
 
 
     # Train NN method
-    method_train = 'GCN'
+    method_train = 'AE'
 
     ######## SET OWN SETTINGS FOR NN CALL ############
 
@@ -377,7 +377,7 @@ if __name__ == '__main__':
     # CROSS MUTATION (AE)
     cross_mutation = [0,1,2]
     # MODEL TYPES (AE)
-    model_types = ['concat','concat']
+    model_types = ['concat']
     # GRAPHCONV LAYERS (GCN)
     layer_1_graphconv = 2 # best to take the same amount as the views we are looking at (normally DNA & mRNA) because of float errors otherwise
     layer_2_graphconv = 5
@@ -439,7 +439,7 @@ if __name__ == '__main__':
 
 
     # Choose feature selection method (PCA,Variance,AE,Eigengenes)
-    feature_select_method = 'ppi'
+    feature_select_method = 'pca'
     # Choose PCA components for each view (None : take all possible PC components for this view)
     components = [None,None,None,None]
     # Choose Variance thresholds for each view

@@ -18,7 +18,7 @@ if __name__ == '__main__':
         for directories in dirs:
             cancer_types += 1
 
-
+    print("test")
     # Different Cancer Types
     cancers = ['PRAD', 'ACC', 'BLCA', 'BRCA', 'CESC', 'CHOL', 'COAD', 'DLBC', 'ESCA', 'GBM', 'HNSC', 'KICH',
                'KIRC','KIRP','LAML','LGG','LIHC','LUAD','LUSC','MESO','PAAD','PCPG','READ','SARC','SKCM',

@@ -1520,7 +1520,7 @@ def objective(trial):
                          optimizer,
                          loss=loss_concat)
     model.set_device(torch.device(device))
-    print_loss = True
+    print_loss = False
 
     log = model.fit(train_data,
                     train_surv,

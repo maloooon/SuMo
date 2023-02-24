@@ -766,16 +766,23 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             for c,fold in enumerate(self.train_folds):
                 for view in range(self.n_views):
                     # Initialize Variance objects for both train and test with same components
-                    view_train_variance = FeatureSelection.F_VARIANCE(self.train_folds[c][view], threshold=thresholds[view])
-                    view_val_variance = FeatureSelection.F_VARIANCE(self.val_folds[c][view], threshold=thresholds[view])
-                    view_test_variance = FeatureSelection.F_VARIANCE(self.x_test[view], threshold=thresholds[view])
-                    # Apply Variance just to the train set
-                    obj_variance = view_train_variance.apply_variance()
-                    # Fit & Transform the train set
-                    train_data = view_train_variance.fit_transform_variance(obj_variance)
-                    # Only transform the test and val set with the given Variance object of train
-                    test_data = view_test_variance.transform_variance(obj_variance)
-                    val_data = view_val_variance.transform_variance(obj_variance)
+                    while True:
+                        try:
+                            view_train_variance = FeatureSelection.F_VARIANCE(self.train_folds[c][view], threshold=thresholds[view])
+                            view_val_variance = FeatureSelection.F_VARIANCE(self.val_folds[c][view], threshold=thresholds[view])
+                            view_test_variance = FeatureSelection.F_VARIANCE(self.x_test[view], threshold=thresholds[view])
+                            # Apply Variance just to the train set
+                            obj_variance = view_train_variance.apply_variance()
+                            # Fit & Transform the train set
+                            train_data = view_train_variance.fit_transform_variance(obj_variance)
+                            # Only transform the test and val set with the given Variance object of train
+                            test_data = view_test_variance.transform_variance(obj_variance)
+                            val_data = view_val_variance.transform_variance(obj_variance)
+                        except ValueError:
+                            thresholds[view] = thresholds[view] - 0.01
+                        else:
+                            break
+
 
 
                     variance_train_tensors[c].append(torch.tensor(train_data))

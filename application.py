@@ -39,11 +39,11 @@ if __name__ == '__main__':
     # Decide number of folds for Cross-Validation. For Optuna Optimization, use just one fold.
     n_folds = 1 # Use 1 for Optuna Hyperparameter Optimization
     # needed for R, cant read in cancer name directly for some reason
-    type_of_preprocessing = 'standardize'
+    type_of_preprocessing = 'normalize'
     # Hyperparameter Optimization NN method
     method_tune = 'FCNN'
     # Feature selection method Hyperparamter Tuning FCNN/AE (For GCN its always PPI)
-    selection_method_tuning = 'pca'
+    selection_method_tuning = 'variance'
 
     print("Preprocessing Type : ", type_of_preprocessing)
     print("Tuning Neural Network : ", method_tune)
@@ -226,7 +226,7 @@ if __name__ == '__main__':
         # Choose PCA components for each view (None : take all possible PC components for this view)
         components = [None,None,None,None]
         # Choose Variance thresholds for each view
-        thresholds = [0.02,0.02,0.02,0.4]
+        thresholds = [0.3,0.3,0.3,0.7]
 
    #     DataProcessing.optuna_optimization()   # AE FEATURE SELECTION OPTIMIZATION
 

@@ -41,7 +41,7 @@ if __name__ == '__main__':
     # needed for R, cant read in cancer name directly for some reason
     type_of_preprocessing = 'standardize'
     # Hyperparameter Optimization NN method
-    method_tune = 'GCN'
+    method_tune = 'FCNN'
     # Feature selection method Hyperparamter Tuning FCNN/AE (For GCN its always PPI)
     selection_method_tuning = 'pca'
 

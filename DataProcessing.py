@@ -89,6 +89,8 @@ def preprocess_features(
     :return: Feature values ordered by views for train/validation/test ;
              dtype : List of Tensors (n_samples, n_features) [for each view]
     """
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 
     if cols_std is not None and preprocess_type.lower() != 'none':
 
@@ -198,7 +200,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                  n_test_samples : Int [Samples]
                  view_names : List of Strings
         """
-
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # Decide which views to look at :
         # First, check if the user views input are actually in the current loaded cancer
         if len(self.which_views) != 0:
@@ -546,7 +548,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         """
 
 
-
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         if method.lower() == 'eigengenes':
             """Eigengene matrices Feature selection
@@ -641,6 +643,8 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                         temp = view.iloc[x, :].values.tolist()
                         eigengene_matrices_tensors_val[c].append(temp)
                     eigengene_matrices_tensors_val[c] = torch.tensor(eigengene_matrices_tensors_val[c])
+
+
 
 
                 if c_fold == 0:
@@ -948,7 +952,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                     for train_batch, train_duration, train_event in ae_trainloader:
                         # Send data to device if possible
                         for view in range(len(train_batch)):
-                            train_batch[view] = train_batch[view].to(device=device)
+                            train_batch[view] = train_batch[view]
 
                         # Structure must be a tuple
                         train_batch = tuple(train_batch)
@@ -982,7 +986,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
                         # Send data to device if possible
                         for view in range(len(train_batch)):
-                            val_batch[view] = val_batch[view].to(device=device)
+                            val_batch[view] = val_batch[view]
 
                         # Structure must be a tuple
                         val_batch = tuple(val_batch)
@@ -1016,7 +1020,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                     for test_batch, test_duration, test_event in ae_testloader:
                         # Send data to device if possible
                         for view in range(len(test_batch)):
-                            test_batch[view] = test_batch[view].to(device=device)
+                            test_batch[view] = test_batch[view]
 
                         # Structure must be a tuple
                         test_batch = tuple(test_batch)

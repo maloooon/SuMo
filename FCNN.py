@@ -505,18 +505,18 @@ def objective(trial):
 
     # Change for EvalSurv-Function
     try:
-        test_duration = test_duration.numpy()
-        test_event = test_event.numpy()
+        test_duration = test_duration.cpu().detach().numpy()
+        test_event = test_event.cpu().detach().numpy()
     except AttributeError:
         pass
 
 
     for c,fold in enumerate(train_data):
         try:
-            train_duration = train_duration.numpy()
-            train_event = train_event.numpy()
-            val_duration = val_duration.numpy()
-            val_event = val_event.numpy()
+            train_duration = train_duration.cpu().detach().numpy()
+            train_event = train_event.cpu().detach().numpy()
+            val_duration = val_duration.cpu().detach().numpy()
+            val_event = val_event.cpu().detach().numpy()
         except AttributeError: # in this case already numpy arrays
             pass
 
@@ -575,7 +575,7 @@ def optuna_optimization():
     # Save all trials in dataframe
     df = study.trials_dataframe()
     df.to_csv("/Users/marlon/Desktop/Evaluation/LUAD/Standardize/FCNN/PCA/Trials.csv")
-
+    df.sort_values('value')
     print("Best Concordance", trial.value)
     print("Best Hyperparameters : {}".format(trial.params))
 

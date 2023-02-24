@@ -1520,7 +1520,7 @@ def objective(trial):
                          optimizer,
                          loss=loss_concat)
     model.set_device(torch.device(device))
-    print_loss = False
+    print_loss = True
 
     log = model.fit(train_data,
                     train_surv,
@@ -1534,6 +1534,23 @@ def objective(trial):
     # Plot it
  #   _ = log.plot()
 
+    # Change for EvalSurv-Function
+    try:
+        test_duration = test_duration.cpu().detach().numpy()
+        test_event = test_event.cpu().detach().numpy()
+    except AttributeError:
+        pass
+
+
+    for c,fold in enumerate(train_data):
+        try:
+            train_duration = train_duration.cpu().detach().numpy()
+            train_event = train_event.cpu().detach().numpy()
+            val_duration = val_duration.cpu().detach().numpy()
+            val_event = val_event.cpu().detach().numpy()
+        except AttributeError: # in this case already numpy arrays
+            pass
+
     # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
     _ = model.compute_baseline_hazards()
 
@@ -1544,6 +1561,8 @@ def objective(trial):
     #      surv.iloc[:, :5].plot()
     #      plt.ylabel('S(t | x)')
     #      _ = plt.xlabel('Time')
+
+
 
 
     # Evaluate with concordance, brier score and binomial log-likelihood

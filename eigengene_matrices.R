@@ -426,6 +426,75 @@ view_names_list <- as.list(scan(text=view_names, what="\n"))
 
 print(view_names_list)
 
+print("HH")
+
+
+
+
+#mRNA
+path <- paste0("/Users/marlon/Desktop/Project/TCGAData/",cancer_name,"/MRNA_for_r.csv")
+if (file.exists(path) & ('MRNA' %in% view_names_list)) {
+  print("Creating mRNA eigengene matrix for training data ....")
+
+  data_mRNA <- read.csv(path)
+  data_mRNA = subset(data_mRNA, select= -c(X)) # remove added X column
+  matrix_mRNA <- t(as.matrix(data_mRNA))
+  class(matrix_mRNA) <- "numeric"
+  eset_mRNA <- new("ExpressionSet", expr = matrix_mRNA)
+  data_new_mRNA = assayData(eset_mRNA)$exprs
+
+  eigengene_mRNA = lmQCM(data_new_mRNA)
+
+  eigengene_mRNA = t(eigengene_mRNA)
+
+  if ("all" == mode) {
+    temp <- paste0("/Users/marlon/Desktop/Project/TCGAData/",cancer_name,"/MRNA_test_for_r.csv")
+    print("HHHHH")
+    print("Creating mRNA eigengene matrix for test data ....")
+    data_test_mRNA <- read.csv(temp)
+    data_test_mRNA = subset(data_test_mRNA, select= -c(X)) # remove added X column
+    matrix_test_mRNA <- t(as.matrix(data_test_mRNA))
+    class(matrix_test_mRNA) <- "numeric"
+    eset_test_mRNA <- new("ExpressionSet", expr = matrix_test_mRNA)
+    data_test_new_mRNA = assayData(eset_test_mRNA)$exprs
+
+    eigengene_test_mRNA = lmQCM(data_test_new_mRNA)
+
+    eigengene_test_mRNA = t(eigengene_test_mRNA)
+
+  }
+
+  temp4 <- paste0("/Users/marlon/Desktop/Project/TCGAData/",cancer_name,"/MRNA_val_for_r.csv")
+
+  print("Creating mRNA eigengene matrix for validation data ....")
+  data_val_mRNA <- read.csv(temp4)
+  data_val_mRNA = subset(data_val_mRNA, select= -c(X)) # remove added X column
+  matrix_val_mRNA <- t(as.matrix(data_val_mRNA))
+  class(matrix_val_mRNA) <- "numeric"
+  eset_val_mRNA <- new("ExpressionSet", expr = matrix_val_mRNA)
+  data_val_new_mRNA = assayData(eset_val_mRNA)$exprs
+
+  eigengene_val_mRNA = lmQCM(data_val_new_mRNA)
+  eigengene_val_mRNA = t(eigengene_val_mRNA)
+
+
+  temp2 <- paste0("/Users/marlon/Desktop/Project/TCGAData/",cancer_name,"/MRNA_eigengene_matrix.csv")
+  temp5 <- paste0("/Users/marlon/Desktop/Project/TCGAData/",cancer_name,"/MRNA_val_eigengene_matrix.csv")
+  write.csv(eigengene_mRNA, temp2, row.names = TRUE)
+  write.csv(eigengene_val_mRNA, temp5, row.names = TRUE)
+
+  if ("all" == mode) {
+    temp3 <- paste0("/Users/marlon/Desktop/Project/TCGAData/",cancer_name,"/MRNA_test_eigengene_matrix.csv")
+    write.csv(eigengene_test_mRNA, temp3, row.names = TRUE)
+  }
+
+
+
+}
+
+
+
+
 
 
 path <- paste0("/Users/marlon/Desktop/Project/TCGAData/",cancer_name,"/RPPA_for_r.csv")
@@ -606,65 +675,6 @@ if (file.exists(path) & ('DNA' %in% view_names_list)) {
     write.csv(eigengene_test_DNA, temp3, row.names = TRUE)
 
   }
-
-
-}
-#mRNA
-path <- paste0("/Users/marlon/Desktop/Project/TCGAData/",cancer_name,"/MRNA_for_r.csv")
-if (file.exists(path) & ('mRNA' %in% view_names_list)) {
-  print("Creating mRNA eigengene matrix for training data ....")
-
-  data_mRNA <- read.csv(path)
-  data_mRNA = subset(data_mRNA, select= -c(X)) # remove added X column
-  matrix_mRNA <- t(as.matrix(data_mRNA))
-  class(matrix_mRNA) <- "numeric"
-  eset_mRNA <- new("ExpressionSet", expr = matrix_mRNA)
-  data_new_mRNA = assayData(eset_mRNA)$exprs
-
-  eigengene_mRNA = lmQCM(data_new_mRNA)
-
-  eigengene_mRNA = t(eigengene_mRNA)
-
-  if ("all" == mode) {
-    temp <- paste0("/Users/marlon/Desktop/Project/TCGAData/",cancer_name,"/MRNA_test_for_r.csv")
-    print("Creating mRNA eigengene matrix for test data ....")
-    data_test_mRNA <- read.csv(temp)
-    data_test_mRNA = subset(data_test_mRNA, select= -c(X)) # remove added X column
-    matrix_test_mRNA <- t(as.matrix(data_test_mRNA))
-    class(matrix_test_mRNA) <- "numeric"
-    eset_test_mRNA <- new("ExpressionSet", expr = matrix_test_mRNA)
-    data_test_new_mRNA = assayData(eset_test_mRNA)$exprs
-
-    eigengene_test_mRNA = lmQCM(data_test_new_mRNA)
-
-    eigengene_test_mRNA = t(eigengene_test_mRNA)
-
-  }
-
-  temp4 <- paste0("/Users/marlon/Desktop/Project/TCGAData/",cancer_name,"/MRNA_val_for_r.csv")
-
-  print("Creating mRNA eigengene matrix for validation data ....")
-  data_val_mRNA <- read.csv(temp4)
-  data_val_mRNA = subset(data_val_mRNA, select= -c(X)) # remove added X column
-  matrix_val_mRNA <- t(as.matrix(data_val_mRNA))
-  class(matrix_val_mRNA) <- "numeric"
-  eset_val_mRNA <- new("ExpressionSet", expr = matrix_val_mRNA)
-  data_val_new_mRNA = assayData(eset_val_mRNA)$exprs
-
-  eigengene_val_mRNA = lmQCM(data_val_new_mRNA)
-  eigengene_val_mRNA = t(eigengene_val_mRNA)
-
-
-  temp2 <- paste0("/Users/marlon/Desktop/Project/TCGAData/",cancer_name,"/MRNA_eigengene_matrix.csv")
-  temp5 <- paste0("/Users/marlon/Desktop/Project/TCGAData/",cancer_name,"/MRNA_val_eigengene_matrix.csv")
-  write.csv(eigengene_mRNA, temp2, row.names = TRUE)
-  write.csv(eigengene_val_mRNA, temp5, row.names = TRUE)
-
-  if ("all" == mode) {
-    temp3 <- paste0("/Users/marlon/Desktop/Project/TCGAData/",cancer_name,"/MRNA_test_eigengene_matrix.csv")
-    write.csv(eigengene_test_mRNA, temp3, row.names = TRUE)
-  }
-
 
 
 }

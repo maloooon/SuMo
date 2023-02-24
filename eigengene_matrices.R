@@ -426,10 +426,6 @@ view_names_list <- as.list(scan(text=view_names, what="\n"))
 
 print(view_names_list)
 
-print("HH")
-
-
-
 
 #mRNA
 path <- paste0("/Users/marlon/Desktop/Project/TCGAData/",cancer_name,"/MRNA_for_r.csv")

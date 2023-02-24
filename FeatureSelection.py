@@ -160,6 +160,10 @@ class PPI():
 
         # Read in protein data
         print("Reading in protein data...")
+     #   prot_to_feat = pd.read_csv(
+     #       os.path.join("~", "SUMO", "Project", "ProteinToFeature.csv"),index_col=0)
+
+
         prot_to_feat = pd.read_csv(
             os.path.join("/Users", "marlon", "Desktop", "Project", "ProteinToFeature.csv"),index_col=0)
 
@@ -313,7 +317,9 @@ class PPI():
         # Find Protein-Protein Interactions
         interactions1 = []
         interactions2 = []
-        with gzip.open('/Users/marlon/Desktop/Project/9606.protein.links.v11.5.txt.gz', 'rt') as f:
+        #dir = os.path.expanduser('~/SUMO/Project/9606.protein.links.v11.5.txt.gz')
+        dir = os.path.expanduser('/Users/marlon/Desktop/Project/9606.protein.links.v11.5.txt.gz')
+        with gzip.open(dir, 'rt') as f:
             next(f) # Ignore the header
             for line in f:
                 protein1, protein2, score = line.strip().split()
@@ -398,12 +404,12 @@ class F_eigengene_matrices():
 
 
         if self.stage == 'train':
-            data_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/{}/{}_for_r.csv".format(self.cancer_name,self.view_name))
+            data_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/{}/{}_for_r.csv".format(self.cancer_name,self.view_name.upper()))
         elif self.stage == 'val':
-            data_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/{}/{}_val_for_r.csv".format(self.cancer_name,self.view_name))
+            data_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/{}/{}_val_for_r.csv".format(self.cancer_name,self.view_name.upper()))
 
         else: # self.stage == 'test'
-            data_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/{}/{}_test_for_r.csv".format(self.cancer_name,self.view_name))
+            data_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/{}/{}_test_for_r.csv".format(self.cancer_name,self.view_name.upper()))
 
 
     def eigengene_multiplication(self):
@@ -412,7 +418,7 @@ class F_eigengene_matrices():
         Need to set rights first so Python can read it : chmod a+rwx 'PATHTOFILE'
         """
 
-        path = ["Rscript /Users/marlon/DataSpellProjectsForSAMO/SAMO/eigengene_matrices.R"]
+        path = ["Rscript /Users/marlon/Desktop/SuMO/eigengene_matrices.R"]
 
         rscript = ["/usr/local/bin/Rscript"]
 

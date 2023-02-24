@@ -298,7 +298,8 @@ def objective(trial):
     :param trial: Settings of the current trial of Hyperparameters
     :return: Concordance Index ; dtype : Float
     """
-
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# dir = os.path.expanduser('~/SUMO/Project/PreparedData/')
     trainset, trainset_feat, valset,valset_feat, testset,testset_feat, num_nodes, num_features, edge_index = load_data()
 
 
@@ -322,32 +323,59 @@ def objective(trial):
 
     for c,feat in enumerate(trainset_feat):
         if c < len(trainset_feat) - 3: # train data
-            train_data = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32'))
+            data_np = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32'))
+            data_tensor = torch.from_numpy(data_np).to(torch.float32)
+            data_tensor = data_tensor.to(device)
+            train_data = data_tensor
         elif c == len(trainset_feat) - 3: # duration
-            train_duration = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')).squeeze(axis=1)
+            duration_np = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')).squeeze(axis=1)
+            duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
+            duration_tensor = duration_tensor.to(device)
+            train_duration = duration_tensor
         elif c == len(trainset_feat) -2: # event
-            train_event = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')).squeeze(axis=1)
+            event_np = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')).squeeze(axis=1)
+            event_tensor = torch.from_numpy(event_np).to(torch.float32)
+            event_tensor = event_tensor.to(device)
+            train_event = event_tensor
 
 
 
 
     for c,feat in enumerate(valset_feat):
         if c < len(valset_feat) - 3: # train data views
-            val_data = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32'))
+            data_np = np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')
+            data_tensor = torch.from_numpy(data_np).to(torch.float32)
+            data_tensor = data_tensor.to(device)
+            val_data = data_tensor
         elif c == len(valset_feat) - 3: # duration
-            val_duration = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            duration_np = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
+            duration_tensor = duration_tensor.to(device)
+            val_duration = duration_tensor
         elif c == len(valset_feat) -2: # event
-            val_event = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            event_np = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            event_tensor = torch.from_numpy(event_np).to(torch.float32)
+            event_tensor = event_tensor.to(device)
+            val_event = event_tensor
 
 
 
     for c,feat in enumerate(testset_feat):
         if c < len(testset_feat) - 3: # train data views
-            test_data = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32'))
+            data_np = np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')
+            data_tensor = torch.from_numpy(data_np).to(torch.float32)
+            data_tensor = data_tensor.to(device)
+            test_data = data_tensor
         elif c == len(testset_feat) - 3: # duration
-            test_duration = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            duration_np = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
+            duration_tensor = duration_tensor.to(device)
+            test_duration = duration_tensor
         elif c == len(testset_feat) -2: # event
-            test_event = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            event_np = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            event_tensor = torch.from_numpy(event_np).to(torch.float32)
+            event_tensor = event_tensor.to(device)
+            test_event = event_tensor
 
 
 
@@ -375,7 +403,12 @@ def objective(trial):
     edge_index = torch.LongTensor(edge_index) #.to(device)
 
 
-    processing_type = trial.suggest_categorical('processing_type', ['normalize','normalizebyrow','normalizebycolumn','none'])
+ #   processing_type = trial.suggest_categorical('processing_type', ['normalize','normalizebyrow','normalizebycolumn','none'])
+
+    # TODO :Using different ones leads to float errors in GCN ?
+
+    # Best results : normalize/standardize in preprocessing, 'none' in postprocessing
+    processing_type = 'none'
 
 
     if processing_type.lower() == 'normalize':
@@ -396,9 +429,7 @@ def objective(trial):
 
 
 
-    # Transforms for PyCox
-    train_surv = (train_duration, train_event)
-    val_data_full = (val_data, (val_duration, val_event))
+
 
 
     train_samples = len(train_duration)
@@ -411,6 +442,10 @@ def objective(trial):
     val_data = val_data.reshape(val_samples, num_nodes * num_features)
     test_data = test_data.reshape(test_samples, num_nodes * num_features)
 
+    # Transforms for PyCox
+    train_surv = (train_duration, train_event)
+    val_data_full = (val_data, (val_duration, val_event))
+
 
 
     l2_regularization_bool = trial.suggest_categorical('l2_regularization_bool', [True,False])
@@ -419,7 +454,7 @@ def objective(trial):
   #  batch_size = trial.suggest_int("batch_size", 5, 200) # TODO : batch size so wählen, dass train samples/ batch_size und val samples/batch_size nie 1 ergeben können, da sonst Error : noch besser error abfangen und einfach skippen, da selten passiert !
     batch_size = trial.suggest_categorical("batch_size", [8,16,32,64,128,256])
   #  n_epochs = trial.suggest_int("n_epochs", 10,20) # setting num of epochs to 10-20 instead of 10-100 bc. it takes too much time
-    n_epochs = 15
+    n_epochs = 30
     dropout_prob = trial.suggest_float("dropout_prob", 0,0.5,step=0.1)
     dropout_bool = trial.suggest_categorical('dropout_bool', [True,False])
     batchnorm_bool = trial.suggest_categorical('batchnorm_bool',[True,False])
@@ -501,7 +536,7 @@ def objective(trial):
               graphconvs=graphconvs,
               ratio=ratio,
               prelu_init= prelu_rate,
-              print_bool= False)
+              print_bool= False).to(device)
 
 
 
@@ -511,11 +546,18 @@ def objective(trial):
         optimizer = Adam(net.parameters(), lr=learning_rate)
 
     model = CoxPH(net, optimizer)
+    model.set_device(torch.device(device))
 
     train_print = True
 
-    log = model.fit(train_data,train_surv, batch_size, n_epochs, callbacks, verbose=train_print,
-                    val_data=val_data_full, val_batch_size= batch_size)
+    log = model.fit(train_data,
+                    train_surv,
+                    batch_size,
+                    n_epochs,
+                    callbacks,
+                    verbose=train_print,
+                    val_data=val_data_full,
+                    val_batch_size= batch_size)
 
     # Plot it
 #    _ = log.plot()

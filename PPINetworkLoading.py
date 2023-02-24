@@ -8,7 +8,12 @@ import gzip
 proteins = {}
 interactions1 = []
 interactions2 = []
-with gzip.open('/Users/marlon/Desktop/Project/9606.protein.links.v11.5.txt.gz', 'rt') as f:
+
+# Replace /Users/marlon/Desktop with dir = os.path.expanduser('~/SUMO ..')
+
+dir = os.path.expanduser('/Users/marlon/Desktop/Project/9606.protein.links.v11.5.txt.gz')
+#dir = os.path.expanduser('~/SUMO/Project/9606.protein.links.v11.5.txt.gz')
+with gzip.open(dir, 'rt') as f:
     next(f) # Ignore the header
     for line in f:
         protein1, protein2, score = line.strip().split()
@@ -27,6 +32,7 @@ proteins_features = {}
 # we are only interested in certain fields
 fields = ['converted_alias', 'name']
 
+# Replace with "~", "SUMO"
 data = pd.read_csv(
     os.path.join("/Users", "marlon", "Desktop", "Project", "gProfiler_hsapiens_09-01-2023_11-01-49.csv"),
     usecols=fields ,index_col=0)
@@ -38,7 +44,7 @@ data = data.reset_index()
 
 
 
-
+# Replace with "~", "SUMO"
 # Read in all features across all cancer types
 features = pd.read_csv(
     os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", "AllFeatures.csv"), index_col=0)
@@ -94,6 +100,9 @@ data = data.drop(index=to_delete_)
 # Based on this data, we can create matrices
 data_df = pd.DataFrame(data)
 
+
+dir = os.path.expanduser("/Users/marlon/Desktop/Project/ProteinToFeature.csv")
+#dir = os.path.expanduser("~/SUMO/Project/ProteinToFeature.csv")
 data_df.to_csv("/Users/marlon/Desktop/Project/ProteinToFeature.csv")
 
 

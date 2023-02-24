@@ -1059,9 +1059,10 @@ def objective(trial):
     :return: Concordance Index ; dtype : Float
     """
 
-
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # Load in data (##### For testing for first fold, later on
-
+  #  dir = os.path.expanduser('~/SUMO/Project/PreparedData/')
+    # set load_data(dir)
     trainset, trainset_feat, valset, valset_feat, testset, testset_feat = load_data()
 
     trainset_feat = list(trainset_feat.values)
@@ -1080,37 +1081,66 @@ def objective(trial):
     train_data = []
     for c,feat in enumerate(trainset_feat):
         if c < len(trainset_feat) - 3: # train data views
-            train_data.append(np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32'))
+            data_np = np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')
+            data_tensor = torch.from_numpy(data_np).to(torch.float32)
+            data_tensor = data_tensor.to(device)
+            train_data.append(data_tensor)
         elif c == len(trainset_feat) - 3: # duration
-            train_duration = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')).squeeze(axis=1)
+            duration_np = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')).squeeze(axis=1)
+            duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
+            duration_tensor = duration_tensor.to(device)
+            train_duration = duration_tensor
         elif c == len(trainset_feat) -2: # event
-            train_event = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')).squeeze(axis=1)
+            event_np = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')).squeeze(axis=1)
+            event_tensor = torch.from_numpy(event_np).to(torch.float32)
+            event_tensor = event_tensor.to(device)
+            train_event = event_tensor
 
     train_data = tuple(train_data)
 
     val_data = []
     for c,feat in enumerate(valset_feat):
         if c < len(valset_feat) - 3: # train data views
-            val_data.append(np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32'))
+            data_np = np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')
+            data_tensor = torch.from_numpy(data_np).to(torch.float32)
+            data_tensor = data_tensor.to(device)
+            val_data.append(data_tensor)
         elif c == len(valset_feat) - 3: # duration
-            val_duration = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            duration_np = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
+            duration_tensor = duration_tensor.to(device)
+            val_duration = duration_tensor
         elif c == len(valset_feat) -2: # event
-            val_event = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            event_np = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            event_tensor = torch.from_numpy(event_np).to(torch.float32)
+            event_tensor = event_tensor.to(device)
+            val_event = event_tensor
 
     test_data = []
 
     for c,feat in enumerate(testset_feat):
         if c < len(testset_feat) - 3: # train data views
-            test_data.append(np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32'))
+            data_np = np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')
+            data_tensor = torch.from_numpy(data_np).to(torch.float32)
+            data_tensor = data_tensor.to(device)
+            test_data.append(data_tensor)
         elif c == len(testset_feat) - 3: # duration
-            test_duration = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            duration_np = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
+            duration_tensor = duration_tensor.to(device)
+            test_duration = duration_tensor
         elif c == len(testset_feat) -2: # event
-            test_event = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            event_np = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            event_tensor = torch.from_numpy(event_np).to(torch.float32)
+            event_tensor = event_tensor.to(device)
+            test_event = event_tensor
 
 
 
     views = []
-    read_in = open('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt', 'r')
+ #   dir = os.path.expanduser('~/SUMO/Project/TCGAData/cancerviews.txt')
+    dir = os.path.expanduser('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt')
+    read_in = open(dir, 'r')
     for view in read_in:
         views.append(view)
 
@@ -1129,16 +1159,16 @@ def objective(trial):
     train_surv = (train_duration, train_event)
     val_data_full = (val_data, (val_duration, val_event))
 
-    second_decoder_bool = False
-    model_types = ['concat']
+    second_decoder_bool = True
+    model_types = ['elementwisemax']
 
-
+    print("AE models : ",model_types)
     ##################################### HYPERPARAMETER SEARCH SETTINGS ##############################################
     l2_regularization_bool = trial.suggest_categorical('l2_regularization_bool', [True,False])
     learning_rate = trial.suggest_float("learning_rate", 1e-5,1e-1,log=True)
     l2_regularization_rate = trial.suggest_float("l2_regularization_rate", 1e-6,1e-3, log=True)
   #  batch_size = trial.suggest_int("batch_size", 5, 200)
-    batch_size = trial.suggest_categorical("batch_size", [8,16,32,64,128,256])
+    batch_size = trial.suggest_categorical("batch_size", [5,16,32,64,128,256])
   #  n_epochs = trial.suggest_int("n_epochs", 10,100) ########### TESTING
     n_epochs = 100
     dropout_prob = trial.suggest_float("dropout_prob", 0,0.5,step=0.1)
@@ -1240,8 +1270,8 @@ def objective(trial):
 
 
     if 'DNA' in view_names:
-        layers_1_DNA = trial.suggest_int('layers_1_DNA', 5, 300)
-        layers_2_DNA = trial.suggest_int('layers_2_DNA', 5, 300)
+        layers_1_DNA = trial.suggest_int('layers_1_DNA', 128, 256)
+        layers_2_DNA = trial.suggest_int('layers_2_DNA', 32, 128)
         layers_1_DNA_activfunc = trial.suggest_categorical('layers_1_DNA_activfunc', ['relu','sigmoid','prelu'])
         layers_2_DNA_activfunc = trial.suggest_categorical('layers_2_DNA_activfunc', ['relu','sigmoid','prelu'])
         layers_1_DNA_dropout = trial.suggest_categorical('layers_1_DNA_dropout', ['yes','no'])
@@ -1385,13 +1415,26 @@ def objective(trial):
 
     # After hierarichcal integrated method
     if len(model_types) == 2:
-        in_feats_third_NN_element_wise = max([i[-1] for i in layers_hierarchical_integrated])
+#        in_feats_third_NN_element_wise = max([i[-1] for i in layers_hierarchical_integrated])
 
         out_sizes_hierachical = []
 
-        in_feats_third_NN_concat = layers_hierarchical_integrated[0][-1] # integrated method has only one layer left
+#        in_feats_third_NN_concat = layers_hierarchical_integrated[0][-1] # integrated method has only one layer left
+
+        for c_layer in range(len(layers_hierarchical)):
+            out_sizes_hierachical.append(layers_hierarchical[c_layer][-1])
+
+        in_feats_third_NN_concat_hierachical = sum(out_sizes_hierachical)
+
+        in_feats_third_NN_elementwise_hierachical = max([i[-1] for i in layers_hierarchical])
+
+        # if first model type is none, we need to take bottleneck dimensions for second AE
+        in_feats_second_AE_hierachical = [x[-1] for x in layers]
 
     in_feats_second_NN_overall = 1
+
+
+
 
 
 
@@ -1414,27 +1457,29 @@ def objective(trial):
                          batch_norm_bool= batchnorm_bool,
                          batch_norm= batchnorms,
                          type_ae=model_types[0],
-                         cross_mutation=[1,2,0],
+                         cross_mutation=None,
                          print_bool=False,
-                         prelu_init= prelu_rate))
+                         prelu_init= prelu_rate)).to(device)
 
 
-  #  all_models.append(AE(views = ['AE'],
-  #                       in_features= [in_feats_second_NN_element_wise],
-  #                       n_hidden_layers_dims= layers_hierarchical_integrated,
-  #                       activ_funcs=activation_functions_hierarchical_integrated,
-  #                       dropout_bool= dropout_bool_hierachical_integrated,
-  #                       dropout_prob= dropout_prob_hierachical_integrated,
-  #                       dropout_layers= dropouts_hierarchical_integrated,
-  #                       batch_norm_bool= batchnorm_bool_hierachical_integrated,
-  #                       batch_norm= batchnorms_hierarchical_integrated,
+    # Hierachical AE no integration : in_features must be sizes of bottleneck dimensions of first AE
+  #  all_models.append(AE(views = view_names,
+   #                      in_features= in_feats_second_AE_hierachical,
+   #                      n_hidden_layers_dims= layers_hierarchical,
+   #                      activ_funcs=activation_functions_hierarchical,
+   #                      dropout_bool= dropout_bool_hierachical,
+   #                      dropout_prob= dropout_prob_hierachical,
+   #                      dropout_layers= dropouts_hierarchical,
+   #                      batch_norm_bool= batchnorm_bool_hierachical,
+   #                      batch_norm= batchnorms_hierarchical,
    #                      type_ae=model_types[1],
-  #                       cross_mutation=None,
-   #                      print_bool=False))
+   #                      cross_mutation=None,
+   #                      print_bool=False,
+   #                      prelu_init= prelu_rate)).to(device)
 
 
     all_models.append(FCNN.NN_changeable(views = ['AE'],
-                                       in_features = [in_feats_second_NN_concat],
+                                       in_features = [in_feats_second_NN_element_wise],
                                        n_hidden_layers_dims= layers_FCNN,
                                        activ_funcs = [FCNN_activation_functions,['none']],
                                        dropout_prob=FCNN_dropout_prob,
@@ -1443,12 +1488,12 @@ def objective(trial):
                                        dropout_bool=FCNN_dropout_bool,
                                        batch_norm_bool=FCNN_batchnorm_bool,
                                        print_bool=False,
-                                       prelu_init = prelu_rate))
+                                       prelu_init = prelu_rate)).to(device)
 
 
 
 
-   # full_net = AE_Hierarichal(all_models, types=model_types)
+  #  full_net = AE_Hierarichal(all_models, types=model_types)
 
     full_net = AE_NN(all_models, type=model_types[0])
 
@@ -1468,13 +1513,14 @@ def objective(trial):
 
     # if second decoder, we need to use loss_3 ; else normal 2 valued loss
     if len(model_types) == 2:
-        loss_hierachical_no_cross = LossHierarichcalAE(loss_3_values_hierarchical)
+        loss_hierachical_no_cross = LossHierarichcalAE(loss_3_values_hierarchical,decoding_bool=True)
         loss_hierachical_cross = LossHierarichcalAESingleCross(loss_3_values_hierarchical, cross_position=1)
     # loss : alpha * surv_loss + (1-alpha) * ae_loss
     model = models.CoxPH(full_net,
                          optimizer,
                          loss=loss_concat)
-    print_loss = True
+    model.set_device(torch.device(device))
+    print_loss = False
 
     log = model.fit(train_data,
                     train_surv,
@@ -1482,11 +1528,11 @@ def objective(trial):
                     n_epochs,
                     verbose=print_loss,
                     val_data= val_data_full,
-                    val_batch_size= batch_size,
+                    val_batch_size= 8,
                     callbacks=callbacks)
 
     # Plot it
-    _ = log.plot()
+ #   _ = log.plot()
 
     # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
     _ = model.compute_baseline_hazards()
@@ -1571,6 +1617,64 @@ def train(train_data,val_data,test_data,
           activation_layers_third,
           dropout_layers_third,
           batchnorm_layers_third):
+    """
+
+    :param train_data: Training Data for each fold for each view  ; dtype : List of Lists [for each view] of Tensors(n_samples,n_features)
+    :param val_data: Validation Data for each fold for each view  ; dtype : List of Lists [for each view] of Tensors(n_samples,n_features)
+    :param test_data: Test Data for each fold for each view  ; dtype : List of Lists [for each view] of Tensors(n_samples,n_features)
+    :param train_duration: Training Duration for each fold  ; dtype : List of Tensors(n_samples,)
+    :param val_duration: Validation Duration for each fold  ; dtype : List of Tensors(n_samples,)
+    :param test_duration: Test Duration for each fold  ; dtype : List of Tensors(n_samples,)
+    :param train_event: Training Event for each fold  ; dtype : List of Tensors(n_samples,)
+    :param val_event: Validation Event for each fold  ; dtype : List of Tensors(n_samples,)
+    :param test_event: Test Event for each fold  ; dtype : List of Tensors(n_samples,)
+    :param n_epochs: Number of Epochs ; dtype : Int
+    :param batch_size: Batch Size ; dtype : Int
+    :param l2_regularization: Decide whether to apply L2 regularization ; dtype : Boolean
+    :param l2_regularization_rate: L2 regularization rate ; dtype : Float
+    :param learning_rate: Learning rate ; dtype : Float
+    :param prelu_rate: Initial Value for PreLU activation ; dtype : Float [between 0 and 1]
+    :param layers: Dimension of Layers for each view ; dtype : List of lists of Ints
+    :param activation_layers: Activation Functions (for each view)
+                              ; dtype : List of Lists of Strings ['relu', 'sigmoid', 'prelu']
+    :param dropout: Decide whether Dropout is to be applied or not ; dtype : Boolean
+    :param dropout_rate: Probability of Neuron Dropouts ; dtype : Int
+    :param dropout_layers:  Layers in which to apply Dropout ; dtype : List of Lists of Strings ['yes','no']
+    :param batchnorm: Decide whether Batch Normalization is to be applied or not ; dtype : Boolean
+    :param batchnorm_layers: Layers in which to apply Batch Normalization ; dtype : List of Lists of Strings ['yes','no']
+    :param view_names: Names of used views ; dtype : List of Strings
+    :param cross_mutation: Choose additional decoder for view ; dtype : List of Int [Indices of decoders for view,
+                            e.g [1,3,0,2] will decode features of view 1 with decoder of view 2 (and 1),
+                            features of view 2 with decoder of view 4 (and 2) ...]
+    :param model_types: Bottlneck/Decoder manipulation ; dtype : String ['concat','elementwisemax','elementwisemin',
+    elementwiseavg','overallmax','overallmin','overallavg', 'cross' or 'cross_k' where k is on of the mentionted types]
+    :param dropout_second: Decide whether Dropout is to be applied or not for the second AE ; dtype : Boolean
+    :param dropout_rate_second: Probability of Neuron Dropouts for the second AE ; dtype : Int
+    :param batchnorm_second: Decide whether Batch Normalization is to be applied or not for the second AE; dtype : Boolean
+    :param layers_second: Dimension of Layers for each view for the second AE ; dtype : List of lists of Ints
+    :param activation_layers_second: Activation Functions (for each view) for the second AE
+                                     ; dtype : List of Lists of Strings ['relu', 'sigmoid', 'prelu']
+    :param dropout_layers_second: Layers in which to apply Dropout for the second AE
+                                  ; dtype : List of Lists of Strings ['yes','no']
+    :param batchnorm_layers_second: Layers in which to apply Batch Normalization for the second AE
+                                    ; dtype : List of Lists of Strings ['yes','no']
+    :param dropout_third: Decide whether Dropout is to be applied or not for the FCNN ; dtype : Boolean
+    :param dropout_rate_third: Probability of Neuron Dropouts fort the FCNN ; dtype : Int
+    :param batchnorm_third: Decide whether Batch Normalization is to be applied or not for the FCNN; dtype : Boolean
+    :param layers_third: Dimension of Layers for each view for the FCNN ; dtype : List of lists of Ints
+    :param activation_layers_third: Activation Functions (for each view) for the FCNN
+                                     ; dtype : List of Lists of Strings ['relu', 'sigmoid', 'prelu']
+    :param dropout_layers_third: Layers in which to apply Dropout for the FCNN
+                                  ; dtype : List of Lists of Strings ['yes','no']
+    :param batchnorm_layers_third: Layers in which to apply Batch Normalization for the FCNN
+                                    ; dtype : List of Lists of Strings ['yes','no']
+    """
+
+
+
+
+#:param ae_hierarichcal_bool : Choose whether this AE is the second AE in the pipeline ; dtype : Boolean
+#:param ae_hierarichcal_decoding_bool : Choose whether the second AE has a decoder ; dtype : Boolean
 
 
     # Cast to numpy arrays if necessary(if we get an error, we already have numpy arrays --> no need to cast)

@@ -268,8 +268,9 @@ def objective(trial):
     :return: Concordance Index ; dtype : Float
     """
 
-
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # Load in data
+  #  dir = os.path.expanduser('~/SUMO/Project/PreparedData/')
     trainset, trainset_feat, valset, valset_feat, testset, testset_feat = load_data()
 
     trainset_feat = list(trainset_feat.values)
@@ -289,37 +290,73 @@ def objective(trial):
     train_data = []
     for c,feat in enumerate(trainset_feat):
         if c < len(trainset_feat) - 3: # train data views
-            train_data.append(np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32'))
+            data_np = np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')
+            data_tensor = torch.from_numpy(data_np).to(torch.float32)
+            data_tensor = data_tensor.to(device)
+            train_data.append(data_tensor)
         elif c == len(trainset_feat) - 3: # duration
-            train_duration = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')).squeeze(axis=1)
+            duration_np = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')).squeeze(axis=1)
+            duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
+            duration_tensor = duration_tensor.to(device)
+            train_duration = duration_tensor
+
         elif c == len(trainset_feat) -2: # event
-            train_event = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')).squeeze(axis=1)
+            event_np = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')).squeeze(axis=1)
+            event_tensor = torch.from_numpy(event_np).to(torch.float32)
+            event_tensor = event_tensor.to(device)
+            train_event = event_tensor
 
     train_data = tuple(train_data)
 
     val_data = []
     for c,feat in enumerate(valset_feat):
         if c < len(valset_feat) - 3: # train data views
-            val_data.append(np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32'))
+            data_np = np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')
+            data_tensor = torch.from_numpy(data_np).to(torch.float32)
+            data_tensor = data_tensor.to(device)
+            val_data.append(data_tensor)
+
         elif c == len(valset_feat) - 3: # duration
-            val_duration = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            duration_np = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
+            duration_tensor = duration_tensor.to(device)
+            val_duration = duration_tensor
+
         elif c == len(valset_feat) -2: # event
-            val_event = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            event_np = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            event_tensor = torch.from_numpy(event_np).to(torch.float32)
+            event_tensor = event_tensor.to(device)
+            val_event = event_tensor
+
 
     test_data = []
 
     for c,feat in enumerate(testset_feat):
         if c < len(testset_feat) - 3: # train data views
-            test_data.append(np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32'))
+            data_np = np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')
+            data_tensor = torch.from_numpy(data_np).to(torch.float32)
+            data_tensor = data_tensor.to(device)
+            test_data.append(data_tensor)
+
         elif c == len(testset_feat) - 3: # duration
-            test_duration = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            duration_np = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
+            duration_tensor = duration_tensor.to(device)
+            test_duration = duration_tensor
+
         elif c == len(testset_feat) -2: # event
-            test_event = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            event_np = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
+            event_tensor = torch.from_numpy(event_np).to(torch.float32)
+            event_tensor = event_tensor.to(device)
+            test_event = event_tensor
+
 
 
 
     views = []
-    read_in = open('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt', 'r')
+ #   dir = os.path.expanduser('~/SUMO/Project/TCGAData/cancerviews.txt')
+    dir = os.path.expanduser('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt')
+    read_in = open(dir, 'r')
     for view in read_in:
             views.append(view)
 
@@ -344,7 +381,7 @@ def objective(trial):
     learning_rate = trial.suggest_float("learning_rate", 1e-5,1e-1,log=True)
     l2_regularization_rate = trial.suggest_float("l2_regularization_rate", 1e-6,1e-3, log=True)
  #   batch_size = trial.suggest_int("batch_size", 5, 200)
-    batch_size = trial.suggest_categorical("batch_size", [8,16,32,64,128,256])
+    batch_size = trial.suggest_categorical("batch_size", [5,16,32,64,128,256])
   #  n_epochs = trial.suggest_int("n_epochs", 10,100)
     n_epochs = 100
     dropout_prob = trial.suggest_float("dropout_prob", 0,0.5,step=0.1)
@@ -360,8 +397,8 @@ def objective(trial):
     batchnorms = []
 
     if 'MRNA' in view_names:
-        layers_1_mRNA = trial.suggest_int('layers_1_mRNA', 5, 512)
-        layers_2_mRNA = trial.suggest_int('layers_2_mRNA', 5, 512)
+        layers_1_mRNA = trial.suggest_int('layers_1_mRNA', 128, 256)
+        layers_2_mRNA = trial.suggest_int('layers_2_mRNA', 32, 128)
         layers_1_mRNA_activfunc = trial.suggest_categorical('layers_1_mRNA_activfunc', ['relu','sigmoid','prelu'])
         layers_2_mRNA_activfunc = trial.suggest_categorical('layers_2_mRNA_activfunc', ['relu','sigmoid','prelu'])
         layers_1_mRNA_dropout = trial.suggest_categorical('layers_1_mRNA_dropout', ['yes','no'])
@@ -375,8 +412,8 @@ def objective(trial):
         batchnorms.append([layers_1_mRNA_batchnorm, layers_2_mRNA_batchnorm])
 
     if 'DNA' in view_names:
-        layers_1_DNA = trial.suggest_int('layers_1_DNA', 5, 512)
-        layers_2_DNA = trial.suggest_int('layers_2_DNA', 5, 512)
+        layers_1_DNA = trial.suggest_int('layers_1_DNA', 128, 256)
+        layers_2_DNA = trial.suggest_int('layers_2_DNA', 32, 128)
         layers_1_DNA_activfunc = trial.suggest_categorical('layers_1_DNA_activfunc', ['relu','sigmoid','prelu'])
         layers_2_DNA_activfunc = trial.suggest_categorical('layers_2_DNA_activfunc', ['relu','sigmoid','prelu'])
         layers_1_DNA_dropout = trial.suggest_categorical('layers_1_DNA_dropout', ['yes','no'])
@@ -389,8 +426,8 @@ def objective(trial):
         batchnorms.append([layers_1_DNA_batchnorm, layers_2_DNA_batchnorm])
 
     if 'MICRORNA' in view_names:
-        layers_1_microRNA = trial.suggest_int('layers_1_microRNA', 5, 512)
-        layers_2_microRNA = trial.suggest_int('layers_2_microRNA', 5, 512)
+        layers_1_microRNA = trial.suggest_int('layers_1_microRNA', 128, 256)
+        layers_2_microRNA = trial.suggest_int('layers_2_microRNA', 32, 128)
         layers_1_microRNA_activfunc = trial.suggest_categorical('layers_1_microRNA_activfunc', ['relu','sigmoid','prelu'])
         layers_2_microRNA_activfunc = trial.suggest_categorical('layers_2_microRNA_activfunc', ['relu','sigmoid','prelu'])
         layers_1_microRNA_dropout = trial.suggest_categorical('layers_1_microRNA_dropout', ['yes','no'])
@@ -403,8 +440,8 @@ def objective(trial):
         batchnorms.append([layers_1_microRNA_batchnorm, layers_2_microRNA_batchnorm])
 
     if 'RPPA' in view_names:
-        layers_1_RPPA = trial.suggest_int('layers_1_microRNA', 5, 512)
-        layers_2_RPPA = trial.suggest_int('layers_1_microRNA', 5, 512)
+        layers_1_RPPA = trial.suggest_int('layers_1_microRNA', 128, 256)
+        layers_2_RPPA = trial.suggest_int('layers_1_microRNA', 32, 128)
         layers_1_RPPA_activfunc = trial.suggest_categorical('layers_1_RPPA_activfunc', ['relu','sigmoid','prelu'])
         layers_2_RPPA_activfunc = trial.suggest_categorical('layers_2_RPPA_activfunc', ['relu','sigmoid','prelu'])
         layers_1_RPPA_dropout = trial.suggest_categorical('layers_1_RPPA_dropout', ['yes','no'])
@@ -437,7 +474,7 @@ def objective(trial):
                               batch_norm_bool=batchnorm_bool,
                               print_bool=False,
                               prelu_init= prelu_rate
-                              )
+                              ).to(device)
 
 
     if l2_regularization_bool == True:
@@ -449,7 +486,8 @@ def objective(trial):
 
 
     model = models.CoxPH(net,optimizer)
-    print_loss = True
+    model.set_device(torch.device(device))
+    print_loss = False
 
     # Fit model
     log = model.fit(train_data,
@@ -458,12 +496,31 @@ def objective(trial):
                     n_epochs,
                     callbacks = callbacks,
                     val_data=val_data_full,
-                    val_batch_size= batch_size,
+                    val_batch_size= 8,
                     verbose=print_loss)
 
 
     # Plot it
-    _ = log.plot()
+ #   _ = log.plot()
+
+    # Change for EvalSurv-Function
+    try:
+        test_duration = test_duration.numpy()
+        test_event = test_event.numpy()
+    except AttributeError:
+        pass
+
+
+    for c,fold in enumerate(train_data):
+        try:
+            train_duration = train_duration.numpy()
+            train_event = train_event.numpy()
+            val_duration = val_duration.numpy()
+            val_event = val_event.numpy()
+        except AttributeError: # in this case already numpy arrays
+            pass
+
+
 
     # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
     _ = model.compute_baseline_hazards()
@@ -509,11 +566,15 @@ def optuna_optimization():
 
 
     # Set amount of different trials
-    EPOCHS = 500
+    EPOCHS = 150
     study = optuna.create_study(direction='maximize',sampler=optuna.samplers.TPESampler(),pruner=optuna.pruners.MedianPruner())
     study.optimize(objective, n_trials = EPOCHS)
 
     trial = study.best_trial
+
+    # Save all trials in dataframe
+    df = study.trials_dataframe()
+    df.to_csv("/Users/marlon/Desktop/Evaluation/LUAD/Standardize/FCNN/PCA/Trials.csv")
 
     print("Best Concordance", trial.value)
     print("Best Hyperparameters : {}".format(trial.params))
@@ -567,44 +628,53 @@ def train(train_data,val_data,test_data,
 
 
 
-    # Cast to numpy arrays if necessary(if we get an error, we already have numpy arrays --> no need to cast)
-    try:
-        test_duration = test_duration.numpy()
-        test_event = test_event.numpy()
-    except AttributeError:
-        pass
+
+
+
+
+
+
+#        for c2,view in enumerate(fold):
+#            try:
+#                train_data[c][c2] = (train_data[c][c2]).numpy()
+#                val_data[c][c2] = (val_data[c][c2]).numpy()
+#                test_data[c][c2] = (test_data[c][c2]).numpy()
+#            except AttributeError:
+#                pass
+
 
 
     for c,fold in enumerate(train_data):
-        try:
-            train_duration[c] = train_duration[c].numpy()
-            train_event[c] = train_event[c].numpy()
-            val_duration[c] = val_duration[c].numpy()
-            val_event[c] = val_event[c].numpy()
-        except AttributeError: # in this case already numpy arrays
-            pass
-
-
-
-        for c2,view in enumerate(fold):
-            try:
-                train_data[c][c2] = (train_data[c][c2]).numpy()
-                val_data[c][c2] = (val_data[c][c2]).numpy()
-                test_data[c][c2] = (test_data[c][c2]).numpy()
-            except AttributeError:
-                pass
-
-
         # Need tuple structure for PyCox
         train_data[c] = tuple(train_data[c])
         val_data[c] = tuple(val_data[c])
         test_data[c] = tuple(test_data[c])
 
 
+
     ############################# FOLD X ###################################
     for c_fold,fold in enumerate(train_data):
 
         for c2,view in enumerate(fold):
+
+            # For GPU acceleration, we need to have everything as tensors for the training loop, but pycox EvalSurv
+            # Needs duration & event to be numpy arrays, thus at the start we set duration/event to tensors
+            # and before EvalSurv to numpy
+            try:
+                test_duration = torch.from_numpy(test_duration).to(torch.float32)
+                test_event = torch.from_numpy(test_event).to(torch.float32)
+            except TypeError:
+                pass
+
+
+            for c,fold in enumerate(train_data):
+                try:
+                    train_duration[c] = torch.from_numpy(train_duration[c]).to(torch.float32)
+                    train_event[c] = torch.from_numpy(train_event[c]).to(torch.float32)
+                    val_duration[c] = torch.from_numpy(val_duration[c]).to(torch.float32)
+                    val_event[c] = torch.from_numpy(val_event[c]).to(torch.float32)
+                except TypeError: # in this case already numpy arrays
+                    pass
 
             print("Train data has shape : {} for view {}".format(train_data[c_fold][c2].shape, view_names[c2]))
             print("Validation data has shape : {} for view {}".format(val_data[c_fold][c2].shape, view_names[c2]))
@@ -670,6 +740,23 @@ def train(train_data,val_data,test_data,
 
         # Plot it
   #      _ = log.plot()
+
+        # Change for EvalSurv-Function
+        try:
+            test_duration = test_duration.numpy()
+            test_event = test_event.numpy()
+        except AttributeError:
+            pass
+
+
+        for c,fold in enumerate(train_data):
+            try:
+                train_duration[c] = train_duration[c].numpy()
+                train_event[c] = train_event[c].numpy()
+                val_duration[c] = val_duration[c].numpy()
+                val_event[c] = val_event[c].numpy()
+            except AttributeError: # in this case already numpy arrays
+                pass
 
         # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
         _ = model.compute_baseline_hazards()

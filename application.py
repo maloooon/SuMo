@@ -3,10 +3,11 @@ import FCNN
 import AE
 import GCN
 import ReadInData
-import DataInputNew
+import DataProcessing
 import torch
 import numpy as np
 import copy
+import os
 
 
 if __name__ == '__main__':
@@ -28,23 +29,44 @@ if __name__ == '__main__':
     view_names = cancer_data[0][2]
     feature_names = cancer_data[0][3]
     cancer_name = cancer_data[0][4][0]
+
+
+
     # Decide which views to use
     # Cancers can have DNA, mRNA, microRNA, RPPA data (not all have all of them though)
     # Leaving which_views empty will take all views into consideration will take all possible views into consideration
     which_views = []
     # Decide number of folds for Cross-Validation. For Optuna Optimization, use just one fold.
-    n_folds = 1
+    n_folds = 1 # Use 1 for Optuna Hyperparameter Optimization
     # needed for R, cant read in cancer name directly for some reason
-    with open('/Users/marlon/Desktop/Project/TCGAData/currentcancer.txt', 'w') as f:
+    type_of_preprocessing = 'standardize'
+    # Hyperparameter Optimization NN method
+    method_tune = 'GCN'
+    # Feature selection method Hyperparamter Tuning FCNN/AE (For GCN its always PPI)
+    selection_method_tuning = 'pca'
+
+    print("Preprocessing Type : ", type_of_preprocessing)
+    print("Tuning Neural Network : ", method_tune)
+    print("Feature Selection Method Tuning: " ,selection_method_tuning)
+
+
+   # dir = os.path.expanduser('~/SUMO/Project/TCGAData/currentcancer.txt') # for mlo gpu
+    dir = os.path.expanduser('/Users/marlon/Desktop/Project/TCGAData/currentcancer.txt')
+    with open(dir, 'w') as f:
         f.write(cancer_name)
 
-    multimodule = DataInputNew.SurvMultiOmicsDataModule(data,
+
+
+    multimodule = DataProcessing.SurvMultiOmicsDataModule(data,
                                                         feature_offsets,
                                                         view_names,
                                                         cancer_name= cancer_name,
                                                         which_views = which_views,
                                                         n_folds = n_folds,
-                                                        type_preprocess= 'normalize')
+                                                        type_preprocess= type_of_preprocessing)
+
+
+
 
 
     # Setup all the data
@@ -53,7 +75,9 @@ if __name__ == '__main__':
 
     # Write used views for input into NN to .txt
     # RPPA data is often dismissed, because nearly all values are NaN
-    with open('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt', 'w') as fp:
+    #dir = os.path.expanduser('~/SUMO/Project/TCGAData/cancerviews.txt')
+    dir = os.path.expanduser('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt')
+    with open(dir, 'w') as fp:
         for item in view_names_fix:
             # write each item on a new line
             fp.write("%s\n" % item)
@@ -62,8 +86,7 @@ if __name__ == '__main__':
 
     ############################################ HYPERPARAMETER OPTIMIZATION ##########################################
 
-    # Hyperparameter Optimization NN method
-    method_tune = 'none'
+
 
     if method_tune == 'GCN':
 
@@ -119,8 +142,12 @@ if __name__ == '__main__':
             train_data_df = pd.DataFrame(train_data_c)
             feat_offs_train = np.cumsum(feat_offs_train)
             feat_offs_train_df = pd.DataFrame(feat_offs_train)
-            train_data_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/TrainData.csv")
-            feat_offs_train_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/TrainDataFeatOffs.csv")
+           # dir = os.path.expanduser('~/SUMO/Project/PreparedData/TrainData.csv')
+            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TrainData.csv")
+            train_data_df.to_csv(dir)
+           # dir = os.path.expanduser('~/SUMO/Project/PreparedData/TrainDataFeatOffs.csv')
+            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TrainDataFeatOffs.csv")
+            feat_offs_train_df.to_csv(dir)
 
             all_val_data = []
             all_val_data.append(val_data[c_fold])
@@ -132,8 +159,13 @@ if __name__ == '__main__':
             val_data_df = pd.DataFrame(val_data_c)
             feat_offs_val = np.cumsum(feat_offs_val)
             feat_offs_val_df = pd.DataFrame(feat_offs_val)
-            val_data_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/ValData.csv")
-            feat_offs_val_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/ValDataFeatOffs.csv")
+          #  dir = os.path.expanduser('~/SUMO/Project/PreparedData/ValData.csv')
+            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/ValData.csv")
+            val_data_df.to_csv(dir)
+         #   dir = os.path.expanduser('~/SUMO/Project/PreparedData/ValDataFeatOffs.csv')
+            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/ValDataFeatOffs.csv")
+            feat_offs_val_df.to_csv(dir)
+
 
             all_test_data = []
             all_test_data.append(test_data[c_fold])
@@ -145,20 +177,42 @@ if __name__ == '__main__':
             test_data_df = pd.DataFrame(test_data_c)
             feat_offs_test = np.cumsum(feat_offs_test)
             feat_offs_test_df = pd.DataFrame(feat_offs_test)
-            test_data_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/TestData.csv")
-            feat_offs_test_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/TestDataFeatOffs.csv")
+           # dir = os.path.expanduser('~/SUMO/Project/PreparedData/TestData.csv')
+            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TestData.csv")
+            test_data_df.to_csv(dir)
+        #    dir = os.path.expanduser('~/SUMO/Project/PreparedData/TestDataFeatOffs.csv')
+            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TestDataFeatOffs.csv")
+            feat_offs_test_df.to_csv(dir)
 
 
 
             # also load number of features per node & number of nodes used aswell as edge indices
-            with open('/Users/marlon/Desktop/Project/PreparedData/num_features.txt', 'w') as f:
+      #      with open('/Users/marlon/Desktop/Project/PreparedData/num_features.txt', 'w') as f:
+      #          f.write(str(num_features))
+      #      with open('/Users/marlon/Desktop/Project/PreparedData/num_nodes.txt', 'w') as f:
+      #          f.write(str(num_nodes))
+      #      with open('/Users/marlon/Desktop/Project/PreparedData/edge_index_1.txt', 'w') as f:
+      #          f.write(','.join(str(i) for i in edge_index[0]))
+      #      with open('/Users/marlon/Desktop/Project/PreparedData/edge_index_2.txt', 'w') as f:
+      #              f.write(','.join(str(i) for i in edge_index[1]))
+
+
+          #  dir = os.path.expanduser('~/SUMO/Project/PreparedData/num_features.txt')
+            dir = os.path.expanduser('/Users/marlon/Desktop/Project/PreparedData/num_features.txt')
+            with open(dir, 'w') as f:
                 f.write(str(num_features))
-            with open('/Users/marlon/Desktop/Project/PreparedData/num_nodes.txt', 'w') as f:
+          #  dir = os.path.expanduser('~/SUMO/Project/PreparedData/num_nodes.txt')
+            dir = os.path.expanduser('/Users/marlon/Desktop/Project/PreparedData/num_nodes.txt')
+            with open(dir, 'w') as f:
                 f.write(str(num_nodes))
-            with open('/Users/marlon/Desktop/Project/PreparedData/edge_index_1.txt', 'w') as f:
+          #  dir = os.path.expanduser('~/SUMO/Project/PreparedData/edge_index_1.txt')
+            dir = os.path.expanduser('/Users/marlon/Desktop/Project/PreparedData/edge_index_1.txt')
+            with open(dir, 'w') as f:
                 f.write(','.join(str(i) for i in edge_index[0]))
-            with open('/Users/marlon/Desktop/Project/PreparedData/edge_index_2.txt', 'w') as f:
-                    f.write(','.join(str(i) for i in edge_index[1]))
+          #  dir = os.path.expanduser('~/SUMO/Project/PreparedData/edge_index_2.txt')
+            dir = os.path.expanduser('/Users/marlon/Desktop/Project/PreparedData/edge_index_2.txt')
+            with open(dir, 'w') as f:
+                f.write(','.join(str(i) for i in edge_index[1]))
 
 
         GCN.optuna_optimization()
@@ -167,18 +221,19 @@ if __name__ == '__main__':
     elif method_tune == 'FCNN' or method_tune == 'AE':
 
         # Choose feature selection method (PCA,Variance,AE,Eigengenes)
-        feature_select_method = 'eigengenes'
+      #  feature_select_method = 'PCA'
+
         # Choose PCA components for each view (None : take all possible PC components for this view)
-        components = [100,100,100,100]
+        components = [None,None,None,None]
         # Choose Variance thresholds for each view
-        thresholds = [0.8,0.8,0.8,0.8]
+        thresholds = [0.02,0.02,0.02,0.4]
 
-
+   #     DataProcessing.optuna_optimization()   # AE FEATURE SELECTION OPTIMIZATION
 
         train_data, val_data, test_data, \
         train_duration, train_event, \
         val_duration, val_event, \
-        test_duration, test_event = multimodule.feature_selection(method=feature_select_method,
+        test_duration, test_event = multimodule.feature_selection(method=selection_method_tuning,
                                                                   components= components,
                                                                   thresholds= thresholds,
                                                                   feature_names= feature_names)
@@ -209,8 +264,14 @@ if __name__ == '__main__':
             train_data_df = pd.DataFrame(train_data_c)
             feat_offs_train = np.cumsum(feat_offs_train)
             feat_offs_train_df = pd.DataFrame(feat_offs_train)
-            train_data_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/TrainData.csv")
-            feat_offs_train_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/TrainDataFeatOffs.csv")
+
+        #    dir = os.path.expanduser('~/SUMO/Project/PreparedData/TrainData.csv')
+            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TrainData.csv")
+            train_data_df.to_csv(dir)
+        #    dir = os.path.expanduser('~/SUMO/Project/PreparedData/TrainDataFeatOffs.csv')
+            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TrainDataFeatOffs.csv")
+            feat_offs_train_df.to_csv(dir)
+
 
             all_val_data = copy.deepcopy(val_data[c_fold])
             all_val_data.append(val_duration[c_fold].unsqueeze(1))
@@ -221,8 +282,14 @@ if __name__ == '__main__':
             val_data_df = pd.DataFrame(val_data_c)
             feat_offs_val = np.cumsum(feat_offs_val)
             feat_offs_val_df = pd.DataFrame(feat_offs_val)
-            val_data_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/ValData.csv")
-            feat_offs_val_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/ValDataFeatOffs.csv")
+
+        #    dir = os.path.expanduser('~/SUMO/Project/PreparedData/ValData.csv')
+            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/ValData.csv")
+            val_data_df.to_csv(dir)
+        #    dir = os.path.expanduser('~/SUMO/Project/PreparedData/ValDataFeatOffs.csv')
+            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/ValDataFeatOffs.csv")
+            feat_offs_val_df.to_csv(dir)
+
 
 
             all_test_data = copy.deepcopy(test_data[c_fold])
@@ -234,8 +301,15 @@ if __name__ == '__main__':
             test_data_df = pd.DataFrame(test_data_c)
             feat_offs_test = np.cumsum(feat_offs_test)
             feat_offs_test_df = pd.DataFrame(feat_offs_test)
-            test_data_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/TestData.csv")
-            feat_offs_test_df.to_csv("/Users/marlon/Desktop/Project/PreparedData/TestDataFeatOffs.csv")
+
+     #       dir = os.path.expanduser('~/SUMO/Project/PreparedData/TestData.csv')
+            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TestData.csv")
+            test_data_df.to_csv(dir)
+      #      dir = os.path.expanduser('~/SUMO/Project/PreparedData/TestDataFeatOffs.csv')
+            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TestDataFeatOffs.csv")
+            feat_offs_test_df.to_csv(dir)
+
+
 
 
         if method_tune == 'FCNN':
@@ -245,7 +319,7 @@ if __name__ == '__main__':
 
 
     # Train NN method
-    method_train = 'AE'
+    method_train = 'none'
 
     ######## SET OWN SETTINGS FOR NN CALL ############
 

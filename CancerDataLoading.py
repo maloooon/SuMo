@@ -12,13 +12,14 @@ if __name__ == '__main__':
 
     # Path where initial cancer data is stored
     dir_path = '/Users/marlon/Desktop/Project/TCGAData'
+    # dir_path = '~/SUMO/Project/TCGAData'
     cancer_types = 0
 
     for base, dirs, files in os.walk(dir_path):
         for directories in dirs:
             cancer_types += 1
 
-    print("test")
+
     # Different Cancer Types
     cancers = ['PRAD', 'ACC', 'BLCA', 'BRCA', 'CESC', 'CHOL', 'COAD', 'DLBC', 'ESCA', 'GBM', 'HNSC', 'KICH',
                'KIRC','KIRP','LAML','LGG','LIHC','LUAD','LUSC','MESO','PAAD','PCPG','READ','SARC','SKCM',
@@ -39,6 +40,7 @@ if __name__ == '__main__':
     not_dropped_indices = [set() for x in range(len(cancers))]
 
 
+    # For GPU, replace "/Users", "marlon", "Desktop"       with "~", "SUMO"
 
     for c, cancer_name in enumerate(cancers):
         # Read mRNA data if it exists
@@ -61,6 +63,7 @@ if __name__ == '__main__':
             views[c].append('mRNA')
 
         # Read DNA data if it exists
+
         if os.path.exists(os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
                                        "TCGA_" + cancer_name + "_2_DNA.csv")):
             data_DNA = pd.read_csv(
@@ -217,6 +220,11 @@ if __name__ == '__main__':
         features.update(list(cancer.columns))
 
     features_df = pd.DataFrame(features)
+
+
+    # Replace /Users/marlon/Desktop with
+    # dir = os.path.expanduser('~/SUMO/Project/...')
+
 
     # Create csv files
     for c,_ in enumerate(cancers):

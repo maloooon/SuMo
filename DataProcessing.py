@@ -5,6 +5,9 @@ import torch
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import RobustScaler
+from sklearn.preprocessing import MaxAbsScaler
+from sklearn.preprocessing import PowerTransformer
 from sklearn_pandas import DataFrameMapper
 from torch.utils.data import DataLoader, Dataset
 import FeatureSelection
@@ -15,6 +18,7 @@ from sklearn.model_selection import StratifiedKFold
 import optuna
 import copy
 import os
+
 
 
 class MultiOmicsDataset(Dataset):
@@ -96,8 +100,14 @@ def preprocess_features(
 
         if preprocess_type.lower() == 'standardize':
             standardize = [([col], StandardScaler()) for col in cols_std]
-        if preprocess_type.lower() == 'normalize':
+        if preprocess_type.lower() == 'minmaxscaling':
             standardize = [([col], MinMaxScaler()) for col in cols_std]
+        if preprocess_type.lower() == 'robustscaling':
+            standardize = [([col], RobustScaler()) for col in cols_std]
+        if preprocess_type.lower() == 'maxabsvalscaling':
+            standardize = [([col], MaxAbsScaler()) for col in cols_std]
+       # if preprocess_type.lower() == 'powertransformer':
+       #     standardize = [([col], PowerTransformer()) for col in cols_std]
         leave = [(col, None) for col in cols_leave]
         # map together so we have all features present again
         mapper = DataFrameMapper(standardize + leave)
@@ -151,7 +161,6 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             df,
             feature_offsets,
             view_names,
-            n_durations = 10,
             cancer_name=None,
             which_views = [],
             n_folds = 2,
@@ -163,7 +172,6 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                                [0, n_feats_view_1, n_feats_view_1 + n_feats_view_2,..]
                           ; dtype : List of Int [Cumulative Sum]
         :param view_names: Names of all views ; dtype : List of Strings
-        :param n_durations: TODO: not needed I think
         :param cancer_name: Name of current looked at cancer ; dtype : String
         :param which_views: Name of views we currently want to analyze ; if empty, all possible views are taken
                            ; dtype : List of Strings
@@ -173,7 +181,6 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         super().__init__()
         self.df = df
         self.feature_offsets = feature_offsets # cumulative sum of features in list of features
-        self.n_durations = n_durations
         self.view_names = [x.upper() for x in view_names]
         self.n_views = len(view_names)
         self.cancer_name = cancer_name
@@ -308,14 +315,6 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         self.duration_train_df = df_train_temp[col_duration]
 
 
-        # Drop all binary values, aswell as NaN values ; This might lead to problems, as numeric values 0/1 will
-        # be seen as binary values ; we leave that out and just remove the columns (features)
-        # which have only NaN values, see cols_remove below
-      #  cols_leave = [col for col in self.df
-      #               if np.isin(self.df[col].dropna().unique(), [0, 1]).all()]
-
-
-
         if cols_leave is None:
             cols_leave = []
 
@@ -328,14 +327,6 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         cols_drop = cols_survival
 
 
-
-
-
-
-
-
-
-
         # features with numeric values
         if cols_std is None:
             cols_std = [
@@ -343,7 +334,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             ]
 
 
-        data_folds, data_folds_targets, data_folds_durations, k_folds = self.cross_validation(df_train_temp,
+        data_folds, data_folds_targets, data_folds_durations = self.cross_validation(df_train_temp,
                                                                                               self.event_train_df,
                                                                                               self.duration_train_df,
                                                                                               self.n_folds)
@@ -352,8 +343,8 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         n_train_fold_samples = []
         n_val_fold_samples = []
 
-        print("Cross validation : {} splits".format(k_folds))
-        for fold in range(k_folds):
+        print("Cross validation : {} splits".format(self.n_folds))
+        for fold in range(self.n_folds):
             print("Split {} : ".format(fold + 1))
             print("non censored events in train : {} with {} samples in total".
                   format(int(np.sum(data_folds_targets[fold][0])), data_folds_targets[fold][0].size))
@@ -373,7 +364,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         # Preprocess train and test data with programmed function
         if self.type_preprocess.lower() != 'none':
             print("Preprocessing data....")
-        for fold in range(k_folds):
+        for fold in range(self.n_folds):
             self.x_train, self.x_test_actual, self.x_val = preprocess_features(
                 df_train=data_folds[fold][0].drop(cols_drop, axis = 1), # drop duration/event from df, as we don't want these
                 df_test=df_test.drop(cols_drop, axis = 1),
@@ -575,7 +566,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
             c += 1
 
-        return folds, folds_targets, folds_durations, k_folds # TODO : k_folds muss denk ich nicht returned werden
+        return folds, folds_targets, folds_durations
 
 
     def feature_selection(self, method = None,
@@ -830,7 +821,6 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                             break
 
 
-
                     variance_train_tensors[c].append(torch.tensor(train_data))
                     variance_val_tensors[c].append(torch.tensor(val_data))
                     variance_test_tensors[c].append(torch.tensor(test_data))
@@ -875,8 +865,6 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
             # Define learning rate
             learning_rate_train = 9.787680019790807e-05
-         #   learning_rate_val = 0.0001
-         #   learning_rate_test = 0.0001
 
             # Define Loss
             criterion = nn.MSELoss()
@@ -890,8 +878,6 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
             # Batch Sizes
             batch_size_train = 8
-          #  batch_size_val = 16
-          #  batch_size_test = 16
 
             # Decide whether to print losses
             print_bool = True
@@ -906,39 +892,21 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
             for c_fold in range(self.n_folds):
                 dimensions_train = [x.shape[1] for x in self.train_folds[c_fold]]
-          #      dimensions_val = [x.shape[1] for x in self.val_folds[c_fold]]
-            #    dimensions_test = [x.shape[1] for x in self.x_test]
+
 
                 # Layer Sizes
-           #     layers_train = [[256,128] for x in range(self.n_views)]
                 layers_train = [[236,159], [181,35], [290,128]]
-             #   layers_val = [[512,256] for x in range(self.n_views)]
-             #   layers_test = [[256,128] for x in range(self.n_views)]
+
 
                 # Activation Functions
-           #     activation_functions_train = [['relu'] for i in range(self.n_views)]
                 activation_functions_train = [['relu','relu'],['relu','sigmoid'],['relu','sigmoid']]
-            #    activation_functions_val = [['relu'] for i in range(self.n_views)]
-            #    activation_functions_test = [['relu'] for i in range(self.n_views)]
-                # Batch Normalization
-             #   batch_normalization_train = [[] for i in range(self.n_views)]
-                batch_normalization_train = [['yes','yes'],['no','yes'], ['yes','yes']]
-            #    batch_normalization_val = [[] for i in range(self.n_views)]
-            #    batch_normalization_test = [[] for i in range(self.n_views)]
-                # Dropout Layers
-            #    dropout_layers_train = [[] for i in range(self.n_views)]
-                dropout_layers_train = [['yes','no'], ['yes','no'], ['no','no']]
-            #    dropout_layers_val = [[] for i in range(self.n_views)]
-            #    dropout_layers_test = [[] for i in range(self.n_views)]
 
-            #    for c,dim in enumerate(layers_train):
-            #        for i in range(len(dim)):
-            #            batch_normalization_train[c].append('no')
-               #         batch_normalization_val[c].append('no')
-               #         batch_normalization_test[c].append('no')
-            #            dropout_layers_train[c].append('no')
-               #         dropout_layers_val[c].append('no')
-               #         dropout_layers_test[c].append('no')
+                # Batch Normalization
+                batch_normalization_train = [['yes','yes'],['no','yes'], ['yes','yes']]
+
+                # Dropout Layers
+                dropout_layers_train = [['yes','no'], ['yes','no'], ['no','no']]
+
 
 
                 # Call train net ; we use none as type, as we want to keep the structure of multiple views
@@ -953,37 +921,11 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                                       type_ae='none',
                                       print_bool=False)
 
-                # Call val net (same structure)
-          #      net_val = featAE.AE(self.view_names,
-          #                          dimensions_val, layers_val,
-          #                          activ_funcs= activation_functions_val,
-          #                          batch_norm= batch_normalization_val,
-          #                          dropout_layers= dropout_layers_val,
-          #                          dropout_prob= 0.1,
-          #                          dropout_bool=False,
-          #                          batch_norm_bool=False,
-          #                          type_ae='none',
-           #                         print_bool=False)
 
 
-                # Call test net (same structure)
-           #     net_test = featAE.AE(self.view_names,
-           #                          dimensions_test, layers_test,
-           #                          activ_funcs= activation_functions_test,
-            #                         batch_norm= batch_normalization_test,
-           #                          dropout_layers= dropout_layers_test,
-           ##                          dropout_prob= 0.1,
-            #                         dropout_bool=False,
-           #                          batch_norm_bool=False,
-             #                        type_ae='none',
-             #                        print_bool=False)
 
                 # optimizers
                 optimizer_train = Adam(net_train.parameters(), lr= learning_rate_train)
-             #   optimizer_val = Adam(net_val.parameters(), lr= learning_rate_val)
-             #   optimizer_test = Adam(net_test.parameters(), lr= learning_rate_test)
-
-
 
                 # Load Data for current fold with Dataloaders for batching structure
                 self.train_set = MultiOmicsDataset(self.train_folds[c_fold], self.train_folds_durations[c_fold], self.train_folds_events[c_fold], type = 'tensor')
@@ -1365,17 +1307,10 @@ def objective(trial):
         batchnorms.append([layers_1_RPPA_batchnorm, layers_2_RPPA_batchnorm])
 
     layers_train = copy.deepcopy(layers)
-  #  layers_val = copy.deepcopy(layers)
-  #  layers_test = copy.deepcopy(layers)
     activ_func_train = copy.deepcopy(activation_functions)
-  #  activ_func_val = copy.deepcopy(activation_functions)
-  #  activ_func_test = copy.deepcopy(activation_functions)
     batchnorms_train = copy.deepcopy(layers)
-  #  batchnorms_val = copy.deepcopy(layers)
-  #  batchnorms_test = copy.deepcopy(layers)
     dropouts_train = copy.deepcopy(layers)
-  #  dropouts_val = copy.deepcopy(layers)
-  #  dropouts_test = copy.deepcopy(layers)
+
 
     # Call train net
     net_train = featAE.AE(view_names,
@@ -1389,42 +1324,15 @@ def objective(trial):
                           type_ae='none',
                           print_bool=False)
 
-    # Call val net (same structure)
- #   net_val = featAE.AE(view_names,
- #                         dimensions, layers_val,
- #                         activ_funcs= activ_func_val,
- #                         batch_norm= batchnorms_val,
- #                         dropout_layers= dropouts_val,
- #                         dropout_prob= dropout_prob,
- #                         dropout_bool=dropout_bool,
- #                         batch_norm_bool=batchnorm_bool,
- #                         type_ae='none',
- #                         print_bool=False)
 
-
-    # Call test net (same structure)
-#    net_test = featAE.AE(view_names,
-#                          dimensions, layers_test,
-#                          activ_funcs= activ_func_test,
-#                          batch_norm= batchnorms_test,
-#                          dropout_layers= dropouts_test,
-#                          dropout_prob= dropout_prob,
-#                          dropout_bool=dropout_bool,
-#                          batch_norm_bool=batchnorm_bool,
-#                          type_ae='none',
-#                          print_bool=False)
 
     # optimizers
 
     if l2_regularization_bool == True:
         optimizer_train = Adam(net_train.parameters(), lr= learning_rate,weight_decay= l2_regularization_rate)
-  #      optimizer_val = Adam(net_val.parameters(), lr= learning_rate, weight_decay= l2_regularization_rate)
-   #     optimizer_test = Adam(net_test.parameters(), lr= learning_rate, weight_decay= l2_regularization_rate)
-
     else:
         optimizer_train = Adam(net_train.parameters(), lr= learning_rate)
-   #     optimizer_val = Adam(net_val.parameters(), lr= learning_rate)
-   #     optimizer_test = Adam(net_test.parameters(), lr= learning_rate)
+
 
 
 

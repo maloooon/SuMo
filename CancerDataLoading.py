@@ -63,7 +63,6 @@ if __name__ == '__main__':
             views[c].append('mRNA')
 
         # Read DNA data if it exists
-
         if os.path.exists(os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
                                        "TCGA_" + cancer_name + "_2_DNA.csv")):
             data_DNA = pd.read_csv(

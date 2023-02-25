@@ -17,7 +17,7 @@ if __name__ == '__main__':
     """
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(device)
+    print("Running on device : ", device)
 
     # Define Cancer to load
     # Possible Cancers are :
@@ -33,18 +33,18 @@ if __name__ == '__main__':
 
 
     # Decide which views to use
-    # Cancers can have mRNA, DNA, microRNA, RPPA data (not all have all of them though)
+    # Cancers can have mRNA, DNA, microRNA, RPPA data
     # Leaving which_views empty will take all views into consideration will take all possible views into consideration
     # If you want to choose specific cancers, put them in the right order : mRNA, DNA, microRNA, RPPA
     which_views = []
-    # Decide number of folds for Cross-Validation. For Optuna Optimization, use just one fold.
+    # Decide number of folds for cross validation. For Optuna optimization, use just one fold.
     n_folds = 1 # Use 1 for Optuna Hyperparameter Optimization
-    # needed for R, cant read in cancer name directly for some reason
+    # Decide type of preprocessing (standardize/minmaxscaling (between 0 & 1)/robustscaling (good when we have outliers)/maxabsvalscaling (between -1 and 1)
     type_of_preprocessing = 'standardize'
     # Hyperparameter Optimization NN method
-    method_tune = 'FCNN'
-    # Feature selection method Hyperparamter Tuning FCNN/AE (For GCN its always PPI)
-    selection_method_tuning = 'variance'
+    method_tune = 'AE'
+    # Feature selection method hyperparamter Tuning FCNN/AE (For GCN its always PPI)
+    selection_method_tuning = 'PCA'
 
     print("Preprocessing Type : ", type_of_preprocessing)
     print("Tuning Neural Network : ", method_tune)
@@ -57,7 +57,7 @@ if __name__ == '__main__':
         f.write(cancer_name)
 
 
-
+    # Call the module
     multimodule = DataProcessing.SurvMultiOmicsDataModule(data,
                                                         feature_offsets,
                                                         view_names,
@@ -75,7 +75,6 @@ if __name__ == '__main__':
 
 
     # Write used views for input into NN to .txt
-    # RPPA data is often dismissed, because nearly all values are NaN
     #dir = os.path.expanduser('~/SUMO/Project/TCGAData/cancerviews.txt')
     dir = os.path.expanduser('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt')
     with open(dir, 'w') as fp:
@@ -87,8 +86,6 @@ if __name__ == '__main__':
 
     ############################################ HYPERPARAMETER OPTIMIZATION ##########################################
 
-
-
     if method_tune == 'GCN':
 
         # PPI feature selection
@@ -97,11 +94,11 @@ if __name__ == '__main__':
         val_duration, val_event, \
         test_duration, test_event = multimodule.feature_selection('ppi', feature_names)
 
-        # We go through each fold (but in Optuna Optimization, we only produce one fold, so this loop is not necessary
-        # per se (just easier to read and if Hyperparameter Optimization was to be implemented with multiple folds,
-        # one can build code based on this
+        # We go through each fold (but in Optuna optimization, we only produce one fold, so this loop is not necessary
+        # per se (just easier to read and if hyperparameter optimization was to be implemented with multiple folds,
+        # one can build code based on this)
         for c_fold in range(n_folds):
-
+            print("For Fold {}".format(c_fold))
             print("Train data has shape : {}".format(train_data[c_fold].shape))
             print("Validation data has shape : {}".format(val_data[c_fold].shape))
             print("Test data has shape : {}".format(test_data[c_fold].shape))
@@ -121,7 +118,6 @@ if __name__ == '__main__':
 
             # data is 3-dimensional : [n_samples,n_proteins,n_features_per_protein]
             # to load data into a csv file, we need to reshape into 2-dimensional data
-
             train_samples = train_duration[c_fold].size(0)
             val_samples = val_duration[c_fold].size(0)
             test_samples = test_duration.size(0)
@@ -186,18 +182,6 @@ if __name__ == '__main__':
             feat_offs_test_df.to_csv(dir)
 
 
-
-            # also load number of features per node & number of nodes used aswell as edge indices
-      #      with open('/Users/marlon/Desktop/Project/PreparedData/num_features.txt', 'w') as f:
-      #          f.write(str(num_features))
-      #      with open('/Users/marlon/Desktop/Project/PreparedData/num_nodes.txt', 'w') as f:
-      #          f.write(str(num_nodes))
-      #      with open('/Users/marlon/Desktop/Project/PreparedData/edge_index_1.txt', 'w') as f:
-      #          f.write(','.join(str(i) for i in edge_index[0]))
-      #      with open('/Users/marlon/Desktop/Project/PreparedData/edge_index_2.txt', 'w') as f:
-      #              f.write(','.join(str(i) for i in edge_index[1]))
-
-
           #  dir = os.path.expanduser('~/SUMO/Project/PreparedData/num_features.txt')
             dir = os.path.expanduser('/Users/marlon/Desktop/Project/PreparedData/num_features.txt')
             with open(dir, 'w') as f:
@@ -226,8 +210,9 @@ if __name__ == '__main__':
 
         # Choose PCA components for each view (None : take all possible PC components for this view)
         components = [None,None,None,None]
-        # Choose Variance thresholds for each view
-        thresholds = [1,1,1,1]
+        # Choose Variance thresholds for each view (if Thresholds are not possible, will be reduced until
+        # possible.
+        thresholds = [0.02,0.1,0.06,0.1]
 
       #  DataProcessing.optuna_optimization()   # AE FEATURE SELECTION OPTIMIZATION
 
@@ -240,9 +225,9 @@ if __name__ == '__main__':
                                                                   feature_names= feature_names)
 
 
-        # We go through each fold (but in Optuna Optimization, we only produce one fold, so this loop is not necessary
+        # We go through each fold (but in Optuna optimization, we only produce one fold, so this loop is not necessary
         # per se (just easier to read and if Hyperparameter Optimization was to be implemented with multiple folds,
-        # one can build code based on this
+        # one can build code based on this)
         for c_fold in range(n_folds):
 
             for c_view, view in enumerate(view_names_fix):
@@ -322,7 +307,7 @@ if __name__ == '__main__':
     # Train NN method
     method_train = 'none'
 
-    ######## SET OWN SETTINGS FOR NN CALL ############
+    ###################################### SET OWN SETTINGS FOR NN CALL #############################################
 
     # FULLY CONNECTED NEURAL NET SETTINGS
     # EPOCHS
@@ -593,9 +578,6 @@ if __name__ == '__main__':
     elif method_train == 'AE':
         print("######################## RUNNING AUTOENCODER ####################################")
 
-
-
-
         AE.train(train_data, val_data, test_data,
                  train_duration, val_duration, test_duration,
                  train_event, val_event, test_event,
@@ -629,11 +611,6 @@ if __name__ == '__main__':
           activation_layers_third = INTEGRATED_ACTIV_FUNCS,
           dropout_layers_third = INTEGRATED_DROPOUT_LAYERS,
           batchnorm_layers_third = INTEGRATED_BATCHNORM_LAYERS)
-
-
-
-
-
 
         print("######################## AUTOENCODER FINISHED ####################################")
 

@@ -103,7 +103,7 @@ data_df = pd.DataFrame(data)
 
 dir = os.path.expanduser("/Users/marlon/Desktop/Project/ProteinToFeature.csv")
 #dir = os.path.expanduser("~/SUMO/Project/ProteinToFeature.csv")
-data_df.to_csv("/Users/marlon/Desktop/Project/ProteinToFeature.csv")
+data_df.to_csv(dir)
 
 
 

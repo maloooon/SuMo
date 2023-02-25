@@ -381,7 +381,7 @@ def objective(trial):
     learning_rate = trial.suggest_float("learning_rate", 1e-5,1e-1,log=True)
     l2_regularization_rate = trial.suggest_float("l2_regularization_rate", 1e-6,1e-3, log=True)
  #   batch_size = trial.suggest_int("batch_size", 5, 200)
-    batch_size = trial.suggest_categorical("batch_size", [5,16,32,64,128,256])
+    batch_size = trial.suggest_categorical("batch_size", [5,17,32,64,128,256])
   #  n_epochs = trial.suggest_int("n_epochs", 10,100)
     n_epochs = 100
     dropout_prob = trial.suggest_float("dropout_prob", 0,0.5,step=0.1)
@@ -496,7 +496,7 @@ def objective(trial):
                     n_epochs,
                     callbacks = callbacks,
                     val_data=val_data_full,
-                    val_batch_size= 8,
+                    val_batch_size= 5,
                     verbose=print_loss)
 
 
@@ -575,7 +575,7 @@ def optuna_optimization():
     # Save all trials in dataframe
     df = study.trials_dataframe()
     df = df.sort_values('value')
-    df.to_csv("/Users/marlon/Desktop/Evaluation/LUAD/Standardize/FCNN/Trial.csv")
+    df.to_csv("/Users/marlon/Desktop/Trial.csv")
 
     print("Best Concordance", trial.value)
     print("Best Hyperparameters : {}".format(trial.params))
@@ -626,23 +626,6 @@ def train(train_data,val_data,test_data,
     :param batchnorm_layers: Layers in which to apply Batch Normalization ; dtype : List of Lists of Strings ['yes','no']
     :param view_names: Names of used views ; dtype : List of Strings
     """
-
-
-
-
-
-
-
-
-
-#        for c2,view in enumerate(fold):
-#            try:
-#                train_data[c][c2] = (train_data[c][c2]).numpy()
-#                val_data[c][c2] = (val_data[c][c2]).numpy()
-#                test_data[c][c2] = (test_data[c][c2]).numpy()
-#            except AttributeError:
-#                pass
-
 
 
     for c,fold in enumerate(train_data):
@@ -794,14 +777,6 @@ def train(train_data,val_data,test_data,
         print("Concordance index : {} , Integrated Brier Score : {} , Binomial Log-Likelihood : {}".format(concordance_index,
                                                                                                            brier_score,
                                                                                                            binomial_score))
-
-
-
-
-
-
-
-
 
 
 def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/"):

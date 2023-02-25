@@ -8,7 +8,8 @@ def readcancerdata(cancer_name):
     Read in cancer data of a particular cancer for analysis.
     :param cancer_name: abbreviation of the cancer name ; dtype : String
     :return: Cancer data, which contains feature values for each view, duration, event,
-     data offsets, view names, feature names and the cancer name to be analyzed ; dtype : List of Dataframes
+     data offsets, view names, feature names and the cancer name to be analyzed
+     ; dtype : List of (Dataframe, Dataframe, List, List, List)
     """
     # Load in cancer data, its feature offsets and views used
     # different types

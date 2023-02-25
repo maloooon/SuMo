@@ -254,7 +254,7 @@ class GCN(nn.Module):
 
 
 
-        return x # all return values have the same value --> error in net
+        return x
 
 
 # https://github.com/bio-ontology-research-group/DeepMOCCA/blob/master/step-by-step/deepmocca_training.ipynb
@@ -405,8 +405,6 @@ def objective(trial):
 
  #   processing_type = trial.suggest_categorical('processing_type', ['normalize','normalizebyrow','normalizebycolumn','none'])
 
-    # TODO :Using different ones leads to float errors in GCN ?
-
     # Best results : normalize/standardize in preprocessing, 'none' in postprocessing
     processing_type = 'none'
 
@@ -501,8 +499,8 @@ def objective(trial):
 
  #   out_1_graphconv = trial.suggest_int('out_1_graphconv', 5, 300)
     out_1_graphconv = 2 # constant bc of some float error
-    # TODO : prelu doesnt work for graph conv activation for some reason
- #   graphconv_1_activation_function = trial.suggest_categorical('graphconv_1_activation_function', ['relu','prelu'])
+
+ #   graphconv_1_activation_function = trial.suggest_categorical('graphconv_1_activation_function', ['relu','sigmoid'])
     graphconv_1_activation_function = 'relu'
 
     # decide whether second graphconv layer
@@ -510,7 +508,7 @@ def objective(trial):
  #   graphconv_2_activation_function = trial.suggest_categorical('graphconv_2_activation_function', ['relu','sigmoid'])
 
     # if no second graphconv layer, take it out here
- #   graphconvs = [out_1_graphconv, out_2_graphconv] # TODO : with only one rundungsfehler im pooling layer
+ #   graphconvs = [out_1_graphconv, out_2_graphconv]
     graphconvs = [out_1_graphconv]
   #  graphconvs_activation_functions = [graphconv_1_activation_function, graphconv_2_activation_function]
     graphconvs_activation_functions = [graphconv_1_activation_function]
@@ -874,9 +872,6 @@ def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/"):
     testset_feat = pd.read_csv(
         os.path.join(data_dir + "TestDataFeatOffs.csv"), index_col=0)
 
-#    num_nodes = pd.read_csv(data_dir + "num_nodes.txt", sep=" ", header=None)
-#    num_features = pd.read_csv(data_dir + "num_features.txt", sep=" ", header=None)
-
     num_nodes = np.loadtxt(data_dir + "num_nodes.txt", unpack=False)
     num_features = np.loadtxt(data_dir + "num_features.txt", unpack=False)
 
@@ -886,10 +881,6 @@ def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/"):
     edge_index_2 = np.loadtxt(data_dir +"edge_index_2.txt" , dtype=int, comments="#", delimiter=",", unpack=False)
 
     edge_index = [list(edge_index_1), list(edge_index_2)]
-
-
-
-
 
 
     return trainset, trainset_feat, valset,valset_feat, testset,testset_feat, num_nodes, num_features, edge_index

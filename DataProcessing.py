@@ -286,10 +286,10 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
 
-        # Drop columns (features) which have only NaN values
+        # Columns (features) which have only NaN values
         cols_remove = self.df.columns[self.df.isna().all()].tolist()
 
-
+        cols_leave = cols_remove
 
         # features with numeric values
         if cols_std is None:
@@ -781,6 +781,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                         except ValueError:
                             thresholds[view] = thresholds[view] - 0.01
                         else:
+                            print("Threshold of view ", self.view_names[view], "is ", thresholds[view])
                             break
 
 
@@ -1256,8 +1257,8 @@ def objective(trial):
     batchnorms = []
 
     if 'MRNA' in view_names:
-        layers_1_mRNA = trial.suggest_int('layers_1_mRNA', 5, 300)
-        layers_2_mRNA = trial.suggest_int('layers_2_mRNA', 5, 300)
+        layers_1_mRNA = trial.suggest_int('layers_1_mRNA', 1000, 2000)
+        layers_2_mRNA = trial.suggest_int('layers_2_mRNA', 500, 1000)
         layers_1_mRNA_activfunc = trial.suggest_categorical('layers_1_mRNA_activfunc', ['relu','sigmoid'])
         layers_2_mRNA_activfunc = trial.suggest_categorical('layers_2_mRNA_activfunc', ['relu','sigmoid'])
         layers_1_mRNA_dropout = trial.suggest_categorical('layers_1_mRNA_dropout', ['yes','no'])
@@ -1272,8 +1273,8 @@ def objective(trial):
 
 
     if 'DNA' in view_names:
-        layers_1_DNA = trial.suggest_int('layers_1_DNA', 5, 300)
-        layers_2_DNA = trial.suggest_int('layers_2_DNA', 5, 300)
+        layers_1_DNA = trial.suggest_int('layers_1_DNA', 1000, 2000)
+        layers_2_DNA = trial.suggest_int('layers_2_DNA', 500,1000)
         layers_1_DNA_activfunc = trial.suggest_categorical('layers_1_DNA_activfunc', ['relu','sigmoid'])
         layers_2_DNA_activfunc = trial.suggest_categorical('layers_2_DNA_activfunc', ['relu','sigmoid'])
         layers_1_DNA_dropout = trial.suggest_categorical('layers_1_DNA_dropout', ['yes','no'])
@@ -1287,8 +1288,8 @@ def objective(trial):
         batchnorms.append([layers_1_DNA_batchnorm, layers_2_DNA_batchnorm])
 
     if 'MICRORNA' in view_names:
-        layers_1_microRNA = trial.suggest_int('layers_1_microRNA', 5, 300)
-        layers_2_microRNA = trial.suggest_int('layers_2_microRNA', 5, 300)
+        layers_1_microRNA = trial.suggest_int('layers_1_microRNA', 1000, 2000)
+        layers_2_microRNA = trial.suggest_int('layers_2_microRNA', 500, 1000)
         layers_1_microRNA_activfunc = trial.suggest_categorical('layers_1_microRNA_activfunc', ['relu','sigmoid'])
         layers_2_microRNA_activfunc = trial.suggest_categorical('layers_2_microRNA_activfunc', ['relu','sigmoid'])
         layers_1_microRNA_dropout = trial.suggest_categorical('layers_1_microRNA_dropout', ['yes','no'])
@@ -1303,8 +1304,8 @@ def objective(trial):
         batchnorms.append([layers_1_microRNA_batchnorm, layers_2_microRNA_batchnorm])
 
     if 'RPPA' in view_names:
-        layers_1_RPPA = trial.suggest_int('layers_1_RPPA', 5, 300)
-        layers_2_RPPA = trial.suggest_int('layers_2_RPPA', 5, 300)
+        layers_1_RPPA = trial.suggest_int('layers_1_RPPA', 1000, 2000)
+        layers_2_RPPA = trial.suggest_int('layers_2_RPPA', 500, 1000)
         layers_1_RPPA_activfunc = trial.suggest_categorical('layers_1_RPPA_activfunc', ['relu','sigmoid'])
         layers_2_RPPA_activfunc = trial.suggest_categorical('layers_2_RPPA_activfunc', ['relu','sigmoid'])
         layers_1_RPPA_dropout = trial.suggest_categorical('layers_1_RPPA_dropout', ['yes','no'])

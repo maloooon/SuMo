@@ -575,7 +575,7 @@ def optuna_optimization():
     # Save all trials in dataframe
     df = study.trials_dataframe()
     df = df.sort_values('value')
-    df.to_csv("/Users/marlon/Desktop/Evaluation/LUAD/Trial.csv")
+    df.to_csv("/Users/marlon/Desktop/Evaluation/LAML/Trial.csv")
 
     print("Best Concordance", trial.value)
     print("Best Hyperparameters : {}".format(trial.params))

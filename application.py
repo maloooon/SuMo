@@ -23,7 +23,7 @@ if __name__ == '__main__':
     # Possible Cancers are :
     #PRAD, ACC, BLCA, BRCA,CESC,CHOL,COAD,DLBC,ESCA,GBM, HNSC,KICH,KIRC,KIRP,LAML,LGG,
     #LIHC,LUAD,LUSC,MESO,PAAD,PCPG,READ,SARC,SKCM,STAD,TGCT,THCA,THYM,UCEC,UCS,UVM
-    cancer_data = ReadInData.readcancerdata('LAML')
+    cancer_data = ReadInData.readcancerdata('LUAD')
     data = cancer_data[0][0]
     feature_offsets = cancer_data[0][1]
     view_names = cancer_data[0][2]
@@ -33,8 +33,9 @@ if __name__ == '__main__':
 
 
     # Decide which views to use
-    # Cancers can have DNA, mRNA, microRNA, RPPA data (not all have all of them though)
+    # Cancers can have mRNA, DNA, microRNA, RPPA data (not all have all of them though)
     # Leaving which_views empty will take all views into consideration will take all possible views into consideration
+    # If you want to choose specific cancers, put them in the right order : mRNA, DNA, microRNA, RPPA
     which_views = []
     # Decide number of folds for Cross-Validation. For Optuna Optimization, use just one fold.
     n_folds = 1 # Use 1 for Optuna Hyperparameter Optimization
@@ -43,7 +44,7 @@ if __name__ == '__main__':
     # Hyperparameter Optimization NN method
     method_tune = 'FCNN'
     # Feature selection method Hyperparamter Tuning FCNN/AE (For GCN its always PPI)
-    selection_method_tuning = 'ae'
+    selection_method_tuning = 'variance'
 
     print("Preprocessing Type : ", type_of_preprocessing)
     print("Tuning Neural Network : ", method_tune)
@@ -226,9 +227,9 @@ if __name__ == '__main__':
         # Choose PCA components for each view (None : take all possible PC components for this view)
         components = [None,None,None,None]
         # Choose Variance thresholds for each view
-        thresholds = [0.06,0.06,0.8,0.6]
+        thresholds = [1,1,1,1]
 
-        DataProcessing.optuna_optimization()   # AE FEATURE SELECTION OPTIMIZATION
+      #  DataProcessing.optuna_optimization()   # AE FEATURE SELECTION OPTIMIZATION
 
         train_data, val_data, test_data, \
         train_duration, train_event, \

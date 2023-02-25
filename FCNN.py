@@ -440,8 +440,8 @@ def objective(trial):
         batchnorms.append([layers_1_microRNA_batchnorm, layers_2_microRNA_batchnorm])
 
     if 'RPPA' in view_names:
-        layers_1_RPPA = trial.suggest_int('layers_1_microRNA', 128, 256)
-        layers_2_RPPA = trial.suggest_int('layers_1_microRNA', 32, 128)
+        layers_1_RPPA = trial.suggest_int('layers_1_RPPA', 128, 256)
+        layers_2_RPPA = trial.suggest_int('layers_2_RPPA', 32, 128)
         layers_1_RPPA_activfunc = trial.suggest_categorical('layers_1_RPPA_activfunc', ['relu','sigmoid','prelu'])
         layers_2_RPPA_activfunc = trial.suggest_categorical('layers_2_RPPA_activfunc', ['relu','sigmoid','prelu'])
         layers_1_RPPA_dropout = trial.suggest_categorical('layers_1_RPPA_dropout', ['yes','no'])
@@ -575,7 +575,7 @@ def optuna_optimization():
     # Save all trials in dataframe
     df = study.trials_dataframe()
     df = df.sort_values('value')
-    df.to_csv("/Users/marlon/Desktop/Evaluation/LAML/Trial.csv")
+    df.to_csv("/Users/marlon/Desktop/Evaluation/LUAD/Standardize/FCNN/Trial.csv")
 
     print("Best Concordance", trial.value)
     print("Best Hyperparameters : {}".format(trial.params))

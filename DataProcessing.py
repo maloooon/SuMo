@@ -239,6 +239,51 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                 self.feature_offsets = sorted(list(self.feature_offsets))
 
 
+        print("There are {} views : {} with feature offsets {}".format(self.n_views, self.view_names, self.feature_offsets))
+
+        # Columns (features) which have only NaN values
+        cols_remove = self.df.columns[self.df.isna().all()].tolist()
+        print("Deleting features with only 0 values...")
+        for feature_name in cols_remove:
+            if 'DNA' in feature_name.upper():
+                idx = self.view_names.index('DNA')
+                # Remove one entity from feature offsets of respective view, as we will delete this feature from this view
+                for c,_ in enumerate(self.feature_offsets):
+                    if c >= (idx + 1):
+                        self.feature_offsets[c] -= 1
+            if 'MRNA' in feature_name.upper():
+                idx = self.view_names.index('MRNA')
+                for c,_ in enumerate(self.feature_offsets):
+                    if c >= (idx + 1):
+                        self.feature_offsets[c] -= 1
+            if 'MIRNA' in feature_name.upper():
+                idx = self.view_names.index('MICRORNA')
+                for c,_ in enumerate(self.feature_offsets):
+                    if c >= (idx + 1):
+                        self.feature_offsets[c] -= 1
+            if 'RPPA' in feature_name.upper():
+                idx = self.view_names.index('RPPA')
+                for c,_ in enumerate(self.feature_offsets):
+                    if c >= (idx + 1):
+                        self.feature_offsets[c] -= 1
+
+        # Drop "empty" feature columns
+        self.df.drop(cols_remove, inplace=True, axis=1)
+
+
+        # Check if any view has no data anymore
+        for c_offset in range(len(self.feature_offsets) -2):
+            if self.feature_offsets[c_offset] == self.feature_offsets[c_offset + 1]:
+                print("View", self.view_names[c_offset], "consists of only 0 values and thus won't be taken"
+                                                          "into consideration for analysis.")
+
+                # Delete from views :
+                del self.view_names[c_offset]
+                self.n_views -= 1
+                # Delete from offsets
+                del self.feature_offsets[c_offset]
+
+        print("After Deletion, we have {} views left : {} and feature offsets {}".format(self.n_views, self.view_names, self.feature_offsets))
         # Split data into test and training set and training
         # into training and validation set, preprocess this data with preprocess_features
         event_values = list(self.df[col_event].values)
@@ -268,7 +313,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         # which have only NaN values, see cols_remove below
       #  cols_leave = [col for col in self.df
       #               if np.isin(self.df[col].dropna().unique(), [0, 1]).all()]
-        # Remove event from binary column values (we are only interested in feature values from views)
+
 
 
         if cols_leave is None:
@@ -286,10 +331,10 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
 
-        # Columns (features) which have only NaN values
-        cols_remove = self.df.columns[self.df.isna().all()].tolist()
 
-        cols_leave = cols_remove
+
+
+
 
         # features with numeric values
         if cols_std is None:

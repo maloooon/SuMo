@@ -19,6 +19,11 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print("Running on device : ", device)
 
+
+    # 4 views STAD,LUAD,LAML,KIRC,KIRP,LIHC,LUSC,MESO,UVM
+    # 2 views ACC, BRCA, CHOL,DLBC, ESCA, GBM, KICH, KIRC, PAAD, PCPG, READ, TGCT, THYM, UCEC, UCS (miRNA,RPPA)
+    # 1 view BLCA, CESC, COAD, HNSC, LGG, SARC, SKCM, THCA (RPPA)
+
     # Define Cancer to load
     # Possible Cancers are :
     #PRAD, ACC, BLCA, BRCA,CESC,CHOL,COAD,DLBC,ESCA,GBM, HNSC,KICH,KIRC,KIRP,LAML,LGG,
@@ -38,13 +43,21 @@ if __name__ == '__main__':
     # If you want to choose specific cancers, put them in the right order : mRNA, DNA, microRNA, RPPA
     which_views = []
     # Decide number of folds for cross validation. For Optuna optimization, use just one fold.
-    n_folds = 1 # Use 1 for Optuna Hyperparameter Optimization
+    n_folds = 5 # Use 1 for Optuna Hyperparameter Optimization
     # Decide type of preprocessing (standardize/minmaxscaling (between 0 & 1)/robustscaling (good when we have outliers)/maxabsvalscaling (between -1 and 1)
     type_of_preprocessing = 'standardize'
     # Hyperparameter Optimization NN method
     method_tune = 'AE'
+    # Train NN method
+    method_train = 'none'
     # Feature selection method hyperparamter Tuning FCNN/AE (For GCN its always PPI)
     selection_method_tuning = 'PCA'
+    components_tuning = [None,None,None,None]
+    thresholds_tuning = [0.1,0.1,0.1,0.1]
+    # Choose feature selection method (PCA,Variance,AE,Eigengenes)
+    selection_method_train = 'PCA'
+    components_train = [100,100,100,100]
+    thresholds_train = [0.1,0.1,0.1,0.1]
 
     print("Preprocessing Type : ", type_of_preprocessing)
     print("Tuning Neural Network : ", method_tune)
@@ -71,18 +84,18 @@ if __name__ == '__main__':
 
 
     # Setup all the data
-    n_train_samples, n_test_samples,n_val_samples, view_names_fix = multimodule.setup()
+ #   n_train_samples, n_test_samples,n_val_samples, view_names_fix = multimodule.setup()    ###### TESTING ON SAME FOLD #########
 
 
     # Write used views for input into NN to .txt
     #dir = os.path.expanduser('~/SUMO/Project/TCGAData/cancerviews.txt')
     dir = os.path.expanduser('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt')
-    with open(dir, 'w') as fp:
-        for item in view_names_fix:
+  #  with open(dir, 'w') as fp:
+   #     for item in view_names_fix:
             # write each item on a new line
-            fp.write("%s\n" % item)
+   #         fp.write("%s\n" % item)
 
-
+    view_names_fix = ['MRNA','DNA','MICRORNA','RPPA']
 
     ############################################ HYPERPARAMETER OPTIMIZATION ##########################################
 
@@ -205,29 +218,17 @@ if __name__ == '__main__':
 
     elif method_tune == 'FCNN' or method_tune == 'AE':
 
-        # Choose feature selection method (PCA,Variance,AE,Eigengenes)
-      #  feature_select_method = 'PCA'
-
-        # Choose PCA components for each view (None : take all possible PC components for this view)
-        components = [None,None,None,None]
-        # Choose Variance thresholds for each view (if Thresholds are not possible, will be reduced until
-        # possible.
-        thresholds = [0.02,0.1,0.06,0.1]
-
       #  DataProcessing.optuna_optimization()   # AE FEATURE SELECTION OPTIMIZATION
 
         train_data, val_data, test_data, \
         train_duration, train_event, \
         val_duration, val_event, \
         test_duration, test_event = multimodule.feature_selection(method=selection_method_tuning,
-                                                                  components= components,
-                                                                  thresholds= thresholds,
+                                                                  components= components_tuning,
+                                                                  thresholds= thresholds_tuning,
                                                                   feature_names= feature_names)
 
 
-        # We go through each fold (but in Optuna optimization, we only produce one fold, so this loop is not necessary
-        # per se (just easier to read and if Hyperparameter Optimization was to be implemented with multiple folds,
-        # one can build code based on this)
         for c_fold in range(n_folds):
 
             for c_view, view in enumerate(view_names_fix):
@@ -252,10 +253,10 @@ if __name__ == '__main__':
             feat_offs_train_df = pd.DataFrame(feat_offs_train)
 
         #    dir = os.path.expanduser('~/SUMO/Project/PreparedData/TrainData.csv')
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TrainData.csv")
+            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TrainData_{}.csv".format(c_fold))
             train_data_df.to_csv(dir)
         #    dir = os.path.expanduser('~/SUMO/Project/PreparedData/TrainDataFeatOffs.csv')
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TrainDataFeatOffs.csv")
+            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TrainDataFeatOffs_{}.csv".format(c_fold))
             feat_offs_train_df.to_csv(dir)
 
 
@@ -270,10 +271,10 @@ if __name__ == '__main__':
             feat_offs_val_df = pd.DataFrame(feat_offs_val)
 
         #    dir = os.path.expanduser('~/SUMO/Project/PreparedData/ValData.csv')
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/ValData.csv")
+            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/ValData_{}.csv".format(c_fold))
             val_data_df.to_csv(dir)
         #    dir = os.path.expanduser('~/SUMO/Project/PreparedData/ValDataFeatOffs.csv')
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/ValDataFeatOffs.csv")
+            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/ValDataFeatOffs_{}.csv".format(c_fold))
             feat_offs_val_df.to_csv(dir)
 
 
@@ -304,32 +305,55 @@ if __name__ == '__main__':
             AE.optuna_optimization()
 
 
-    # Train NN method
-    method_train = 'none'
+
 
     ###################################### SET OWN SETTINGS FOR NN CALL #############################################
 
     # FULLY CONNECTED NEURAL NET SETTINGS
     # EPOCHS
-    N_EPOCHS = 30
+    N_EPOCHS = 100
     # BATCH SIZE
-    BATCH_SIZE = 64
+    BATCH_SIZE = 5
     # L2 REGULARIZATION
     L2_REGULARIZATION_BOOL = True
-    L2_REGULARIZATION_RATE = 0.000833844235362246
+    L2_REGULARIZATION_RATE = 4.54414e-6
     # LR
-    LEARNING_RATE = 0.0017038276577365065
+    LEARNING_RATE = 0.002
     # PRELU INIT VALUE
-    PRELU_RATE = 0.1
+    PRELU_RATE = 0.05
     # LAYER SIZES DIFFERENT VIEWS
-    layers_1_mRNA = 64
-    layers_2_mRNA = 16
-    layers_1_DNA = 64
-    layers_2_DNA = 16
-    layers_1_microRNA = 64
-    layers_2_microRNA = 16
-    layers_1_RPPA = 200
-    layers_2_RPPA = 200
+    layers_1_mRNA = 87
+    layers_1_mRNA_activfunc = 'prelu'
+    layers_1_mRNA_batchnorm = 'no'
+    layers_1_mRNA_dropout = 'no'
+    layers_2_mRNA = 21
+    layers_2_mRNA_activfunc = 'prelu'
+    layers_2_mRNA_batchnorm = 'no'
+    layers_2_mRNA_dropout = 'no'
+    layers_1_DNA = 75
+    layers_1_DNA_activfunc = 'prelu'
+    layers_1_DNA_batchnorm = 'no'
+    layers_1_DNA_dropout = 'no'
+    layers_2_DNA = 19
+    layers_2_DNA_activfunc = 'sigmoid'
+    layers_2_DNA_batchnorm = 'no'
+    layers_2_DNA_dropout = 'no'
+    layers_1_microRNA = 72
+    layers_1_microRNA_activfunc = 'sigmoid'
+    layers_1_microRNA_batchnorm = 'no'
+    layers_1_microRNA_dropout = 'no'
+    layers_2_microRNA = 31
+    layers_2_microRNA_activfunc = 'relu'
+    layers_2_microRNA_batchnorm = 'no'
+    layers_2_microRNA_dropout = 'no'
+    layers_1_RPPA = 65
+    layers_1_RPPA_activfunc = 'prelu'
+    layers_1_RPPA_batchnorm = 'no'
+    layers_1_RPPA_dropout = 'no'
+    layers_2_RPPA = 13
+    layers_2_RPPA_activfunc = 'sigmoid'
+    layers_2_RPPA_batchnorm = 'no'
+    layers_2_RPPA_dropout = 'no'
     # LAYER SIZES INTEGRATED
     layers_1 = 16
     layers_2 = 8
@@ -345,15 +369,7 @@ if __name__ == '__main__':
     layers_2_microRNA_integrated = 100
     layers_1_RPPA_integrated = 100
     layers_2_RPPA_integrated = 100
-    # ACTIVATION FUNCTIONS
-    layers_1_mRNA_activfunc = 'sigmoid'
-    layers_2_mRNA_activfunc = 'sigmoid'
-    layers_1_DNA_activfunc = 'relu'
-    layers_2_DNA_activfunc = 'sigmoid'
-    layers_1_microRNA_activfunc = 'relu'
-    layers_2_microRNA_activfunc = 'sigmoid'
-    layers_1_RPPA_activfunc = 'relu'
-    layers_2_RPPA_activfunc = 'relu'
+
     # ACTIVATION FUNCTIONS INTEGRATED
     layers_1_integrated_activfunc = 'relu'
     layers_2_integrated_activfunc = 'relu'
@@ -371,16 +387,8 @@ if __name__ == '__main__':
     layers_1_RPPA_activfunc_integrated = 'relu'
     layers_2_RPPA_activfunc_integrated = 'relu'
     # DROPOUT
-    DROPOUT_BOOL = True
+    DROPOUT_BOOL = False
     DROPOUT_PROB = 0.2
-    layers_1_mRNA_dropout = 'no'
-    layers_2_mRNA_dropout = 'no'
-    layers_1_DNA_dropout = 'no'
-    layers_2_DNA_dropout = 'yes'
-    layers_1_microRNA_dropout = 'yes'
-    layers_2_microRNA_dropout = 'no'
-    layers_1_RPPA_dropout = 'no'
-    layers_2_RPPA_dropout = 'no'
     # DROPOUT FUNCTIONS INTEGRATED
     DROPOUT_BOOL_INTEGRATED = True
     DROPOUT_PROB_INTEGRATED = 0.2
@@ -404,14 +412,6 @@ if __name__ == '__main__':
     layers_2_RPPA_dropout_integrated = 'no'
     # BATCH NORMALIZATION
     BATCHNORM_BOOL = False
-    layers_1_mRNA_batchnorm = 'no'
-    layers_2_mRNA_batchnorm = 'no'
-    layers_1_DNA_batchnorm = 'no'
-    layers_2_DNA_batchnorm = 'no'
-    layers_1_microRNA_batchnorm = 'yes'
-    layers_2_microRNA_batchnorm = 'yes'
-    layers_1_RPPA_batchnorm = 'no'
-    layers_2_RPPA_batchnorm = 'no'
     # BATCH NORMALIZATION INTEGRATED
     BATCHNORM_BOOL_INTEGRATED = True
     layers_1_integrated_batchnorm = 'yes'
@@ -431,7 +431,7 @@ if __name__ == '__main__':
     layers_1_RPPA_batchnorm_integrated = 'no'
     layers_2_RPPA_batchnorm_integrated = 'no'
     # FINAL LAYER
-    layer_final_activfunc = 'none'
+    layer_final_activfunc = 'prelu'
     layer_final_dropout = 'yes'
     layer_final_batchnorm = 'yes'
     # CROSS MUTATION (AE)
@@ -447,14 +447,14 @@ if __name__ == '__main__':
 
 
 
-    LAYERS = [[layers_1_mRNA, layers_2_mRNA],[layers_1_DNA,layers_2_DNA],[layers_1_microRNA, layers_2_microRNA]]
+    LAYERS = [[layers_1_mRNA, layers_2_mRNA],[layers_1_DNA,layers_2_DNA],[layers_1_microRNA, layers_2_microRNA], [layers_1_RPPA,layers_2_RPPA]]
 
     ACTIV_FUNCS = [[layers_1_mRNA_activfunc, layers_2_mRNA_activfunc], [layers_1_DNA_activfunc, layers_2_DNA_activfunc],
-                   [layers_1_microRNA_activfunc, layers_2_microRNA_activfunc], [layer_final_activfunc]]
+                   [layers_1_microRNA_activfunc, layers_2_microRNA_activfunc],[layers_1_RPPA_activfunc, layers_2_RPPA_activfunc], [layer_final_activfunc]]
     DROPOUT_LAYERS = [[layers_1_mRNA_dropout, layers_2_mRNA_dropout], [layers_1_DNA_dropout, layers_2_DNA_dropout],
-                      [layers_1_microRNA_dropout, layers_2_microRNA_dropout], [layer_final_dropout]]
+                      [layers_1_microRNA_dropout, layers_2_microRNA_dropout],[layers_1_RPPA_dropout,layers_2_RPPA_dropout], [layer_final_dropout]]
     BATCHNORM_LAYERS = [[layers_1_mRNA_batchnorm, layers_2_mRNA_batchnorm],[layers_1_DNA_batchnorm, layers_2_DNA_batchnorm],
-                        [layers_1_microRNA_batchnorm,layers_2_microRNA_batchnorm], [layer_final_batchnorm]]
+                        [layers_1_microRNA_batchnorm,layers_2_microRNA_batchnorm], [layers_1_RPPA_batchnorm, layers_2_RPPA_batchnorm],[layer_final_batchnorm]]
 
 
     # Used for GCN input or final FCNN input in AE construction
@@ -497,23 +497,15 @@ if __name__ == '__main__':
     ratio = 0.2
 
 
-
-    # Choose feature selection method (PCA,Variance,AE,Eigengenes)
-    feature_select_method = 'pca'
-    # Choose PCA components for each view (None : take all possible PC components for this view)
-    components = [None,None,None,None]
-    # Choose Variance thresholds for each view
-    thresholds = [0.8,0.8,0.8,0.8]
-
-
-    if feature_select_method.lower() == 'pca' or feature_select_method.lower() == 'variance' or\
-            feature_select_method.lower() == 'eigengenes' or feature_select_method.lower() == 'ae':
+    if selection_method_train.lower() == 'pca' or selection_method_train.lower() == 'variance' or\
+            selection_method_train.lower() == 'eigengenes' or selection_method_train.lower() == 'ae':
+        print("Feature selection....")
         train_data, val_data, test_data, \
         train_duration, train_event, \
         val_duration, val_event, \
-        test_duration, test_event = multimodule.feature_selection(method=feature_select_method,
-                                                                  components= components,
-                                                                  thresholds= thresholds,
+        test_duration, test_event = multimodule.feature_selection(method=selection_method_train,
+                                                                  components= components_train,
+                                                                  thresholds= thresholds_train,
                                                                   feature_names= feature_names)
     else: # PPI feature selection
         edge_index, proteins_used, train_data, val_data, test_data, \

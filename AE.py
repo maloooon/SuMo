@@ -1060,85 +1060,122 @@ def objective(trial):
     """
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # Load in data (##### For testing for first fold, later on
-  #  dir = os.path.expanduser('~/SUMO/Project/PreparedData/')
-    # set load_data(dir)
-    trainset, trainset_feat, valset, valset_feat, testset, testset_feat = load_data()
+    # Load in data
+    #  dir = os.path.expanduser('~/SUMO/Project/PreparedData/')
+    #    trainset, trainset_feat, valset, valset_feat, testset, testset_feat = load_data()
 
-    trainset_feat = list(trainset_feat.values)
-    for idx,_ in enumerate(trainset_feat):
-        trainset_feat[idx] = trainset_feat[idx].item()
-
-    valset_feat = list(valset_feat.values)
-    for idx,_ in enumerate(valset_feat):
-        valset_feat[idx] = valset_feat[idx].item()
-
-    testset_feat = list(testset_feat.values)
-    for idx,_ in enumerate(testset_feat):
-        testset_feat[idx] = testset_feat[idx].item()
+    trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4,testset,trainset_feat_0,\
+    trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4,feat_offs = load_data()
 
 
-    train_data = []
-    for c,feat in enumerate(trainset_feat):
-        if c < len(trainset_feat) - 3: # train data views
-            data_np = np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')
-            data_tensor = torch.from_numpy(data_np).to(torch.float32)
-            data_tensor = data_tensor.to(device)
-            train_data.append(data_tensor)
-        elif c == len(trainset_feat) - 3: # duration
-            duration_np = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')).squeeze(axis=1)
-            duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
-            duration_tensor = duration_tensor.to(device)
-            train_duration = duration_tensor
-        elif c == len(trainset_feat) -2: # event
-            event_np = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')).squeeze(axis=1)
-            event_tensor = torch.from_numpy(event_np).to(torch.float32)
-            event_tensor = event_tensor.to(device)
-            train_event = event_tensor
+    # Feature offsets need to be the same in train/val/test for each fold, otherwise NN wouldn't work (diff dimension inputs)
+    feat_offs = [trainset_feat_0,trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4]
 
-    train_data = tuple(train_data)
 
-    val_data = []
-    for c,feat in enumerate(valset_feat):
-        if c < len(valset_feat) - 3: # train data views
-            data_np = np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')
-            data_tensor = torch.from_numpy(data_np).to(torch.float32)
-            data_tensor = data_tensor.to(device)
-            val_data.append(data_tensor)
-        elif c == len(valset_feat) - 3: # duration
-            duration_np = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
-            duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
-            duration_tensor = duration_tensor.to(device)
-            val_duration = duration_tensor
-        elif c == len(valset_feat) -2: # event
-            event_np = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
-            event_tensor = torch.from_numpy(event_np).to(torch.float32)
-            event_tensor = event_tensor.to(device)
-            val_event = event_tensor
+    for c2,_ in enumerate(feat_offs):
+        feat_offs[c2] = list(feat_offs[c2].values)
+        for idx,_ in enumerate(feat_offs[c2]):
+            feat_offs[c2][idx] = feat_offs[c2][idx].item()
 
-    test_data = []
 
-    for c,feat in enumerate(testset_feat):
-        if c < len(testset_feat) - 3: # train data views
-            data_np = np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')
-            data_tensor = torch.from_numpy(data_np).to(torch.float32)
-            data_tensor = data_tensor.to(device)
-            test_data.append(data_tensor)
-        elif c == len(testset_feat) - 3: # duration
-            duration_np = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
-            duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
-            duration_tensor = duration_tensor.to(device)
-            test_duration = duration_tensor
-        elif c == len(testset_feat) -2: # event
-            event_np = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
-            event_tensor = torch.from_numpy(event_np).to(torch.float32)
-            event_tensor = event_tensor.to(device)
-            test_event = event_tensor
+    # Split data in feature values, duration, event
 
+    trainset = [trainset_0 ,trainset_1,trainset_2,trainset_3,trainset_4]
+    valset = [valset_0 ,valset_1,valset_2,valset_3,valset_4]
+    n_folds = len(trainset)
+    train_data_folds = []
+    train_duration_folds = []
+    train_event_folds = []
+    val_data_folds = []
+    val_duration_folds = []
+    val_event_folds = []
+    test_data_folds = []
+
+
+    for c2,_ in enumerate(trainset):
+        train_data = []
+        for c,feat in enumerate(feat_offs[c2]):
+            if c < len(feat_offs[c2]) - 3: # train data views
+                data_np = np.array((trainset[c2].iloc[:, feat_offs[c2][c] : feat_offs[c2][c+1]]).values).astype('float32')
+                data_tensor = torch.from_numpy(data_np).to(torch.float32)
+                data_tensor = data_tensor.to(device)
+                train_data.append(data_tensor)
+            elif c == len(feat_offs[c2]) - 3: # duration
+                duration_np = (np.array((trainset[c2].iloc[:, feat_offs[c2][c] : feat_offs[c2][c+1]]).values).astype('float32')).squeeze(axis=1)
+                duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
+                duration_tensor = duration_tensor.to(device)
+                train_duration = duration_tensor
+
+            elif c == len(feat_offs[c2]) -2: # event
+                event_np = (np.array((trainset[c2].iloc[:, feat_offs[c2][c] : feat_offs[c2][c+1]]).values).astype('float32')).squeeze(axis=1)
+                event_tensor = torch.from_numpy(event_np).to(torch.float32)
+                event_tensor = event_tensor.to(device)
+                train_event = event_tensor
+
+        train_data = tuple(train_data)
+
+        val_data = []
+        for c,feat in enumerate(feat_offs[c2]):
+            if c < len(feat_offs[c2]) - 3: # train data views
+                data_np = np.array((valset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')
+                data_tensor = torch.from_numpy(data_np).to(torch.float32)
+                data_tensor = data_tensor.to(device)
+                val_data.append(data_tensor)
+
+            elif c == len(feat_offs[c2]) - 3: # duration
+                duration_np = (np.array((valset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')).squeeze(axis=1)
+                duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
+                duration_tensor = duration_tensor.to(device)
+                val_duration = duration_tensor
+
+            elif c == len(feat_offs[c2]) -2: # event
+                event_np = (np.array((valset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')).squeeze(axis=1)
+                event_tensor = torch.from_numpy(event_np).to(torch.float32)
+                event_tensor = event_tensor.to(device)
+                val_event = event_tensor
+
+
+
+        test_data = []
+        for c,feat in enumerate(feat_offs[c2]):
+            if c < len(feat_offs[c2]) - 3: # train data views
+                data_np = np.array((testset.iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')
+                data_tensor = torch.from_numpy(data_np).to(torch.float32)
+                data_tensor = data_tensor.to(device)
+                test_data.append(data_tensor)
+
+            elif c == len(feat_offs[c2]) - 3: # duration
+                duration_np = (np.array((testset.iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')).squeeze(axis=1)
+                duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
+                duration_tensor = duration_tensor.to(device)
+                test_duration = duration_tensor
+
+            elif c == len(feat_offs[c2]) -2: # event
+                event_np = (np.array((testset.iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')).squeeze(axis=1)
+                event_tensor = torch.from_numpy(event_np).to(torch.float32)
+                event_tensor = event_tensor.to(device)
+                test_event = event_tensor
+
+        train_data_folds.append(train_data)
+        val_data_folds.append(val_data)
+        train_duration_folds.append(train_duration)
+        val_duration_folds.append(val_duration)
+        train_event_folds.append(train_event)
+        val_event_folds.append(val_event)
+        test_data_folds.append(test_data)
+
+    # Rename so we have same structure as in train function
+    train_data = train_data_folds
+    train_duration = train_duration_folds
+    train_event = train_event_folds
+    val_data = val_data_folds
+    val_duration = val_duration_folds
+    val_event = val_event_folds
+    test_data = test_data_folds
 
 
     views = []
- #   dir = os.path.expanduser('~/SUMO/Project/TCGAData/cancerviews.txt')
+    #   dir = os.path.expanduser('~/SUMO/Project/TCGAData/cancerviews.txt')
     dir = os.path.expanduser('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt')
     read_in = open(dir, 'r')
     for view in read_in:
@@ -1147,22 +1184,21 @@ def objective(trial):
     view_names = [line[:-1] for line in views]
 
 
-    dimensions_train = [x.shape[1] for x in train_data]
-    dimensions_val = [x.shape[1] for x in val_data]
-    dimensions_test = [x.shape[1] for x in test_data]
+#    dimensions_train = [x.shape[1] for x in train_data]
+#    dimensions_val = [x.shape[1] for x in val_data]
+#    dimensions_test = [x.shape[1] for x in test_data]
 
-    assert (dimensions_train == dimensions_val == dimensions_test), 'Feature mismatch between train/test'
+#    assert (dimensions_train == dimensions_val == dimensions_test), 'Feature mismatch between train/test'
 
-    dimensions = dimensions_train
+#    dimensions = dimensions_train
 
     # Transforms for PyCox
-    train_surv = (train_duration, train_event)
-    val_data_full = (val_data, (val_duration, val_event))
+ #   train_surv = (train_duration, train_event)
+ #   val_data_full = (val_data, (val_duration, val_event))
 
     second_decoder_bool = False
     model_types = ['concat']
 
-    print("AE models : ",model_types)
     ##################################### HYPERPARAMETER SEARCH SETTINGS ##############################################
     l2_regularization_bool = trial.suggest_categorical('l2_regularization_bool', [True,False])
     learning_rate = trial.suggest_float("learning_rate", 1e-5,1e-1,log=True)
@@ -1211,8 +1247,8 @@ def objective(trial):
     batchnorms_hierarchical_integrated = []
 
     if 'MRNA' in view_names:
-        layers_1_mRNA = trial.suggest_int('layers_1_mRNA', 128, 256)
-        layers_2_mRNA = trial.suggest_int('layers_2_mRNA', 32, 128)
+        layers_1_mRNA = trial.suggest_int('layers_1_mRNA', 32, 64)
+        layers_2_mRNA = trial.suggest_int('layers_2_mRNA', 16, 32)
         layers_1_mRNA_activfunc = trial.suggest_categorical('layers_1_mRNA_activfunc', ['relu','sigmoid','prelu'])
         layers_2_mRNA_activfunc = trial.suggest_categorical('layers_2_mRNA_activfunc', ['relu','sigmoid','prelu'])
         layers_1_mRNA_dropout = trial.suggest_categorical('layers_1_mRNA_dropout', ['yes','no'])
@@ -1242,8 +1278,8 @@ def objective(trial):
 
 
     if 'DNA' in view_names:
-        layers_1_DNA = trial.suggest_int('layers_1_DNA', 128, 256)
-        layers_2_DNA = trial.suggest_int('layers_2_DNA', 32, 128)
+        layers_1_DNA = trial.suggest_int('layers_1_DNA', 32, 64)
+        layers_2_DNA = trial.suggest_int('layers_2_DNA', 16, 32)
         layers_1_DNA_activfunc = trial.suggest_categorical('layers_1_DNA_activfunc', ['relu','sigmoid','prelu'])
         layers_2_DNA_activfunc = trial.suggest_categorical('layers_2_DNA_activfunc', ['relu','sigmoid','prelu'])
         layers_1_DNA_dropout = trial.suggest_categorical('layers_1_DNA_dropout', ['yes','no'])
@@ -1273,8 +1309,8 @@ def objective(trial):
 
 
     if 'MICRORNA' in view_names:
-        layers_1_microRNA = trial.suggest_int('layers_1_microRNA', 128, 256)
-        layers_2_microRNA = trial.suggest_int('layers_2_microRNA', 32, 128)
+        layers_1_microRNA = trial.suggest_int('layers_1_microRNA', 32, 64)
+        layers_2_microRNA = trial.suggest_int('layers_2_microRNA', 16, 32)
         layers_1_microRNA_activfunc = trial.suggest_categorical('layers_1_microRNA_activfunc', ['relu','sigmoid','prelu'])
         layers_2_microRNA_activfunc = trial.suggest_categorical('layers_2_microRNA_activfunc', ['relu','sigmoid','prelu'])
         layers_1_microRNA_dropout = trial.suggest_categorical('layers_1_microRNA_dropout', ['yes','no'])
@@ -1303,8 +1339,8 @@ def objective(trial):
 
 
     if 'RPPA' in view_names:
-        layers_1_RPPA = trial.suggest_int('layers_1_RPPA', 128, 256)
-        layers_2_RPPA = trial.suggest_int('layers_2_RPPA', 32, 128)
+        layers_1_RPPA = trial.suggest_int('layers_1_RPPA', 32, 64)
+        layers_2_RPPA = trial.suggest_int('layers_2_RPPA', 16, 32)
         layers_1_RPPA_activfunc = trial.suggest_categorical('layers_1_RPPA_activfunc', ['relu','sigmoid','prelu'])
         layers_2_RPPA_activfunc = trial.suggest_categorical('layers_2_RPPA_activfunc', ['relu','sigmoid','prelu'])
         layers_1_RPPA_dropout = trial.suggest_categorical('layers_1_RPPA_dropout', ['yes','no'])
@@ -1354,8 +1390,7 @@ def objective(trial):
 
 
 
-    # Create List of models to be used
-    all_models = nn.ModuleList()
+
 
 
 
@@ -1411,9 +1446,9 @@ def objective(trial):
     # After concat FCNN (concatenated input into FCNN)
 
     # This is needed in nearly every case, just not if we don't integrate the data in the autoencoders in any way
-    # (basically just let AE work as feature selection method) ; TODO : add if case for this case
-    layers_1_FCNN = trial.suggest_int('layers_1_FCNN', 128,256)
-    layers_2_FCNN = trial.suggest_int('layers_2_FCNN', 32, 128)
+    # (basically just let AE work as feature selection method)
+    layers_1_FCNN = trial.suggest_int('layers_1_FCNN', 32,64)
+    layers_2_FCNN = trial.suggest_int('layers_2_FCNN', 16, 32)
 
     layers_FCNN = [[layers_1_FCNN,layers_2_FCNN]]
 
@@ -1451,165 +1486,199 @@ def objective(trial):
     # AE's
 
 
-    all_models.append(AE(views = view_names,
-                         in_features= dimensions,
-                         n_hidden_layers_dims= layers,
-                         activ_funcs=activation_functions,
-                         dropout_bool= dropout_bool,
-                         dropout_prob= dropout_prob,
-                         dropout_layers= dropouts,
-                         batch_norm_bool= batchnorm_bool,
-                         batch_norm= batchnorms,
-                         type_ae=model_types[0],
-                         cross_mutation=None,
-                         print_bool=False,
-                         prelu_init= prelu_rate)).to(device)
+    c_indices = []
+    for c_fold in range(n_folds):
+
+        # Create List of models to be used
+        all_models = nn.ModuleList()
 
 
-    # Hierachical AE no integration : in_features must be sizes of bottleneck dimensions of first AE
-  #  all_models.append(AE(views = view_names,
-   #                      in_features= in_feats_second_AE_hierachical,
-   #                      n_hidden_layers_dims= layers_hierarchical,
-   #                      activ_funcs=activation_functions_hierarchical,
-   #                      dropout_bool= dropout_bool_hierachical,
-   #                      dropout_prob= dropout_prob_hierachical,
-   #                      dropout_layers= dropouts_hierarchical,
-   #                      batch_norm_bool= batchnorm_bool_hierachical,
-   #                      batch_norm= batchnorms_hierarchical,
-   #                      type_ae=model_types[1],
-   #                      cross_mutation=None,
-   #                      print_bool=False,
-   #                      prelu_init= prelu_rate)).to(device)
+        dimensions_train = [x.shape[1] for x in train_data[c_fold]]
+        dimensions_val = [x.shape[1] for x in val_data[c_fold]]
+        dimensions_test = [x.shape[1] for x in test_data[c_fold]]
+
+        assert (dimensions_train == dimensions_val == dimensions_test), 'Feature mismatch between train/test'
+
+        dimensions = dimensions_train
+
+        # Transforms for PyCox
+        train_surv = (train_duration[c_fold], train_event[c_fold])
+        val_data_full = (val_data[c_fold], (val_duration[c_fold], val_event[c_fold]))
 
 
-    all_models.append(FCNN.NN_changeable(views = ['AE'],
-                                       in_features = [in_feats_second_NN_concat],
-                                       n_hidden_layers_dims= layers_FCNN,
-                                       activ_funcs = [FCNN_activation_functions,['none']],
-                                       dropout_prob=FCNN_dropout_prob,
-                                       dropout_layers=FCNN_dropouts,
-                                       batch_norm = FCNN_batchnorms,
-                                       dropout_bool=FCNN_dropout_bool,
-                                       batch_norm_bool=FCNN_batchnorm_bool,
-                                       print_bool=False,
-                                       prelu_init = prelu_rate)).to(device)
+        layers_u = copy.deepcopy(layers)
+        activation_functions_u = copy.deepcopy(activation_functions)
+        dropouts_u = copy.deepcopy(dropouts)
+        batchnorms_u = copy.deepcopy(batchnorms)
+        all_models.append(AE(views = view_names,
+                             in_features= dimensions,
+                             n_hidden_layers_dims= layers_u,
+                             activ_funcs=activation_functions_u,
+                             dropout_bool= dropout_bool,
+                             dropout_prob= dropout_prob,
+                             dropout_layers= dropouts_u,
+                             batch_norm_bool= batchnorm_bool,
+                             batch_norm= batchnorms_u,
+                             type_ae=model_types[0],
+                             cross_mutation=None,
+                             print_bool=False,
+                             prelu_init= prelu_rate)).to(device)
+
+
+        # Hierachical AE no integration : in_features must be sizes of bottleneck dimensions of first AE
+      #  all_models.append(AE(views = view_names,
+       #                      in_features= in_feats_second_AE_hierachical,
+       #                      n_hidden_layers_dims= layers_hierarchical,
+       #                      activ_funcs=activation_functions_hierarchical,
+       #                      dropout_bool= dropout_bool_hierachical,
+       #                      dropout_prob= dropout_prob_hierachical,
+       #                      dropout_layers= dropouts_hierarchical,
+       #                      batch_norm_bool= batchnorm_bool_hierachical,
+       #                      batch_norm= batchnorms_hierarchical,
+       #                      type_ae=model_types[1],
+       #                      cross_mutation=None,
+       #                      print_bool=False,
+       #                      prelu_init= prelu_rate)).to(device)
+
+        layers_FCNN_u = copy.deepcopy(layers_FCNN)
+        FCNN_activation_functions_u = copy.deepcopy(FCNN_activation_functions)
+        FCNN_dropouts_u = copy.deepcopy(FCNN_dropouts)
+        FCNN_batchnorms_u = copy.deepcopy(FCNN_batchnorms)
+        all_models.append(FCNN.NN_changeable(views = ['AE'],
+                                           in_features = [in_feats_second_NN_concat],
+                                           n_hidden_layers_dims= layers_FCNN_u,
+                                           activ_funcs = [FCNN_activation_functions_u,['none']],
+                                           dropout_prob=FCNN_dropout_prob,
+                                           dropout_layers=FCNN_dropouts_u,
+                                           batch_norm = FCNN_batchnorms_u,
+                                           dropout_bool=FCNN_dropout_bool,
+                                           batch_norm_bool=FCNN_batchnorm_bool,
+                                           print_bool=False,
+                                           prelu_init = prelu_rate)).to(device)
 
 
 
 
-  #  full_net = AE_Hierarichal(all_models, types=model_types)
+      #  full_net = AE_Hierarichal(all_models, types=model_types)
 
-    full_net = AE_NN(all_models, type=model_types[0])
-
-
-    # set optimizer
-    if l2_regularization_bool == True:
-        optimizer = Adam(full_net.parameters(), lr=learning_rate, weight_decay=l2_regularization_rate)
-    else:
-        optimizer = Adam(full_net.parameters(), lr=learning_rate)
-
-    callbacks = [tt.callbacks.EarlyStopping(patience=10)]
-    #   cross_pos = model_types.index("cross") + 1
-    #   model = models.CoxPH(full_net,optimizer, loss=LossHierarichcalAESingleCross(alpha=[0.4,0.4,0.2], decoding_bool=True, cross_position=cross_pos)) # Change Loss here
-
-    loss_concat = LossAEConcatHazard(loss_surv)
-    loss_cross = LossAECrossHazard(loss_surv)
-
-    # if second decoder, we need to use loss_3 ; else normal 2 valued loss
-    if len(model_types) == 2:
-        loss_hierachical_no_cross = LossHierarichcalAE(loss_3_values_hierarchical,decoding_bool=True)
-        loss_hierachical_cross = LossHierarichcalAESingleCross(loss_3_values_hierarchical, cross_position=1)
-    # loss : alpha * surv_loss + (1-alpha) * ae_loss
-    model = models.CoxPH(full_net,
-                         optimizer,
-                         loss=loss_concat)
-    model.set_device(torch.device(device))
-    print_loss = False
-
-    log = model.fit(train_data,
-                    train_surv,
-                    batch_size,
-                    n_epochs,
-                    verbose=print_loss,
-                    val_data= val_data_full,
-                    val_batch_size= 16,
-                    callbacks=callbacks)
-
-    # Plot it
- #   _ = log.plot()
-
-    # Change for EvalSurv-Function
-    try:
-        test_duration = test_duration.cpu().detach().numpy()
-        test_event = test_event.cpu().detach().numpy()
-    except AttributeError:
-        pass
+        full_net = AE_NN(all_models, type=model_types[0])
 
 
-    for c,fold in enumerate(train_data):
+        # set optimizer
+        if l2_regularization_bool == True:
+            optimizer = Adam(full_net.parameters(), lr=learning_rate, weight_decay=l2_regularization_rate)
+        else:
+            optimizer = Adam(full_net.parameters(), lr=learning_rate)
+
+        callbacks = [tt.callbacks.EarlyStopping(patience=10)]
+        #   cross_pos = model_types.index("cross") + 1
+        #   model = models.CoxPH(full_net,optimizer, loss=LossHierarichcalAESingleCross(alpha=[0.4,0.4,0.2], decoding_bool=True, cross_position=cross_pos)) # Change Loss here
+
+        loss_concat = LossAEConcatHazard(loss_surv)
+        loss_cross = LossAECrossHazard(loss_surv)
+
+        # if second decoder, we need to use loss_3 ; else normal 2 valued loss
+        if len(model_types) == 2:
+            loss_hierachical_no_cross = LossHierarichcalAE(loss_3_values_hierarchical,decoding_bool=True)
+            loss_hierachical_cross = LossHierarichcalAESingleCross(loss_3_values_hierarchical, cross_position=1)
+        # loss : alpha * surv_loss + (1-alpha) * ae_loss
+        model = models.CoxPH(full_net,
+                             optimizer,
+                             loss=loss_concat)
+        model.set_device(torch.device(device))
+        print_loss = False
+
+        log = model.fit(train_data[c_fold],
+                        train_surv,
+                        batch_size,
+                        n_epochs,
+                        verbose=print_loss,
+                        val_data= val_data_full,
+                        val_batch_size= 16,
+                        callbacks=callbacks)
+
+        # Plot it
+     #   _ = log.plot()
+
+        # Change for EvalSurv-Function
         try:
-            train_duration = train_duration.cpu().detach().numpy()
-            train_event = train_event.cpu().detach().numpy()
-            val_duration = val_duration.cpu().detach().numpy()
-            val_event = val_event.cpu().detach().numpy()
-        except AttributeError: # in this case already numpy arrays
+            test_duration = test_duration.cpu().detach().numpy()
+            test_event = test_event.cpu().detach().numpy()
+        except AttributeError:
             pass
 
-    # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
-    _ = model.compute_baseline_hazards()
 
-    # Predict based on test data
-    surv = model.predict_surv_df(test_data)
+        for c,fold in enumerate(train_data):
+            try:
+                train_duration[c_fold] = train_duration[c_fold].cpu().detach().numpy()
+                train_event[c_fold] = train_event[c_fold].cpu().detach().numpy()
+                val_duration[c_fold] = val_duration[c_fold].cpu().detach().numpy()
+                val_event[c_fold] = val_event[c_fold].cpu().detach().numpy()
+            except AttributeError: # in this case already numpy arrays
+                pass
 
-    # Plot it
-    #      surv.iloc[:, :5].plot()
-    #      plt.ylabel('S(t | x)')
-    #      _ = plt.xlabel('Time')
+        # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
+        _ = model.compute_baseline_hazards()
 
+        # Predict based on test data
+        surv = model.predict_surv_df(test_data[c_fold])
 
-
-
-    # Evaluate with concordance, brier score and binomial log-likelihood
-    ev = EvalSurv(surv, test_duration, test_event, censor_surv='km') # censor_surv : Kaplan-Meier
-
-    # concordance
-    concordance_index = ev.concordance_td()
-
-    if concordance_index < 0.5:
-        concordance_index = 1 - concordance_index
-
-    #brier score
-    time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
-    _ = ev.brier_score(time_grid).plot
-    brier_score = ev.integrated_brier_score(time_grid)
-
-    #binomial log-likelihood
-    binomial_score = ev.integrated_nbll(time_grid)
-
-
-    return concordance_index
+        # Plot it
+        #      surv.iloc[:, :5].plot()
+        #      plt.ylabel('S(t | x)')
+        #      _ = plt.xlabel('Time')
 
 
 
-def optuna_optimization(fold = 1):
+
+        # Evaluate with concordance, brier score and binomial log-likelihood
+        ev = EvalSurv(surv, test_duration, test_event, censor_surv='km') # censor_surv : Kaplan-Meier
+
+        # concordance
+        concordance_index = ev.concordance_td()
+
+        if concordance_index < 0.5:
+            concordance_index = 1 - concordance_index
+
+        #brier score
+      #  time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
+      ##  _ = ev.brier_score(time_grid).plot
+      #  brier_score = ev.integrated_brier_score(time_grid)
+
+        #binomial log-likelihood
+     #   binomial_score = ev.integrated_nbll(time_grid)
+        c_indices.append(concordance_index)
+
+    return c_indices[0],c_indices[1],c_indices[2],c_indices[3],c_indices[4]
+
+
+
+def optuna_optimization():
     """
     Optuna Optimization for Hyperparameters.
     """
 
 
-    EPOCHS = 150
-    study = optuna.create_study(direction='maximize',sampler=optuna.samplers.TPESampler(),pruner=optuna.pruners.MedianPruner())
+    # Set amount of different trials
+    EPOCHS = 100
+    study = optuna.create_study(directions=['maximize','maximize','maximize','maximize','maximize'],sampler=optuna.samplers.TPESampler(),pruner=optuna.pruners.MedianPruner())
     study.optimize(objective, n_trials = EPOCHS)
+    optuna.visualization.plot_pareto_front(study, target_names=["FLOPS", "C-Indices"])
+    optuna.visualization.plot_param_importances(
+        study, target=lambda t: t.values[0], target_name="flops"
+    )
 
-    trial = study.best_trial
+    trial = study.best_trials
+
+    print(trial)
 
     # Save all trials in dataframe
     df = study.trials_dataframe()
     df = df.sort_values('value')
     df.to_csv("/Users/marlon/Desktop/Trial.csv")
 
-    print("Best Concordance", trial.value)
-    print("Best Hyperparamters : {}".format(trial.params))
+# print("Best Concordance Sum", trial.value)
+# print("Best Hyperparameters : {}".format(trial.params))
 
 
 def train(train_data,val_data,test_data,
@@ -1939,17 +2008,16 @@ def train(train_data,val_data,test_data,
 
 
 
-
+"""
 def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/"):
 
-    """
-    Function to load data. Needed for Optuna Optimization.
-    :param data_dir: Directory in which data is stored.
-    :return: trainset/valset/testset : train/validation/test set ; dtype : TODO
-             trainset_feat/valset_feat/testset_feat : feature offsets for train/validation/test set including
-             duration & event ; dtype : TODO
+    
+  #  Function to load data. Needed for Optuna Optimization.
+  #  :param data_dir: Directory in which data is stored.
+  #  :return: trainset/valset/testset : train/validation/test set ; dtype : TODO
+  #           trainset_feat/valset_feat/testset_feat : feature offsets for train/validation/test set including
+  #           duration & event ; dtype : TODO
 
-    """
 
     trainset = pd.read_csv(
         os.path.join(data_dir + "TrainData.csv"), index_col=0)
@@ -1972,3 +2040,61 @@ def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/"):
 
 
     return trainset, trainset_feat, valset, valset_feat, testset, testset_feat
+
+"""
+def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/"):
+    """
+    Function to load data. Needed for Optuna Optimization.
+    :param data_dir: Directory in which data is stored.
+    :return: data and feature offsets (for feature values, duration and event)
+    """
+
+    trainset_0 = pd.read_csv(
+        os.path.join(data_dir + "TrainData_0.csv"), index_col=0)
+    trainset_1 = pd.read_csv(
+        os.path.join(data_dir + "TrainData_1.csv"), index_col=0)
+    trainset_2 = pd.read_csv(
+        os.path.join(data_dir + "TrainData_2.csv"), index_col=0)
+    trainset_3 = pd.read_csv(
+        os.path.join(data_dir + "TrainData_3.csv"), index_col=0)
+    trainset_4 = pd.read_csv(
+        os.path.join(data_dir + "TrainData_4.csv"), index_col=0)
+
+    trainset_feat_0 = pd.read_csv(
+        os.path.join(data_dir +"TrainDataFeatOffs_0.csv"), index_col=0)
+
+    trainset_feat_1 = pd.read_csv(
+        os.path.join(data_dir +"TrainDataFeatOffs_1.csv"), index_col=0)
+
+    trainset_feat_2 = pd.read_csv(
+        os.path.join(data_dir +"TrainDataFeatOffs_2.csv"), index_col=0)
+
+    trainset_feat_3 = pd.read_csv(
+        os.path.join(data_dir +"TrainDataFeatOffs_3.csv"), index_col=0)
+
+    trainset_feat_4 = pd.read_csv(
+        os.path.join(data_dir +"TrainDataFeatOffs_4.csv"), index_col=0)
+
+
+    valset_0 = pd.read_csv(
+        os.path.join(data_dir + "ValData_0.csv"), index_col=0)
+    valset_1 = pd.read_csv(
+        os.path.join(data_dir + "ValData_1.csv"), index_col=0)
+    valset_2 = pd.read_csv(
+        os.path.join(data_dir + "ValData_2.csv"), index_col=0)
+    valset_3 = pd.read_csv(
+        os.path.join(data_dir + "ValData_3.csv"), index_col=0)
+    valset_4 = pd.read_csv(
+        os.path.join(data_dir + "ValData_4.csv"), index_col=0)
+
+
+
+    testset = pd.read_csv(
+        os.path.join(data_dir +  "TestData.csv"), index_col=0)
+
+    testset_feat = pd.read_csv(
+        os.path.join(data_dir + "TestDataFeatOffs.csv"), index_col=0)
+
+
+    return trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4,testset, \
+           trainset_feat_0,trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4,testset_feat

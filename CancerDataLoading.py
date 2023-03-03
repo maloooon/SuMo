@@ -9,10 +9,10 @@ if __name__ == '__main__':
     Load in all Cancer Types and concatenate their views, duration and event respectively by samples.
     """
 
-
+    dir = "Desktop" # dir is Desktop for own CPU or SUMO for GPU
     # Path where initial cancer data is stored
-    dir_path = '/Users/marlon/Desktop/Project/TCGAData'
-    # dir_path = '~/SUMO/Project/TCGAData'
+
+    dir_path = os.path.expanduser('~/{}/Project/TCGAData'.format(dir))
     cancer_types = 0
 
     for base, dirs, files in os.walk(dir_path):
@@ -44,11 +44,10 @@ if __name__ == '__main__':
 
     for c, cancer_name in enumerate(cancers):
         # Read mRNA data if it exists
-        if os.path.exists(os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
-                                       "TCGA_" + cancer_name + "_1_mRNA.csv")):
+        directory = os.path.expanduser('~/{}/Project/TCGAData/{}/TCGA_{}_1_mRNA.csv'.format(dir,cancer_name,cancer_name))
+        if os.path.exists(os.path.join(directory)):
             data_mRNA = pd.read_csv(
-                os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
-                             "TCGA_" + cancer_name + "_1_mRNA.csv"), index_col=0)
+                os.path.join(directory), index_col=0)
             samples[c].append(len(data_mRNA))
             # We need to reset indices bc meta data and view data have different index names
             data_mRNA.reset_index(drop=True,inplace=True)
@@ -63,11 +62,10 @@ if __name__ == '__main__':
             views[c].append('mRNA')
 
         # Read DNA data if it exists
-        if os.path.exists(os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
-                                       "TCGA_" + cancer_name + "_2_DNA.csv")):
+        directory = os.path.expanduser('~/{}/Project/TCGAData/{}/TCGA_{}_2_DNA.csv'.format(dir,cancer_name,cancer_name))
+        if os.path.exists(os.path.join(directory)):
             data_DNA = pd.read_csv(
-                os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
-                             "TCGA_" + cancer_name + "_2_DNA.csv"), index_col=0)
+                os.path.join(directory), index_col=0)
 
             samples[c].append(len(data_DNA))
             data_DNA.reset_index(drop=True, inplace=True)
@@ -82,11 +80,10 @@ if __name__ == '__main__':
             views[c].append('DNA')
 
         # Read microRNA data if it exists
-        if os.path.exists(os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
-                                       "TCGA_" + cancer_name + "_3_miRNA.csv")):
+        directory = os.path.expanduser('~/{}/Project/TCGAData/{}/TCGA_{}_3_miRNA.csv'.format(dir,cancer_name,cancer_name))
+        if os.path.exists(os.path.join(directory)):
             data_miRNA = pd.read_csv(
-                os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
-                             "TCGA_" + cancer_name + "_3_miRNA.csv"), index_col=0)
+                os.path.join(directory), index_col=0)
             samples[c].append(len(data_miRNA))
             data_miRNA.reset_index(drop=True, inplace=True)
 
@@ -100,11 +97,10 @@ if __name__ == '__main__':
             views[c].append('microRNA')
 
         # Read RPPA data if it exists
-        if os.path.exists(os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
-                                       "TCGA_" + cancer_name + "_4_RPPA.csv")):
+        directory = os.path.expanduser('~/{}/Project/TCGAData/{}/TCGA_{}_4_RPPA.csv'.format(dir,cancer_name,cancer_name))
+        if os.path.exists(os.path.join(directory)):
             data_RPPA = pd.read_csv(
-                os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
-                             "TCGA_" + cancer_name + "_4_RPPA.csv"), index_col=0)
+                os.path.join(directory), index_col=0)
 
 
 
@@ -123,9 +119,9 @@ if __name__ == '__main__':
 
         # Duration & Event data, which is stored in meta file,
         # needs to be available for each type, otherwise we can't do survival analysis
+        directory = os.path.expanduser('~/{}/Project/TCGAData/{}/TCGA_{}_meta.csv'.format(dir,cancer_name,cancer_name))
         meta_data = pd.read_csv(
-            os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", cancer_name,
-                         "TCGA_" + cancer_name + "_meta.csv"), index_col=0, keep_default_na=False)
+            os.path.join(directory), index_col=0, keep_default_na=False)
         # Rename vital status to event
         meta_data.rename(
             {"clin:vital_status": "event"}, axis="columns", inplace=True
@@ -221,20 +217,18 @@ if __name__ == '__main__':
     features_df = pd.DataFrame(features)
 
 
-    # Replace /Users/marlon/Desktop with
-    # dir = os.path.expanduser('~/SUMO/Project/...')
-
-
     # Create csv files
     for c,_ in enumerate(cancers):
-        cancer_data_dfs[c].to_csv("/Users/marlon/Desktop/Project/TCGAData/" + _ + "/" + _ + "Data.csv")
-        feature_offsets_dfs[c].to_csv("/Users/marlon/Desktop/Project/TCGAData/" + _ +"/" + _ + "DataFeatOffsets.csv")
-        view_names_dfs[c].to_csv("/Users/marlon/Desktop/Project/TCGAData/" + _ + "/" + _ + "Views.csv")
+        cancer_data_dfs[c].to_csv(("~/{}/Project/TCGAData/" + _ + "/" + _ + "Data.csv").format(dir))
+        feature_offsets_dfs[c].to_csv(("~/{}/Project/TCGAData/" + _ +"/" + _ + "DataFeatOffsets.csv").format(dir))
+        view_names_dfs[c].to_csv(("~/{}/Project/TCGAData/" + _ + "/" + _ + "Views.csv").format(dir))
 
         for c2,x in enumerate(views[c]):
-            features_per_cancer_per_view_dfs[c][c2].to_csv("/Users/marlon/Desktop/Project/TCGAData/" + _ + "/" + x + "FeatureNames.csv")
+            features_per_cancer_per_view_dfs[c][c2].to_csv(("~/{}/Project/TCGAData/" + _ + "/" + x + "FeatureNames.csv").format(dir))
 
-    features_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/AllFeatures.csv")
+    features_df.to_csv(("~/{}/Project/TCGAData/AllFeatures.csv").format(dir))
+
+
 
 
 

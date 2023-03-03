@@ -11,6 +11,7 @@ import os
 import optuna
 
 
+
 class NN_changeable(nn.Module):
     def __init__(self,views,in_features,n_hidden_layers_dims =None,
                  activ_funcs = None,dropout_prob = None, dropout_layers = None,
@@ -268,13 +269,14 @@ def objective(trial):
     :return: Concordance Index ; dtype : Float
     """
 
+    direc_set = 'Desktop'
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # Load in data
-  #  dir = os.path.expanduser('~/SUMO/Project/PreparedData/')
-#    trainset, trainset_feat, valset, valset_feat, testset, testset_feat = load_data()
+    dir = os.path.expanduser('~/{}/Project/PreparedData/'.format(direc_set))
+    #    trainset, trainset_feat, valset, valset_feat, testset, testset_feat = load_data()
 
-    trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4,testset,trainset_feat_0,\
-    trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4,feat_offs = load_data()
+    trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4,testset_0,testset_1,testset_2,testset_3,testset_4,trainset_feat_0, \
+    trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4 = load_data(data_dir = dir)
 
 
 
@@ -292,6 +294,7 @@ def objective(trial):
 
     trainset = [trainset_0 ,trainset_1,trainset_2,trainset_3,trainset_4]
     valset = [valset_0 ,valset_1,valset_2,valset_3,valset_4]
+    testset = [testset_0,testset_1,testset_2,testset_3,testset_4]
     n_folds = len(trainset)
     train_data_folds = []
     train_duration_folds = []
@@ -349,19 +352,19 @@ def objective(trial):
         test_data = []
         for c,feat in enumerate(feat_offs[c2]):
             if c < len(feat_offs[c2]) - 3: # train data views
-                data_np = np.array((testset.iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')
+                data_np = np.array((testset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')
                 data_tensor = torch.from_numpy(data_np).to(torch.float32)
                 data_tensor = data_tensor.to(device)
                 test_data.append(data_tensor)
 
             elif c == len(feat_offs[c2]) - 3: # duration
-                duration_np = (np.array((testset.iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')).squeeze(axis=1)
+                duration_np = (np.array((testset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')).squeeze(axis=1)
                 duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
                 duration_tensor = duration_tensor.to(device)
                 test_duration = duration_tensor
 
             elif c == len(feat_offs[c2]) -2: # event
-                event_np = (np.array((testset.iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')).squeeze(axis=1)
+                event_np = (np.array((testset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')).squeeze(axis=1)
                 event_tensor = torch.from_numpy(event_np).to(torch.float32)
                 event_tensor = event_tensor.to(device)
                 test_event = event_tensor
@@ -385,25 +388,32 @@ def objective(trial):
 
 
     views = []
- #   dir = os.path.expanduser('~/SUMO/Project/TCGAData/cancerviews.txt')
-    dir = os.path.expanduser('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt')
+    dir = os.path.expanduser('~/{}/Project/TCGAData/cancerviews.txt'.format(direc_set))
+    # dir = os.path.expanduser('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt')
     read_in = open(dir, 'r')
     for view in read_in:
-            views.append(view)
+        views.append(view)
 
     view_names = [line[:-1] for line in views]
 
 
+    ######## TESTING PURPOSES ########
+ #   view_names = ['MRNA','MICRORNA','RPPA']
+    ####### TESTING PURPOSES ########
 
+
+    # Current fold to be optimized
+    c_fold = 0
+    # Optimize each fold on its own
 
 
     ##################################### HYPERPARAMETER SEARCH SETTINGS ##############################################
     l2_regularization_bool = trial.suggest_categorical('l2_regularization_bool', [True,False])
     learning_rate = trial.suggest_float("learning_rate", 1e-5,1e-1,log=True)
     l2_regularization_rate = trial.suggest_float("l2_regularization_rate", 1e-6,1e-3, log=True)
- #   batch_size = trial.suggest_int("batch_size", 5, 200)
-    batch_size = trial.suggest_categorical("batch_size", [5,17,32,64,128,256])
-  #  n_epochs = trial.suggest_int("n_epochs", 10,100)
+    #   batch_size = trial.suggest_int("batch_size", 5, 200)
+    batch_size = trial.suggest_categorical("batch_size", [32,64,128])
+    #  n_epochs = trial.suggest_int("n_epochs", 10,100)
     n_epochs = 100
     dropout_prob = trial.suggest_float("dropout_prob", 0,0.5,step=0.1)
     dropout_bool = trial.suggest_categorical('dropout_bool', [True,False])
@@ -484,123 +494,121 @@ def objective(trial):
     batchnorms.append([layer_final_batchnorm])
 
 
-    c_indices = []
-    for c_fold in range(n_folds):
 
 
-        dimensions_train = [x.shape[1] for x in train_data[c_fold]]
-        dimensions_val = [x.shape[1] for x in val_data[c_fold]]
-        dimensions_test = [x.shape[1] for x in test_data[c_fold]]
 
-        assert (dimensions_train == dimensions_val == dimensions_test), 'Feature mismatch between train/test'
+    dimensions_train = [x.shape[1] for x in train_data[c_fold]]
+    dimensions_val = [x.shape[1] for x in val_data[c_fold]]
+    dimensions_test = [x.shape[1] for x in test_data[c_fold]]
 
-        dimensions = dimensions_train
+    assert (dimensions_train == dimensions_val == dimensions_test), 'Feature mismatch between train/test'
 
-        # Transforms for PyCox
-        train_surv = (train_duration[c_fold], train_event[c_fold])
-        val_data_full = (val_data[c_fold], (val_duration[c_fold], val_event[c_fold]))
+    dimensions = dimensions_train
 
-
-        layers_u = copy.deepcopy(layers)
-        activation_layers_u = copy.deepcopy(activation_functions)
-        dropout_layers_u = copy.deepcopy(dropouts)
-        batchnorm_layers_u = copy.deepcopy(batchnorms)
-
-        net = NN_changeable(views=view_names,
-                                  in_features=dimensions,
-                                  n_hidden_layers_dims=layers_u,
-                                  activ_funcs=activation_layers_u,
-                                  dropout_prob=dropout_prob,
-                                  dropout_layers=dropout_layers_u,
-                                  batch_norm=batchnorm_layers_u,
-                                  dropout_bool=dropout_bool,
-                                  batch_norm_bool=batchnorm_bool,
-                                  print_bool=False,
-                                  prelu_init= prelu_rate
-                                  ).to(device)
+    # Transforms for PyCox
+    train_surv = (train_duration[c_fold], train_event[c_fold])
+    val_data_full = (val_data[c_fold], (val_duration[c_fold], val_event[c_fold]))
 
 
-        if l2_regularization_bool == True:
-            optimizer = Adam(net.parameters(), lr=learning_rate, weight_decay=l2_regularization_rate)
-        else:
-            optimizer = Adam(net.parameters(), lr=learning_rate)
+    layers_u = copy.deepcopy(layers)
+    activation_layers_u = copy.deepcopy(activation_functions)
+    dropout_layers_u = copy.deepcopy(dropouts)
+    batchnorm_layers_u = copy.deepcopy(batchnorms)
 
-        callbacks = [tt.callbacks.EarlyStopping(patience=10)]
-
-
-        model = models.CoxPH(net,optimizer)
-        model.set_device(torch.device(device))
-        print_loss = False
-
-
-        # Fit model
-        log = model.fit(train_data[c_fold],
-                        train_surv,
-                        batch_size,
-                        n_epochs,
-                        callbacks = callbacks,
-                        val_data=val_data_full,
-                        val_batch_size= 5,
-                        verbose=print_loss)
+    net = NN_changeable(views=view_names,
+                        in_features=dimensions,
+                        n_hidden_layers_dims=layers_u,
+                        activ_funcs=activation_layers_u,
+                        dropout_prob=dropout_prob,
+                        dropout_layers=dropout_layers_u,
+                        batch_norm=batchnorm_layers_u,
+                        dropout_bool=dropout_bool,
+                        batch_norm_bool=batchnorm_bool,
+                        print_bool=False,
+                        prelu_init= prelu_rate
+                        ).to(device)
 
 
-        # Plot it
-     #   _ = log.plot()
+    if l2_regularization_bool == True:
+        optimizer = Adam(net.parameters(), lr=learning_rate, weight_decay=l2_regularization_rate)
+    else:
+        optimizer = Adam(net.parameters(), lr=learning_rate)
 
-        # Change for EvalSurv-Function
+    callbacks = [tt.callbacks.EarlyStopping(patience=10)]
+
+
+    model = models.CoxPH(net,optimizer)
+    model.set_device(torch.device(device))
+    print_loss = False
+
+
+    # Fit model
+    log = model.fit(train_data[c_fold],
+                    train_surv,
+                    batch_size,
+                    n_epochs,
+                    callbacks = callbacks,
+                    val_data=val_data_full,
+                    val_batch_size= 5,
+                    verbose=print_loss)
+
+
+    # Plot it
+   # _ = log.plot()
+
+    # Change for EvalSurv-Function
+    try:
+        test_duration = test_duration.cpu().detach().numpy()
+        test_event = test_event.cpu().detach().numpy()
+    except AttributeError:
+        pass
+
+
+    for c,fold in enumerate(train_data):
         try:
-            test_duration = test_duration.cpu().detach().numpy()
-            test_event = test_event.cpu().detach().numpy()
-        except AttributeError:
+            train_duration[c_fold] = train_duration[c_fold].cpu().detach().numpy()
+            train_event[c_fold] = train_event[c_fold].cpu().detach().numpy()
+            val_duration[c_fold] = val_duration[c_fold].cpu().detach().numpy()
+            val_event[c_fold] = val_event[c_fold].cpu().detach().numpy()
+        except AttributeError: # in this case already numpy arrays
             pass
 
 
-        for c,fold in enumerate(train_data):
-            try:
-                train_duration[c_fold] = train_duration[c_fold].cpu().detach().numpy()
-                train_event[c_fold] = train_event[c_fold].cpu().detach().numpy()
-                val_duration[c_fold] = val_duration[c_fold].cpu().detach().numpy()
-                val_event[c_fold] = val_event[c_fold].cpu().detach().numpy()
-            except AttributeError: # in this case already numpy arrays
-                pass
+
+    # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
+    _ = model.compute_baseline_hazards()
 
 
+    # Predict based on test data
+    surv = model.predict_surv_df(test_data[c_fold])
 
-        # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
-        _ = model.compute_baseline_hazards()
-
-
-        # Predict based on test data
-        surv = model.predict_surv_df(test_data[c_fold])
-
-        # Plot it
-        #     surv.iloc[:, :5].plot()
-        #     plt.ylabel('S(t | x)')
-        #     _ = plt.xlabel('Time')
+    # Plot it
+    #     surv.iloc[:, :5].plot()
+    #     plt.ylabel('S(t | x)')
+    #     _ = plt.xlabel('Time')
 
 
-        # Evaluate with concordance, brier score and binomial log-likelihood
-        ev = EvalSurv(surv, test_duration, test_event, censor_surv='km') # censor_surv : Kaplan-Meier
+    # Evaluate with concordance, brier score and binomial log-likelihood
+    ev = EvalSurv(surv, test_duration, test_event, censor_surv='km') # censor_surv : Kaplan-Meier
 
-        # Concordance Index ; Used for Optimization
-        concordance_index = ev.concordance_td()
+    # Concordance Index ; Used for Optimization
+    concordance_index = ev.concordance_td()
 
-        if concordance_index < 0.5:
-            concordance_index = 1 - concordance_index
+    if concordance_index < 0.5:
+        concordance_index = 1 - concordance_index
 
 
-        # These two scores can also be used for Optimization if wanted
-        #Brier score
-     #   time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
-     #   _ = ev.brier_score(time_grid).plot
-     #   brier_score = ev.integrated_brier_score(time_grid)
+    # These two scores can also be used for Optimization if wanted
+    #Brier score
+    #   time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
+    #   _ = ev.brier_score(time_grid).plot
+    #   brier_score = ev.integrated_brier_score(time_grid)
 
-        #Binomial log-likelihood
-     #   binomial_score = ev.integrated_nbll(time_grid)
+    #Binomial log-likelihood
+    #   binomial_score = ev.integrated_nbll(time_grid)
 
-        c_indices.append(concordance_index)
 
-    return c_indices[0],c_indices[1],c_indices[2],c_indices[3],c_indices[4]
+    return concordance_index
 
 
 
@@ -612,25 +620,32 @@ def optuna_optimization():
 
     # Set amount of different trials
     EPOCHS = 100
-    study = optuna.create_study(directions=['maximize','maximize','maximize','maximize','maximize'],sampler=optuna.samplers.TPESampler(),pruner=optuna.pruners.MedianPruner())
+    study = optuna.create_study(directions=['maximize'],sampler=optuna.samplers.TPESampler(),pruner=optuna.pruners.MedianPruner())
     study.optimize(objective, n_trials = EPOCHS)
-    optuna.visualization.plot_pareto_front(study, target_names=["FLOPS", "C-Indices"])
-    optuna.visualization.plot_param_importances(
-        study, target=lambda t: t.values[0], target_name="flops"
-    )
-
     trial = study.best_trials
+   # Show change of c-Index across folds
+    fig = optuna.visualization.plot_optimization_history(study)
+    fig.show(renderer='browser')
+    # Show hyperparameter importance
+    fig = optuna.visualization.plot_param_importances(study)
+    fig.show(renderer='browser')
 
-    print(trial)
+    # Save the best trial for each fold
+    direc_set = 'Desktop'
+    dir = os.path.expanduser(r'~/{}/Project/Trial/FCNN_KIRC3_Standardize_PCA_BEST_3.txt'.format(direc_set))
+    with open(dir, 'w') as fp:
+        for item in trial:
+            # write each item on a new line
+            fp.write("%s\n" % item)
+
 
     # Save all trials in dataframe
-    df = study.trials_dataframe()
-    df = df.sort_values('value')
-    df.to_csv("/Users/marlon/Desktop/Trial.csv")
+#  df = study.trials_dataframe()
+#    df = df.sort_values('value')
+#  df.to_csv("~/SUMO/Project/Trial/FCNN_KIRC3_Standardize_PCA.csv")
 
-   # print("Best Concordance Sum", trial.value)
-   # print("Best Hyperparameters : {}".format(trial.params))
-
+# print("Best Concordance Sum", trial.value)
+# print("Best Hyperparameters : {}".format(trial.params))
 
 
 def train(train_data,val_data,test_data,
@@ -830,7 +845,7 @@ def train(train_data,val_data,test_data,
                                                                                                            binomial_score))
 
 
-def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/"):
+def load_data(data_dir):
     """
     Function to load data. Needed for Optuna Optimization.
     :param data_dir: Directory in which data is stored.
@@ -876,16 +891,25 @@ def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/"):
         os.path.join(data_dir + "ValData_4.csv"), index_col=0)
 
 
+    testset_0 = pd.read_csv(
+        os.path.join(data_dir +  "TestData_0.csv"), index_col=0)
+    testset_1 = pd.read_csv(
+        os.path.join(data_dir +  "TestData_1.csv"), index_col=0)
+    testset_2 = pd.read_csv(
+        os.path.join(data_dir +  "TestData_2.csv"), index_col=0)
+    testset_3 = pd.read_csv(
+        os.path.join(data_dir +  "TestData_3.csv"), index_col=0)
+    testset_4 = pd.read_csv(
+        os.path.join(data_dir +  "TestData_4.csv"), index_col=0)
 
-    testset = pd.read_csv(
-        os.path.join(data_dir +  "TestData.csv"), index_col=0)
 
-    testset_feat = pd.read_csv(
-        os.path.join(data_dir + "TestDataFeatOffs.csv"), index_col=0)
+    #testset_feat = pd.read_csv(
+    #    os.path.join(data_dir + "TestDataFeatOffs.csv"), index_col=0)
 
 
-    return trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4,testset,\
-           trainset_feat_0,trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4,testset_feat
+    return trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4,\
+           testset_0,testset_1,testset_2,testset_3,testset_4, \
+           trainset_feat_0,trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4
 
     # return trainset, trainset_feat, valset, valset_feat, testset, testset_feat
 

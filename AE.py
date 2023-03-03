@@ -278,7 +278,7 @@ class AE(nn.Module):
     def __init__(self, views, in_features, n_hidden_layers_dims = None,
                  activ_funcs = None, dropout_prob = None, dropout_layers= None, batch_norm = None,
                  dropout_bool = False, batch_norm_bool= False, type_ae = None, cross_mutation = None,
-                 ae_hierarichcal_bool = False, ae_hierarichcal_decoding_bool = False, print_bool = False,
+                 print_bool = False,
                  prelu_init = 0.25):
         """
         Autoencoder with changeable hyperparameters. Each view has an AE itself. The bottleneck representations can be
@@ -304,9 +304,7 @@ class AE(nn.Module):
                                            mentionted types]
         :param cross_mutation : Choose additional decoder for view ; dtype : List of Int [Indices of decoders for view,
                                 e.g [1,3,0,2] will decode features of view 1 with decoder of view 2 (and 1),
-                                features of view 2 with decoder of view 4 (and 2) ...] TODO: check
-        :param ae_hierarichcal_bool : Choose whether this AE is the second AE in the pipeline ; dtype : Boolean
-        :param ae_hierarichcal_decoding_bool : Choose whether the second AE has a decoder ; dtype : Boolean
+                                features of view 2 with decoder of view 4 (and 2) ...] ; dtype : List or Tuple
         :param print_bool : Choose whether to print the models structure or not ; dtype : Boolean
         """
         super().__init__()
@@ -321,8 +319,6 @@ class AE(nn.Module):
         self.batch_norm_bool = batch_norm_bool
         self.type_ae = type_ae
         self.cross_mutation = cross_mutation
-        self.ae_hierarichcal_bool = ae_hierarichcal_bool
-        self.ae_hierarichcal_decoding_bool = ae_hierarichcal_decoding_bool
         self.prelu_init = prelu_init
         # Create list of lists which will store each hidden layer call for each view (encoding & decoding stage)
         self.hidden_layers = nn.ParameterList([nn.ParameterList([]) for x in range(len(in_features))])
@@ -659,10 +655,10 @@ class AE(nn.Module):
             if _.size(1) > size:
                 size = _.size(1)
 
-
-        element_wise_avg = torch.empty(batch_size,size)
-        element_wise_max = torch.empty(batch_size,size)
-        element_wise_min = torch.empty(batch_size,size)
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        element_wise_avg = torch.empty(batch_size,size).to(device)
+        element_wise_max = torch.empty(batch_size,size).to(device)
+        element_wise_min = torch.empty(batch_size,size).to(device)
 
 
 
@@ -832,7 +828,8 @@ class LossHierarichcalAESingleCross(nn.Module):
 
         :param alpha: Loss ratio [Negative partial log likelihood loss, MSE loss AE 1, MSE loss AE 2]
                       ; dtype : List [3 values
-        :param decoding_bool : Choose whether the second AE has an decoder ; dtype : Boolean
+        :param decoding_bool : Choose whether the second AE has an decoder. Note that this should be true if
+                               the cross_position is 2, because otherwise there won't be any cross-decoding ; dtype : Boolean
         :param cross_position : Choose whether first or second AE uses cross implementation
                                 ; dtype : Int [1 : first AE, 2 : second AE]
         """
@@ -1058,14 +1055,16 @@ def objective(trial):
     :param trial: Settings of the current trial of Hyperparameters
     :return: Concordance Index ; dtype : Float
     """
-
+    direc_set = 'Desktop'
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # Load in data
-    #  dir = os.path.expanduser('~/SUMO/Project/PreparedData/')
-    #    trainset, trainset_feat, valset, valset_feat, testset, testset_feat = load_data()
+    dir = os.path.expanduser('~/{}/Project/PreparedData/'.format(direc_set))
 
-    trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4,testset,trainset_feat_0,\
-    trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4,feat_offs = load_data()
+
+    trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4,\
+    testset_0,testset_1,testset_2,testset_3,testset_4,trainset_feat_0, \
+    trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4 = load_data(data_dir = dir)
+
 
 
     # Feature offsets need to be the same in train/val/test for each fold, otherwise NN wouldn't work (diff dimension inputs)
@@ -1082,6 +1081,7 @@ def objective(trial):
 
     trainset = [trainset_0 ,trainset_1,trainset_2,trainset_3,trainset_4]
     valset = [valset_0 ,valset_1,valset_2,valset_3,valset_4]
+    testset = [testset_0,testset_1,testset_2,testset_3,testset_4]
     n_folds = len(trainset)
     train_data_folds = []
     train_duration_folds = []
@@ -1139,19 +1139,19 @@ def objective(trial):
         test_data = []
         for c,feat in enumerate(feat_offs[c2]):
             if c < len(feat_offs[c2]) - 3: # train data views
-                data_np = np.array((testset.iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')
+                data_np = np.array((testset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')
                 data_tensor = torch.from_numpy(data_np).to(torch.float32)
                 data_tensor = data_tensor.to(device)
                 test_data.append(data_tensor)
 
             elif c == len(feat_offs[c2]) - 3: # duration
-                duration_np = (np.array((testset.iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')).squeeze(axis=1)
+                duration_np = (np.array((testset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')).squeeze(axis=1)
                 duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
                 duration_tensor = duration_tensor.to(device)
                 test_duration = duration_tensor
 
             elif c == len(feat_offs[c2]) -2: # event
-                event_np = (np.array((testset.iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')).squeeze(axis=1)
+                event_np = (np.array((testset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')).squeeze(axis=1)
                 event_tensor = torch.from_numpy(event_np).to(torch.float32)
                 event_tensor = event_tensor.to(device)
                 test_event = event_tensor
@@ -1175,8 +1175,8 @@ def objective(trial):
 
 
     views = []
-    #   dir = os.path.expanduser('~/SUMO/Project/TCGAData/cancerviews.txt')
-    dir = os.path.expanduser('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt')
+    dir = os.path.expanduser('~/{}/Project/TCGAData/cancerviews.txt'.format(direc_set))
+   # dir = os.path.expanduser('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt')
     read_in = open(dir, 'r')
     for view in read_in:
         views.append(view)
@@ -1184,20 +1184,11 @@ def objective(trial):
     view_names = [line[:-1] for line in views]
 
 
-#    dimensions_train = [x.shape[1] for x in train_data]
-#    dimensions_val = [x.shape[1] for x in val_data]
-#    dimensions_test = [x.shape[1] for x in test_data]
-
-#    assert (dimensions_train == dimensions_val == dimensions_test), 'Feature mismatch between train/test'
-
-#    dimensions = dimensions_train
-
-    # Transforms for PyCox
- #   train_surv = (train_duration, train_event)
- #   val_data_full = (val_data, (val_duration, val_event))
 
     second_decoder_bool = False
     model_types = ['concat']
+    # Current fold to be optimized
+    c_fold = 0
 
     ##################################### HYPERPARAMETER SEARCH SETTINGS ##############################################
     l2_regularization_bool = trial.suggest_categorical('l2_regularization_bool', [True,False])
@@ -1486,170 +1477,170 @@ def objective(trial):
     # AE's
 
 
-    c_indices = []
-    for c_fold in range(n_folds):
-
-        # Create List of models to be used
-        all_models = nn.ModuleList()
-
-
-        dimensions_train = [x.shape[1] for x in train_data[c_fold]]
-        dimensions_val = [x.shape[1] for x in val_data[c_fold]]
-        dimensions_test = [x.shape[1] for x in test_data[c_fold]]
-
-        assert (dimensions_train == dimensions_val == dimensions_test), 'Feature mismatch between train/test'
-
-        dimensions = dimensions_train
-
-        # Transforms for PyCox
-        train_surv = (train_duration[c_fold], train_event[c_fold])
-        val_data_full = (val_data[c_fold], (val_duration[c_fold], val_event[c_fold]))
-
-
-        layers_u = copy.deepcopy(layers)
-        activation_functions_u = copy.deepcopy(activation_functions)
-        dropouts_u = copy.deepcopy(dropouts)
-        batchnorms_u = copy.deepcopy(batchnorms)
-        all_models.append(AE(views = view_names,
-                             in_features= dimensions,
-                             n_hidden_layers_dims= layers_u,
-                             activ_funcs=activation_functions_u,
-                             dropout_bool= dropout_bool,
-                             dropout_prob= dropout_prob,
-                             dropout_layers= dropouts_u,
-                             batch_norm_bool= batchnorm_bool,
-                             batch_norm= batchnorms_u,
-                             type_ae=model_types[0],
-                             cross_mutation=None,
-                             print_bool=False,
-                             prelu_init= prelu_rate)).to(device)
-
-
-        # Hierachical AE no integration : in_features must be sizes of bottleneck dimensions of first AE
-      #  all_models.append(AE(views = view_names,
-       #                      in_features= in_feats_second_AE_hierachical,
-       #                      n_hidden_layers_dims= layers_hierarchical,
-       #                      activ_funcs=activation_functions_hierarchical,
-       #                      dropout_bool= dropout_bool_hierachical,
-       #                      dropout_prob= dropout_prob_hierachical,
-       #                      dropout_layers= dropouts_hierarchical,
-       #                      batch_norm_bool= batchnorm_bool_hierachical,
-       #                      batch_norm= batchnorms_hierarchical,
-       #                      type_ae=model_types[1],
-       #                      cross_mutation=None,
-       #                      print_bool=False,
-       #                      prelu_init= prelu_rate)).to(device)
-
-        layers_FCNN_u = copy.deepcopy(layers_FCNN)
-        FCNN_activation_functions_u = copy.deepcopy(FCNN_activation_functions)
-        FCNN_dropouts_u = copy.deepcopy(FCNN_dropouts)
-        FCNN_batchnorms_u = copy.deepcopy(FCNN_batchnorms)
-        all_models.append(FCNN.NN_changeable(views = ['AE'],
-                                           in_features = [in_feats_second_NN_concat],
-                                           n_hidden_layers_dims= layers_FCNN_u,
-                                           activ_funcs = [FCNN_activation_functions_u,['none']],
-                                           dropout_prob=FCNN_dropout_prob,
-                                           dropout_layers=FCNN_dropouts_u,
-                                           batch_norm = FCNN_batchnorms_u,
-                                           dropout_bool=FCNN_dropout_bool,
-                                           batch_norm_bool=FCNN_batchnorm_bool,
-                                           print_bool=False,
-                                           prelu_init = prelu_rate)).to(device)
 
 
 
-
-      #  full_net = AE_Hierarichal(all_models, types=model_types)
-
-        full_net = AE_NN(all_models, type=model_types[0])
+    # Create List of models to be used
+    all_models = nn.ModuleList()
 
 
-        # set optimizer
-        if l2_regularization_bool == True:
-            optimizer = Adam(full_net.parameters(), lr=learning_rate, weight_decay=l2_regularization_rate)
-        else:
-            optimizer = Adam(full_net.parameters(), lr=learning_rate)
+    dimensions_train = [x.shape[1] for x in train_data[c_fold]]
+    dimensions_val = [x.shape[1] for x in val_data[c_fold]]
+    dimensions_test = [x.shape[1] for x in test_data[c_fold]]
 
-        callbacks = [tt.callbacks.EarlyStopping(patience=10)]
-        #   cross_pos = model_types.index("cross") + 1
-        #   model = models.CoxPH(full_net,optimizer, loss=LossHierarichcalAESingleCross(alpha=[0.4,0.4,0.2], decoding_bool=True, cross_position=cross_pos)) # Change Loss here
+    assert (dimensions_train == dimensions_val == dimensions_test), 'Feature mismatch between train/test'
 
-        loss_concat = LossAEConcatHazard(loss_surv)
-        loss_cross = LossAECrossHazard(loss_surv)
+    dimensions = dimensions_train
 
-        # if second decoder, we need to use loss_3 ; else normal 2 valued loss
-        if len(model_types) == 2:
-            loss_hierachical_no_cross = LossHierarichcalAE(loss_3_values_hierarchical,decoding_bool=True)
-            loss_hierachical_cross = LossHierarichcalAESingleCross(loss_3_values_hierarchical, cross_position=1)
-        # loss : alpha * surv_loss + (1-alpha) * ae_loss
-        model = models.CoxPH(full_net,
-                             optimizer,
-                             loss=loss_concat)
-        model.set_device(torch.device(device))
-        print_loss = False
+    # Transforms for PyCox
+    train_surv = (train_duration[c_fold], train_event[c_fold])
+    val_data_full = (val_data[c_fold], (val_duration[c_fold], val_event[c_fold]))
 
-        log = model.fit(train_data[c_fold],
-                        train_surv,
-                        batch_size,
-                        n_epochs,
-                        verbose=print_loss,
-                        val_data= val_data_full,
-                        val_batch_size= 16,
-                        callbacks=callbacks)
 
-        # Plot it
-     #   _ = log.plot()
+    layers_u = copy.deepcopy(layers)
+    activation_functions_u = copy.deepcopy(activation_functions)
+    dropouts_u = copy.deepcopy(dropouts)
+    batchnorms_u = copy.deepcopy(batchnorms)
+    all_models.append(AE(views = view_names,
+                         in_features= dimensions,
+                         n_hidden_layers_dims= layers_u,
+                         activ_funcs=activation_functions_u,
+                         dropout_bool= dropout_bool,
+                         dropout_prob= dropout_prob,
+                         dropout_layers= dropouts_u,
+                         batch_norm_bool= batchnorm_bool,
+                         batch_norm= batchnorms_u,
+                         type_ae=model_types[0],
+                         cross_mutation=None,
+                         print_bool=False,
+                         prelu_init= prelu_rate)).to(device)
 
-        # Change for EvalSurv-Function
+
+    # Hierachical AE no integration : in_features must be sizes of bottleneck dimensions of first AE
+  #  all_models.append(AE(views = view_names,
+   #                      in_features= in_feats_second_AE_hierachical,
+   #                      n_hidden_layers_dims= layers_hierarchical,
+   #                      activ_funcs=activation_functions_hierarchical,
+   #                      dropout_bool= dropout_bool_hierachical,
+   #                      dropout_prob= dropout_prob_hierachical,
+   #                      dropout_layers= dropouts_hierarchical,
+   #                      batch_norm_bool= batchnorm_bool_hierachical,
+   #                      batch_norm= batchnorms_hierarchical,
+   #                      type_ae=model_types[1],
+   #                      cross_mutation=None,
+   #                      print_bool=False,
+   #                      prelu_init= prelu_rate)).to(device)
+
+    layers_FCNN_u = copy.deepcopy(layers_FCNN)
+    FCNN_activation_functions_u = copy.deepcopy(FCNN_activation_functions)
+    FCNN_dropouts_u = copy.deepcopy(FCNN_dropouts)
+    FCNN_batchnorms_u = copy.deepcopy(FCNN_batchnorms)
+    all_models.append(FCNN.NN_changeable(views = ['AE'],
+                                       in_features = [in_feats_second_NN_concat],
+                                       n_hidden_layers_dims= layers_FCNN_u,
+                                       activ_funcs = [FCNN_activation_functions_u,['none']],
+                                       dropout_prob=FCNN_dropout_prob,
+                                       dropout_layers=FCNN_dropouts_u,
+                                       batch_norm = FCNN_batchnorms_u,
+                                       dropout_bool=FCNN_dropout_bool,
+                                       batch_norm_bool=FCNN_batchnorm_bool,
+                                       print_bool=False,
+                                       prelu_init = prelu_rate)).to(device)
+
+
+
+
+  #  full_net = AE_Hierarichal(all_models, types=model_types)
+
+    full_net = AE_NN(all_models, type=model_types[0])
+
+
+    # set optimizer
+    if l2_regularization_bool == True:
+        optimizer = Adam(full_net.parameters(), lr=learning_rate, weight_decay=l2_regularization_rate)
+    else:
+        optimizer = Adam(full_net.parameters(), lr=learning_rate)
+
+    callbacks = [tt.callbacks.EarlyStopping(patience=10)]
+    #   cross_pos = model_types.index("cross") + 1
+    #   model = models.CoxPH(full_net,optimizer, loss=LossHierarichcalAESingleCross(alpha=[0.4,0.4,0.2], decoding_bool=True, cross_position=cross_pos)) # Change Loss here
+
+    loss_concat = LossAEConcatHazard(loss_surv)
+    loss_cross = LossAECrossHazard(loss_surv)
+
+    # if second decoder, we need to use loss_3 ; else normal 2 valued loss
+    if len(model_types) == 2:
+        loss_hierachical_no_cross = LossHierarichcalAE(loss_3_values_hierarchical,decoding_bool=True)
+        loss_hierachical_cross = LossHierarichcalAESingleCross(loss_3_values_hierarchical, cross_position=1)
+    # loss : alpha * surv_loss + (1-alpha) * ae_loss
+    model = models.CoxPH(full_net,
+                         optimizer,
+                         loss=loss_concat)
+    model.set_device(torch.device(device))
+    print_loss = False
+
+    log = model.fit(train_data[c_fold],
+                    train_surv,
+                    batch_size,
+                    n_epochs,
+                    verbose=print_loss,
+                    val_data= val_data_full,
+                    val_batch_size= 16,
+                    callbacks=callbacks)
+
+    # Plot it
+ #   _ = log.plot()
+
+    # Change for EvalSurv-Function
+    try:
+        test_duration = test_duration.cpu().detach().numpy()
+        test_event = test_event.cpu().detach().numpy()
+    except AttributeError:
+        pass
+
+
+    for c,fold in enumerate(train_data):
         try:
-            test_duration = test_duration.cpu().detach().numpy()
-            test_event = test_event.cpu().detach().numpy()
-        except AttributeError:
+            train_duration[c_fold] = train_duration[c_fold].cpu().detach().numpy()
+            train_event[c_fold] = train_event[c_fold].cpu().detach().numpy()
+            val_duration[c_fold] = val_duration[c_fold].cpu().detach().numpy()
+            val_event[c_fold] = val_event[c_fold].cpu().detach().numpy()
+        except AttributeError: # in this case already numpy arrays
             pass
 
+    # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
+    _ = model.compute_baseline_hazards()
 
-        for c,fold in enumerate(train_data):
-            try:
-                train_duration[c_fold] = train_duration[c_fold].cpu().detach().numpy()
-                train_event[c_fold] = train_event[c_fold].cpu().detach().numpy()
-                val_duration[c_fold] = val_duration[c_fold].cpu().detach().numpy()
-                val_event[c_fold] = val_event[c_fold].cpu().detach().numpy()
-            except AttributeError: # in this case already numpy arrays
-                pass
+    # Predict based on test data
+    surv = model.predict_surv_df(test_data[c_fold])
 
-        # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
-        _ = model.compute_baseline_hazards()
-
-        # Predict based on test data
-        surv = model.predict_surv_df(test_data[c_fold])
-
-        # Plot it
-        #      surv.iloc[:, :5].plot()
-        #      plt.ylabel('S(t | x)')
-        #      _ = plt.xlabel('Time')
+    # Plot it
+    #      surv.iloc[:, :5].plot()
+    #      plt.ylabel('S(t | x)')
+    #      _ = plt.xlabel('Time')
 
 
 
 
-        # Evaluate with concordance, brier score and binomial log-likelihood
-        ev = EvalSurv(surv, test_duration, test_event, censor_surv='km') # censor_surv : Kaplan-Meier
+    # Evaluate with concordance, brier score and binomial log-likelihood
+    ev = EvalSurv(surv, test_duration, test_event, censor_surv='km') # censor_surv : Kaplan-Meier
 
-        # concordance
-        concordance_index = ev.concordance_td()
+    # concordance
+    concordance_index = ev.concordance_td()
 
-        if concordance_index < 0.5:
-            concordance_index = 1 - concordance_index
+    if concordance_index < 0.5:
+        concordance_index = 1 - concordance_index
 
-        #brier score
-      #  time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
-      ##  _ = ev.brier_score(time_grid).plot
-      #  brier_score = ev.integrated_brier_score(time_grid)
+    #brier score
+  #  time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
+  ##  _ = ev.brier_score(time_grid).plot
+  #  brier_score = ev.integrated_brier_score(time_grid)
 
-        #binomial log-likelihood
-     #   binomial_score = ev.integrated_nbll(time_grid)
-        c_indices.append(concordance_index)
+    #binomial log-likelihood
+ #   binomial_score = ev.integrated_nbll(time_grid)
 
-    return c_indices[0],c_indices[1],c_indices[2],c_indices[3],c_indices[4]
+
+    return concordance_index
 
 
 
@@ -1660,22 +1651,30 @@ def optuna_optimization():
 
 
     # Set amount of different trials
-    EPOCHS = 100
-    study = optuna.create_study(directions=['maximize','maximize','maximize','maximize','maximize'],sampler=optuna.samplers.TPESampler(),pruner=optuna.pruners.MedianPruner())
+    EPOCHS = 30
+    study = optuna.create_study(directions=['maximize'],sampler=optuna.samplers.TPESampler(),pruner=optuna.pruners.MedianPruner())
     study.optimize(objective, n_trials = EPOCHS)
-    optuna.visualization.plot_pareto_front(study, target_names=["FLOPS", "C-Indices"])
-    optuna.visualization.plot_param_importances(
-        study, target=lambda t: t.values[0], target_name="flops"
-    )
-
     trial = study.best_trials
+    # Show change of c-Index across folds
+    fig = optuna.visualization.plot_optimization_history(study)
+    fig.show(renderer='browser')
+    # Show hyperparameter importance
+    fig = optuna.visualization.plot_param_importances(study)
+    fig.show(renderer='browser')
 
-    print(trial)
+    # Save the best trial for each fold
+    direc_set = 'Desktop'
+    dir = os.path.expanduser(r'~/{}/Project/Trial/FCNN_KIRC3_Standardize_PCA_BEST_3.txt'.format(direc_set))
+    with open(dir, 'w') as fp:
+        for item in trial:
+            # write each item on a new line
+            fp.write("%s\n" % item)
+
 
     # Save all trials in dataframe
-    df = study.trials_dataframe()
-    df = df.sort_values('value')
-    df.to_csv("/Users/marlon/Desktop/Trial.csv")
+#  df = study.trials_dataframe()
+#    df = df.sort_values('value')
+#  df.to_csv("~/SUMO/Project/Trial/FCNN_KIRC3_Standardize_PCA.csv")
 
 # print("Best Concordance Sum", trial.value)
 # print("Best Hyperparameters : {}".format(trial.params))
@@ -1713,7 +1712,8 @@ def train(train_data,val_data,test_data,
           layers_third,
           activation_layers_third,
           dropout_layers_third,
-          batchnorm_layers_third):
+          batchnorm_layers_third,
+          loss_rate):
     """
 
     :param train_data: Training Data for each fold for each view  ; dtype : List of Lists [for each view] of Tensors(n_samples,n_features)
@@ -1765,6 +1765,7 @@ def train(train_data,val_data,test_data,
                                   ; dtype : List of Lists of Strings ['yes','no']
     :param batchnorm_layers_third: Layers in which to apply Batch Normalization for the FCNN
                                     ; dtype : List of Lists of Strings ['yes','no']
+    :param loss_rate : Loss ratio between MSE loss(es) and negative partial log likelihood loss ; dtype : List of Int [2 decoders] or Int [1 decoder]
     """
 
 
@@ -1774,35 +1775,7 @@ def train(train_data,val_data,test_data,
 #:param ae_hierarichcal_decoding_bool : Choose whether the second AE has a decoder ; dtype : Boolean
 
 
-    # Cast to numpy arrays if necessary(if we get an error, we already have numpy arrays --> no need to cast)
-    try:
-        test_duration = test_duration.numpy()
-        test_event = test_event.numpy()
-    except AttributeError:
-        pass
-
-
     for c,fold in enumerate(train_data):
-        try:
-            train_duration[c] = train_duration[c].numpy()
-            train_event[c] = train_event[c].numpy()
-            val_duration[c] = val_duration[c].numpy()
-            val_event[c] = val_event[c].numpy()
-        except AttributeError: # in this case already numpy arrays
-            pass
-
-
-
-        for c2,view in enumerate(fold):
-            try:
-                train_data[c][c2] = (train_data[c][c2]).numpy()
-                val_data[c][c2] = (val_data[c][c2]).numpy()
-                test_data[c][c2] = (test_data[c][c2]).numpy()
-            except AttributeError:
-                pass
-
-
-
         # Need tuple structure for PyCox
         train_data[c] = tuple(train_data[c])
         val_data[c] = tuple(val_data[c])
@@ -1813,6 +1786,26 @@ def train(train_data,val_data,test_data,
     ############################# FOLD X ###################################
     for c_fold,fold in enumerate(train_data):
         for c2,view in enumerate(fold):
+
+            # For GPU acceleration, we need to have everything as tensors for the training loop, but pycox EvalSurv
+            # Needs duration & event to be numpy arrays, thus at the start we set duration/event to tensors
+            # and before EvalSurv to numpy
+            try:
+                test_duration = torch.from_numpy(test_duration).to(torch.float32)
+                test_event = torch.from_numpy(test_event).to(torch.float32)
+            except TypeError:
+                pass
+
+
+            for c,fold in enumerate(train_data):
+                try:
+                    train_duration[c] = torch.from_numpy(train_duration[c]).to(torch.float32)
+                    train_event[c] = torch.from_numpy(train_event[c]).to(torch.float32)
+                    val_duration[c] = torch.from_numpy(val_duration[c]).to(torch.float32)
+                    val_event[c] = torch.from_numpy(val_event[c]).to(torch.float32)
+                except TypeError:
+                    pass
+
             print("Train data has shape : {} for view {}".format(train_data[c_fold][c2].shape, view_names[c2]))
             print("Validation data has shape : {} for view {}".format(val_data[c_fold][c2].shape, view_names[c2]))
             print("Test data has shape : {} for view {}".format(test_data[c_fold][c2].shape, view_names[c2]))
@@ -1836,9 +1829,12 @@ def train(train_data,val_data,test_data,
         all_models = nn.ModuleList()
 
 
-     #   model_types = ['concat','elementwisemax']
 
+        #model_types = ['none', 'cross_elementwiseavg']
         print("MODEL TYPES : ", model_types)
+
+
+
 
 
         out_sizes = []
@@ -1846,16 +1842,21 @@ def train(train_data,val_data,test_data,
             out_sizes.append(layers[c_layer][-1])
 
 
-        in_feats_second_NN_concat = sum(out_sizes)
-        in_feats_second_NN_elementwise = max([i[-1] for i in layers])
+        in_feats_second_NN_concat = [sum(out_sizes)]
+        in_feats_second_NN_elementwise = [max([i[-1] for i in layers])]
 
         out_sizes_second = []
         for c_layer in range(len(layers_second)):
             out_sizes_second.append(layers_second[c_layer][-1])
 
 
-        in_feats_third_NN_concat = sum(out_sizes_second)
-        in_feats_third_NN_elementwise = max([i[-1] for i in layers_second])
+        in_feats_third_NN_concat = [sum(out_sizes_second)]
+        in_feats_third_NN_elementwise = [max([i[-1] for i in layers_second])]
+
+
+        # if first model type is none, we need to take bottleneck dimensions for second AE
+        in_feats_second_AE_hierachical = [x[-1] for x in layers]
+
 
 
         # AE's
@@ -1873,32 +1874,27 @@ def train(train_data,val_data,test_data,
                              batch_norm_bool= batchnorm,
                              batch_norm= batchnorm_layers_u,
                              type_ae=model_types[0],
-                             cross_mutation=cross_mutation,
+                             cross_mutation=None,
                              print_bool=False,
                              prelu_init= prelu_rate))
 
 
-#        layers_u_2 = copy.deepcopy(layers_second)
-#        activation_layers_u_2 = copy.deepcopy(activation_layers_second)
-#        dropout_layers_u_2 = copy.deepcopy(dropout_layers_second)
-#        batchnorm_layers_u_2 = copy.deepcopy(batchnorm_layers_second)
-#        all_models.append(AE(views = ['AE'],
-#                             in_features=[in_feats_second_NN_concat],
-#                             n_hidden_layers_dims= layers_u_2,
-#                             activ_funcs = activation_layers_u_2,
-#                             dropout_prob= dropout_second,
-#                             dropout_layers = dropout_layers_u_2,
-#                             batch_norm = batchnorm_layers_u_2,
-#                             dropout_bool=dropout_second,
-#                             batch_norm_bool=batchnorm_second,
-##                             type_ae =model_types[1],
-#                             cross_mutation=[1,0,3,2],
-#                             ae_hierarichcal_bool= False,
-##                             print_bool=False))
-
-
-
-
+        layers_u_2 = copy.deepcopy(layers_second)
+        activation_layers_u_2 = copy.deepcopy(activation_layers_second)
+        dropout_layers_u_2 = copy.deepcopy(dropout_layers_second)
+        batchnorm_layers_u_2 = copy.deepcopy(batchnorm_layers_second)
+        all_models.append(AE(views = view_names,
+                             in_features=in_feats_second_AE_hierachical,
+                             n_hidden_layers_dims= layers_u_2,
+                             activ_funcs = activation_layers_u_2,
+                             dropout_prob= dropout_rate_second,
+                             dropout_bool= dropout_second,
+                             dropout_layers = dropout_layers_u_2,
+                             batch_norm = batchnorm_layers_u_2,
+                             batch_norm_bool=batchnorm_second,
+                             type_ae =model_types[1],
+                             cross_mutation=cross_mutation,
+                             print_bool=False))
 
 
         # NN
@@ -1914,10 +1910,10 @@ def train(train_data,val_data,test_data,
         dropout_layers_u_3 = copy.deepcopy(dropout_layers_third)
         batchnorm_layers_u_3 = copy.deepcopy(batchnorm_layers_third)
         all_models.append(FCNN.NN_changeable(views = ['AE'],
-                                           in_features = [in_feats_second_NN_concat],
+                                           in_features = in_feats_third_NN_elementwise,
                                            n_hidden_layers_dims= layers_u_3,
                                            activ_funcs = activation_layers_u_3,
-                                           dropout_prob=dropout_third,
+                                           dropout_prob=dropout_rate_third,
                                            dropout_layers=dropout_layers_u_3,
                                            batch_norm =batchnorm_layers_u_3,
                                            dropout_bool=dropout_third,
@@ -1937,9 +1933,9 @@ def train(train_data,val_data,test_data,
 
 
 
-    #    full_net = AE_Hierarichal(all_models, types=model_types)
+        full_net = AE_Hierarichal(all_models, types=model_types)
 
-        full_net = AE_NN(all_models, type=model_types[0])
+     #   full_net = AE_NN(all_models, type=model_types[0])
 
 
         # set optimizer
@@ -1956,8 +1952,8 @@ def train(train_data,val_data,test_data,
         # loss : alpha * surv_loss + (1-alpha) * ae_loss
         model = models.CoxPH(full_net,
                              optimizer,
-                             loss=LossAEConcatHazard(alpha=0.6))
-        print_loss = True
+                             loss=LossHierarichcalAESingleCross(alpha=[loss_rate, 1-loss_rate], decoding_bool= False, cross_position=2))
+        print_loss = False
         print("Split {} : ".format(c_fold + 1))
         log = model.fit(train_data[c_fold],
                         train_surv,
@@ -1965,11 +1961,28 @@ def train(train_data,val_data,test_data,
                         n_epochs,
                         verbose=print_loss,
                         val_data= val_data_full,
-                        val_batch_size= batch_size,
+                        val_batch_size= 12,
                         callbacks=callbacks)
 
         # Plot it
         _ = log.plot()
+
+        # Change for EvalSurv-Function
+        try:
+            test_duration = test_duration.cpu().detach().numpy()
+            test_event = test_event.cpu().detach().numpy()
+        except AttributeError:
+            pass
+
+
+        for c,fold in enumerate(train_data):
+            try:
+                train_duration[c_fold] = train_duration[c_fold].cpu().detach().numpy()
+                train_event[c_fold] = train_event[c_fold].cpu().detach().numpy()
+                val_duration[c_fold] = val_duration[c_fold].cpu().detach().numpy()
+                val_event[c_fold] = val_event[c_fold].cpu().detach().numpy()
+            except AttributeError: # in this case already numpy arrays
+                pass
 
         # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
         _ = model.compute_baseline_hazards()
@@ -2007,42 +2020,7 @@ def train(train_data,val_data,test_data,
 
 
 
-
-"""
-def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/"):
-
-    
-  #  Function to load data. Needed for Optuna Optimization.
-  #  :param data_dir: Directory in which data is stored.
-  #  :return: trainset/valset/testset : train/validation/test set ; dtype : TODO
-  #           trainset_feat/valset_feat/testset_feat : feature offsets for train/validation/test set including
-  #           duration & event ; dtype : TODO
-
-
-    trainset = pd.read_csv(
-        os.path.join(data_dir + "TrainData.csv"), index_col=0)
-
-    trainset_feat = pd.read_csv(
-        os.path.join(data_dir +"TrainDataFeatOffs.csv"), index_col=0)
-
-
-    valset = pd.read_csv(
-        os.path.join(data_dir + "ValData.csv"), index_col=0)
-
-    valset_feat = pd.read_csv(
-        os.path.join(data_dir +"ValDataFeatOffs.csv"), index_col=0)
-
-    testset = pd.read_csv(
-        os.path.join(data_dir +  "TestData.csv"), index_col=0)
-
-    testset_feat = pd.read_csv(
-        os.path.join(data_dir + "TestDataFeatOffs.csv"), index_col=0)
-
-
-    return trainset, trainset_feat, valset, valset_feat, testset, testset_feat
-
-"""
-def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/"):
+def load_data(data_dir):
     """
     Function to load data. Needed for Optuna Optimization.
     :param data_dir: Directory in which data is stored.
@@ -2087,14 +2065,20 @@ def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/"):
     valset_4 = pd.read_csv(
         os.path.join(data_dir + "ValData_4.csv"), index_col=0)
 
+    testset_0 = pd.read_csv(
+        os.path.join(data_dir +  "TestData_0.csv"), index_col=0)
+    testset_1 = pd.read_csv(
+        os.path.join(data_dir +  "TestData_1.csv"), index_col=0)
+    testset_2 = pd.read_csv(
+        os.path.join(data_dir +  "TestData_2.csv"), index_col=0)
+    testset_3 = pd.read_csv(
+        os.path.join(data_dir +  "TestData_3.csv"), index_col=0)
+    testset_4 = pd.read_csv(
+        os.path.join(data_dir +  "TestData_4.csv"), index_col=0)
 
 
-    testset = pd.read_csv(
-        os.path.join(data_dir +  "TestData.csv"), index_col=0)
-
-    testset_feat = pd.read_csv(
-        os.path.join(data_dir + "TestDataFeatOffs.csv"), index_col=0)
 
 
-    return trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4,testset, \
-           trainset_feat_0,trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4,testset_feat
+    return trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4, \
+           testset_0,testset_1,testset_2,testset_3,testset_4, \
+           trainset_feat_0,trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4

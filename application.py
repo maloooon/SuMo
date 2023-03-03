@@ -28,7 +28,7 @@ if __name__ == '__main__':
     # Possible Cancers are :
     #PRAD, ACC, BLCA, BRCA,CESC,CHOL,COAD,DLBC,ESCA,GBM, HNSC,KICH,KIRC,KIRP,LAML,LGG,
     #LIHC,LUAD,LUSC,MESO,PAAD,PCPG,READ,SARC,SKCM,STAD,TGCT,THCA,THYM,UCEC,UCS,UVM
-    cancer_data = ReadInData.readcancerdata('LUAD')
+    cancer_data = ReadInData.readcancerdata('KIRC')
     data = cancer_data[0][0]
     feature_offsets = cancer_data[0][1]
     view_names = cancer_data[0][2]
@@ -41,18 +41,18 @@ if __name__ == '__main__':
     # Cancers can have mRNA, DNA, microRNA, RPPA data
     # Leaving which_views empty will take all views into consideration will take all possible views into consideration
     # If you want to choose specific cancers, put them in the right order : mRNA, DNA, microRNA, RPPA
-    which_views = []
+    which_views = ['mRNA','microRNA','RPPA']
     # Decide number of folds for cross validation. For Optuna optimization, use just one fold.
     n_folds = 5 # Use 1 for Optuna Hyperparameter Optimization
     # Decide type of preprocessing (standardize/minmaxscaling (between 0 & 1)/robustscaling (good when we have outliers)/maxabsvalscaling (between -1 and 1)
-    type_of_preprocessing = 'standardize'
+    type_of_preprocessing = 'maxabsvalscaling'
     # Hyperparameter Optimization NN method
-    method_tune = 'AE'
+    method_tune = 'none'
     # Train NN method
-    method_train = 'none'
+    method_train = 'AE'
     # Feature selection method hyperparamter Tuning FCNN/AE (For GCN its always PPI)
-    selection_method_tuning = 'PCA'
-    components_tuning = [None,None,None,None]
+    selection_method_tuning = 'eigengenes'
+    components_tuning = [50,30,50,50]
     thresholds_tuning = [0.1,0.1,0.1,0.1]
     # Choose feature selection method (PCA,Variance,AE,Eigengenes)
     selection_method_train = 'PCA'
@@ -63,11 +63,15 @@ if __name__ == '__main__':
     print("Tuning Neural Network : ", method_tune)
     print("Feature Selection Method Tuning: " ,selection_method_tuning)
 
+    direc_set = 'Desktop' # dir is Desktop for own CPU or SUMO for GPU
 
-   # dir = os.path.expanduser('~/SUMO/Project/TCGAData/currentcancer.txt') # for mlo gpu
-    dir = os.path.expanduser('/Users/marlon/Desktop/Project/TCGAData/currentcancer.txt')
+
+    dir = os.path.expanduser('~/{}/Project/TCGAData/currentcancer.txt'.format(direc_set)) # for mlo gpu
+  #  dir = os.path.expanduser('/Users/marlon/Desktop/Project/TCGAData/currentcancer.txt')
     with open(dir, 'w') as f:
         f.write(cancer_name)
+
+
 
 
     # Call the module
@@ -84,18 +88,19 @@ if __name__ == '__main__':
 
 
     # Setup all the data
- #   n_train_samples, n_test_samples,n_val_samples, view_names_fix = multimodule.setup()    ###### TESTING ON SAME FOLD #########
+    n_train_samples, n_test_samples,n_val_samples, view_names_fix = multimodule.setup()    ###### TESTING ON SAME FOLD #########
 
 
+    ######## TESTING PURPOSES #######
+   # view_names_fix = ['MICRORNA','RPPA']
+    ######## TESTING PURPOSES #########
     # Write used views for input into NN to .txt
-    #dir = os.path.expanduser('~/SUMO/Project/TCGAData/cancerviews.txt')
-    dir = os.path.expanduser('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt')
-  #  with open(dir, 'w') as fp:
-   #     for item in view_names_fix:
-            # write each item on a new line
-   #         fp.write("%s\n" % item)
 
-    view_names_fix = ['MRNA','DNA','MICRORNA','RPPA']
+    dir = os.path.expanduser('~/{}/Project/TCGAData/cancerviews.txt'.format(direc_set))
+    with open(dir, 'w') as fp:
+        for item in view_names_fix:
+            # write each item on a new line
+            fp.write("%s\n" % item)
 
     ############################################ HYPERPARAMETER OPTIMIZATION ##########################################
 
@@ -152,11 +157,11 @@ if __name__ == '__main__':
             train_data_df = pd.DataFrame(train_data_c)
             feat_offs_train = np.cumsum(feat_offs_train)
             feat_offs_train_df = pd.DataFrame(feat_offs_train)
-           # dir = os.path.expanduser('~/SUMO/Project/PreparedData/TrainData.csv')
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TrainData.csv")
+            dir = os.path.expanduser('~/{}/Project/PreparedData/TrainData_{}.csv'.format(direc_set,c_fold))
+          #  dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TrainData.csv")
             train_data_df.to_csv(dir)
-           # dir = os.path.expanduser('~/SUMO/Project/PreparedData/TrainDataFeatOffs.csv')
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TrainDataFeatOffs.csv")
+            dir = os.path.expanduser('~/{}/Project/PreparedData/TrainDataFeatOffs_{}.csv'.format(direc_set,c_fold))
+          #  dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TrainDataFeatOffs.csv")
             feat_offs_train_df.to_csv(dir)
 
             all_val_data = []
@@ -169,11 +174,11 @@ if __name__ == '__main__':
             val_data_df = pd.DataFrame(val_data_c)
             feat_offs_val = np.cumsum(feat_offs_val)
             feat_offs_val_df = pd.DataFrame(feat_offs_val)
-          #  dir = os.path.expanduser('~/SUMO/Project/PreparedData/ValData.csv')
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/ValData.csv")
+            dir = os.path.expanduser('~/{}/Project/PreparedData/ValData_{}.csv'.format(direc_set,c_fold))
+          #  dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/ValData.csv")
             val_data_df.to_csv(dir)
-         #   dir = os.path.expanduser('~/SUMO/Project/PreparedData/ValDataFeatOffs.csv')
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/ValDataFeatOffs.csv")
+            dir = os.path.expanduser('~/{}/Project/PreparedData/ValDataFeatOffs_{}.csv'.format(direc_set,c_fold))
+           # dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/ValDataFeatOffs.csv")
             feat_offs_val_df.to_csv(dir)
 
 
@@ -187,28 +192,28 @@ if __name__ == '__main__':
             test_data_df = pd.DataFrame(test_data_c)
             feat_offs_test = np.cumsum(feat_offs_test)
             feat_offs_test_df = pd.DataFrame(feat_offs_test)
-           # dir = os.path.expanduser('~/SUMO/Project/PreparedData/TestData.csv')
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TestData.csv")
+            dir = os.path.expanduser('~/{}/Project/PreparedData/TestData_{}.csv'.format(direc_set,c_fold))
+            #dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TestData.csv")
             test_data_df.to_csv(dir)
-        #    dir = os.path.expanduser('~/SUMO/Project/PreparedData/TestDataFeatOffs.csv')
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TestDataFeatOffs.csv")
+            dir = os.path.expanduser('~/{}/Project/PreparedData/TestDataFeatOffs_{}.csv'.format(direc_set,c_fold))
+          #  dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TestDataFeatOffs.csv")
             feat_offs_test_df.to_csv(dir)
 
 
-          #  dir = os.path.expanduser('~/SUMO/Project/PreparedData/num_features.txt')
-            dir = os.path.expanduser('/Users/marlon/Desktop/Project/PreparedData/num_features.txt')
+            dir = os.path.expanduser('~/{}/Project/PreparedData/num_features.txt'.format(direc_set))
+          #  dir = os.path.expanduser('/Users/marlon/Desktop/Project/PreparedData/num_features.txt')
             with open(dir, 'w') as f:
                 f.write(str(num_features))
-          #  dir = os.path.expanduser('~/SUMO/Project/PreparedData/num_nodes.txt')
-            dir = os.path.expanduser('/Users/marlon/Desktop/Project/PreparedData/num_nodes.txt')
+            dir = os.path.expanduser('~/{}/Project/PreparedData/num_nodes.txt'.format(direc_set))
+          #  dir = os.path.expanduser('/Users/marlon/Desktop/Project/PreparedData/num_nodes.txt')
             with open(dir, 'w') as f:
                 f.write(str(num_nodes))
-          #  dir = os.path.expanduser('~/SUMO/Project/PreparedData/edge_index_1.txt')
-            dir = os.path.expanduser('/Users/marlon/Desktop/Project/PreparedData/edge_index_1.txt')
+            dir = os.path.expanduser('~/{}/Project/PreparedData/edge_index_1.txt'.format(direc_set))
+          #  dir = os.path.expanduser('/Users/marlon/Desktop/Project/PreparedData/edge_index_1.txt')
             with open(dir, 'w') as f:
                 f.write(','.join(str(i) for i in edge_index[0]))
-          #  dir = os.path.expanduser('~/SUMO/Project/PreparedData/edge_index_2.txt')
-            dir = os.path.expanduser('/Users/marlon/Desktop/Project/PreparedData/edge_index_2.txt')
+            dir = os.path.expanduser('~/{}/Project/PreparedData/edge_index_2.txt'.format(direc_set))
+           # dir = os.path.expanduser('/Users/marlon/Desktop/Project/PreparedData/edge_index_2.txt')
             with open(dir, 'w') as f:
                 f.write(','.join(str(i) for i in edge_index[1]))
 
@@ -230,6 +235,7 @@ if __name__ == '__main__':
 
 
         for c_fold in range(n_folds):
+            print("For Fold {}".format(c_fold))
 
             for c_view, view in enumerate(view_names_fix):
                 print("Train data has shape : {} for view {}".format(train_data[c_fold][c_view].shape, view_names_fix[c_view]))
@@ -252,11 +258,11 @@ if __name__ == '__main__':
             feat_offs_train = np.cumsum(feat_offs_train)
             feat_offs_train_df = pd.DataFrame(feat_offs_train)
 
-        #    dir = os.path.expanduser('~/SUMO/Project/PreparedData/TrainData.csv')
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TrainData_{}.csv".format(c_fold))
+            dir = os.path.expanduser('~/{}/Project/PreparedData/TrainData_{}.csv'.format(direc_set,c_fold))
+        #    dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TrainData_{}.csv".format(c_fold))
             train_data_df.to_csv(dir)
-        #    dir = os.path.expanduser('~/SUMO/Project/PreparedData/TrainDataFeatOffs.csv')
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TrainDataFeatOffs_{}.csv".format(c_fold))
+            dir = os.path.expanduser('~/{}/Project/PreparedData/TrainDataFeatOffs_{}.csv'.format(direc_set,c_fold))
+         #   dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TrainDataFeatOffs_{}.csv".format(c_fold))
             feat_offs_train_df.to_csv(dir)
 
 
@@ -270,12 +276,9 @@ if __name__ == '__main__':
             feat_offs_val = np.cumsum(feat_offs_val)
             feat_offs_val_df = pd.DataFrame(feat_offs_val)
 
-        #    dir = os.path.expanduser('~/SUMO/Project/PreparedData/ValData.csv')
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/ValData_{}.csv".format(c_fold))
+            dir = os.path.expanduser('~/{}/Project/PreparedData/ValData_{}.csv'.format(direc_set,c_fold))
             val_data_df.to_csv(dir)
-        #    dir = os.path.expanduser('~/SUMO/Project/PreparedData/ValDataFeatOffs.csv')
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/ValDataFeatOffs_{}.csv".format(c_fold))
-            feat_offs_val_df.to_csv(dir)
+
 
 
 
@@ -289,12 +292,9 @@ if __name__ == '__main__':
             feat_offs_test = np.cumsum(feat_offs_test)
             feat_offs_test_df = pd.DataFrame(feat_offs_test)
 
-     #       dir = os.path.expanduser('~/SUMO/Project/PreparedData/TestData.csv')
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TestData.csv")
+            dir = os.path.expanduser('~/{}/Project/PreparedData/TestData_{}.csv'.format(direc_set,c_fold))
             test_data_df.to_csv(dir)
-      #      dir = os.path.expanduser('~/SUMO/Project/PreparedData/TestDataFeatOffs.csv')
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/PreparedData/TestDataFeatOffs.csv")
-            feat_offs_test_df.to_csv(dir)
+
 
 
 
@@ -309,192 +309,36 @@ if __name__ == '__main__':
 
     ###################################### SET OWN SETTINGS FOR NN CALL #############################################
 
-    # FULLY CONNECTED NEURAL NET SETTINGS
-    # EPOCHS
-    N_EPOCHS = 100
-    # BATCH SIZE
-    BATCH_SIZE = 5
-    # L2 REGULARIZATION
-    L2_REGULARIZATION_BOOL = True
-    L2_REGULARIZATION_RATE = 4.54414e-6
-    # LR
-    LEARNING_RATE = 0.002
-    # PRELU INIT VALUE
-    PRELU_RATE = 0.05
-    # LAYER SIZES DIFFERENT VIEWS
-    layers_1_mRNA = 87
-    layers_1_mRNA_activfunc = 'prelu'
-    layers_1_mRNA_batchnorm = 'no'
-    layers_1_mRNA_dropout = 'no'
-    layers_2_mRNA = 21
-    layers_2_mRNA_activfunc = 'prelu'
-    layers_2_mRNA_batchnorm = 'no'
-    layers_2_mRNA_dropout = 'no'
-    layers_1_DNA = 75
-    layers_1_DNA_activfunc = 'prelu'
-    layers_1_DNA_batchnorm = 'no'
-    layers_1_DNA_dropout = 'no'
-    layers_2_DNA = 19
-    layers_2_DNA_activfunc = 'sigmoid'
-    layers_2_DNA_batchnorm = 'no'
-    layers_2_DNA_dropout = 'no'
-    layers_1_microRNA = 72
-    layers_1_microRNA_activfunc = 'sigmoid'
-    layers_1_microRNA_batchnorm = 'no'
-    layers_1_microRNA_dropout = 'no'
-    layers_2_microRNA = 31
-    layers_2_microRNA_activfunc = 'relu'
-    layers_2_microRNA_batchnorm = 'no'
-    layers_2_microRNA_dropout = 'no'
-    layers_1_RPPA = 65
-    layers_1_RPPA_activfunc = 'prelu'
-    layers_1_RPPA_batchnorm = 'no'
-    layers_1_RPPA_dropout = 'no'
-    layers_2_RPPA = 13
-    layers_2_RPPA_activfunc = 'sigmoid'
-    layers_2_RPPA_batchnorm = 'no'
-    layers_2_RPPA_dropout = 'no'
-    # LAYER SIZES INTEGRATED
-    layers_1 = 16
-    layers_2 = 8
-    # LAYER SIZES INTEGRATED 2 (for Hierachical AE)
-    layers_c_1 = 16
-    layers_c_2 = 8
-    # LAYER SIZES INTEGRATED ALL VIEWS
-    layers_1_mRNA_integrated = 100
-    layers_2_mRNA_integrated = 100
-    layers_1_DNA_integrated = 100
-    layers_2_DNA_integrated = 100
-    layers_1_microRNA_integrated = 100
-    layers_2_microRNA_integrated = 100
-    layers_1_RPPA_integrated = 100
-    layers_2_RPPA_integrated = 100
-
-    # ACTIVATION FUNCTIONS INTEGRATED
-    layers_1_integrated_activfunc = 'relu'
-    layers_2_integrated_activfunc = 'relu'
-    # ACTIVATION FUNCTIONS INTEGRATED 2
-    layers_c_1_integrated_activfunc = 'relu'
-    layers_c_2_integrated_activfunc = 'relu'
-
-    # ACTIVATION FUNCTIONS INTEGRATED ALL VIEWS
-    layers_1_mRNA_activfunc_integrated = 'sigmoid'
-    layers_2_mRNA_activfunc_integrated = 'sigmoid'
-    layers_1_DNA_activfunc_integrated = 'relu'
-    layers_2_DNA_activfunc_integrated = 'sigmoid'
-    layers_1_microRNA_activfunc_integrated = 'relu'
-    layers_2_microRNA_activfunc_integrated = 'sigmoid'
-    layers_1_RPPA_activfunc_integrated = 'relu'
-    layers_2_RPPA_activfunc_integrated = 'relu'
-    # DROPOUT
-    DROPOUT_BOOL = False
-    DROPOUT_PROB = 0.2
-    # DROPOUT FUNCTIONS INTEGRATED
-    DROPOUT_BOOL_INTEGRATED = True
-    DROPOUT_PROB_INTEGRATED = 0.2
-    layers_1_integrated_dropout = 'yes'
-    layers_2_integrated_dropout = 'yes'
-    # DROPOUT FUNCTIONS INTEGRATED 2
-    DROPOUT_C_BOOL_INTEGRATED = True
-    DROPOUT_C_PROB_INTEGRATED = 0.2
-    layers_c_1_integrated_dropout = 'yes'
-    layers_c_2_integrated_dropout = 'yes'
-    # DROPOUT FUNCTIONS INTEGRATED ALL VIEWS
-    DROPOUT_BOOL_INTEGRATED_VIEWS = True
-    DROPOUT_PROB_INTEGRATED_VIEWS = 0.2
-    layers_1_mRNA_dropout_integrated = 'no'
-    layers_2_mRNA_dropout_integrated = 'no'
-    layers_1_DNA_dropout_integrated = 'no'
-    layers_2_DNA_dropout_integrated = 'yes'
-    layers_1_microRNA_dropout_integrated = 'yes'
-    layers_2_microRNA_dropout_integrated = 'no'
-    layers_1_RPPA_dropout_integrated = 'no'
-    layers_2_RPPA_dropout_integrated = 'no'
-    # BATCH NORMALIZATION
-    BATCHNORM_BOOL = False
-    # BATCH NORMALIZATION INTEGRATED
-    BATCHNORM_BOOL_INTEGRATED = True
-    layers_1_integrated_batchnorm = 'yes'
-    layers_2_integrated_batchnorm = 'yes'
-    # BATCH NORMALIZATION INTEGRATED 2
-    BATCHNORM_C_BOOL_INTEGRATED = True
-    layers_c_1_integrated_batchnorm = 'yes'
-    layers_c_2_integrated_batchnorm = 'yes'
-    # BATCH NORMALIZATION INTEGRATED ALL VIEWS
-    BATCHNORM_BOOL_INTEGRATED_VIEWS = True
-    layers_1_mRNA_batchnorm_integrated = 'no'
-    layers_2_mRNA_batchnorm_integrated = 'no'
-    layers_1_DNA_batchnorm_integrated = 'no'
-    layers_2_DNA_batchnorm_integrated = 'no'
-    layers_1_microRNA_batchnorm_integrated = 'yes'
-    layers_2_microRNA_batchnorm_integrated = 'yes'
-    layers_1_RPPA_batchnorm_integrated = 'no'
-    layers_2_RPPA_batchnorm_integrated = 'no'
-    # FINAL LAYER
-    layer_final_activfunc = 'prelu'
-    layer_final_dropout = 'yes'
-    layer_final_batchnorm = 'yes'
-    # CROSS MUTATION (AE)
-    cross_mutation = [0,1,2]
-    # MODEL TYPES (AE)
-    model_types = ['concat']
-    # GRAPHCONV LAYERS (GCN)
-    layer_1_graphconv = 2 # best to take the same amount as the views we are looking at (normally DNA & mRNA) because of float errors otherwise
-    layer_2_graphconv = 5
-    # GRAPHCONV ACTIVATION LAYERS (GCN)
-    layer_1_graphconv_activfunc = 'relu'
-    layer_2_graphconv_activfunc = 'relu'
+    params={'l2_regularization_bool': True, 'learning_rate': 0.0005078153954199322,
+            'l2_regularization_rate': 4.455144035548901e-05, 'batch_size': 16, 'dropout_prob': 0.1,
+            'dropout_bool': True, 'batchnorm_bool': False, 'prelu_rate': 0.30000000000000004,
+            'dropout_prob_hierachical': 0.1, 'dropout_bool_hierachical': True, 'batchnorm_bool_hierachical': True,
+            'loss_surv': 0.657402294726867, 'layers_1_mRNA': 32, 'layers_2_mRNA': 32, 'layers_1_mRNA_activfunc': 'prelu',
+            'layers_2_mRNA_activfunc': 'sigmoid', 'layers_1_mRNA_dropout': 'yes', 'layers_2_mRNA_dropout': 'no',
+            'layers_1_mRNA_batchnorm': 'yes', 'layers_2_mRNA_batchnorm': 'no', 'layers_1_mRNA_hierarichcal': 32,
+            'layers_2_mRNA_hierarichcal': 27, 'layers_1_mRNA_activfunc_hierarichcal': 'prelu',
+            'layers_2_mRNA_activfunc_hierarichcal': 'relu', 'layers_1_mRNA_dropout_hierarichcal': 'yes',
+            'layers_2_mRNA_dropout_hierarichcal': 'yes', 'layers_1_mRNA_batchnorm_hierarichcal': 'no',
+            'layers_2_mRNA_batchnorm_hierarichcal': 'no', 'layers_1_microRNA': 52, 'layers_2_microRNA': 32,
+            'layers_1_microRNA_activfunc': 'prelu', 'layers_2_microRNA_activfunc': 'sigmoid', 'layers_1_microRNA_dropout': 'no',
+            'layers_2_microRNA_dropout': 'yes', 'layers_1_microRNA_batchnorm': 'yes', 'layers_2_microRNA_batchnorm': 'yes',
+            'layers_1_microRNA_hierarichcal': 64, 'layers_2_microRNA_hierarichcal': 32,
+            'layers_1_microRNA_activfunc_hierarichcal': 'prelu', 'layers_2_microRNA_activfunc_hierarichcal': 'prelu',
+            'layers_1_microRNA_dropout_hierarichcal': 'no', 'layers_2_microRNA_dropout_hierarichcal': 'no',
+            'layers_1_microRNA_batchnorm_hierarichcal': 'yes', 'layers_2_microRNA_batchnorm_hierarichcal': 'no',
+            'layers_1_RPPA': 64, 'layers_2_RPPA': 32, 'layers_1_RPPA_activfunc': 'relu',
+            'layers_2_RPPA_activfunc': 'prelu', 'layers_1_RPPA_dropout': 'yes', 'layers_2_RPPA_dropout': 'yes',
+            'layers_1_RPPA_batchnorm': 'no', 'layers_2_RPPA_batchnorm': 'yes', 'layers_1_RPPA_hierarichcal': 55,
+            'layers_2_RPPA_hierarichcal': 20, 'layers_1_RPPA_activfunc_hierarichcal': 'relu',
+            'layers_2_RPPA_activfunc_hierarichcal': 'relu', 'layers_1_RPPA_dropout_hierarichcal': 'yes',
+            'layers_2_RPPA_dropout_hierarichcal': 'no', 'layers_1_RPPA_batchnorm_hierarichcal': 'no',
+            'layers_2_RPPA_batchnorm_hierarichcal': 'no', 'cross_decoders_3_views': (2, 1, 0),
+            'layers_1_FCNN': 37, 'layers_2_FCNN': 30, 'layers_1_FCNN_activfunc': 'prelu',
+            'layers_2_FCNN_activfunc': 'prelu', 'FCNN_dropout_prob': 0.4, 'FCNN_dropout_bool': False,
+            'FCNN_batchnorm_bool': True, 'layers_1_FCNN_dropout': 'no', 'layers_2_FCNN_dropout': 'yes',
+            'layers_1_FCNN_batchnorm': 'no', 'layers_2_FCNN_batchnorm': 'no'}
 
 
-
-    LAYERS = [[layers_1_mRNA, layers_2_mRNA],[layers_1_DNA,layers_2_DNA],[layers_1_microRNA, layers_2_microRNA], [layers_1_RPPA,layers_2_RPPA]]
-
-    ACTIV_FUNCS = [[layers_1_mRNA_activfunc, layers_2_mRNA_activfunc], [layers_1_DNA_activfunc, layers_2_DNA_activfunc],
-                   [layers_1_microRNA_activfunc, layers_2_microRNA_activfunc],[layers_1_RPPA_activfunc, layers_2_RPPA_activfunc], [layer_final_activfunc]]
-    DROPOUT_LAYERS = [[layers_1_mRNA_dropout, layers_2_mRNA_dropout], [layers_1_DNA_dropout, layers_2_DNA_dropout],
-                      [layers_1_microRNA_dropout, layers_2_microRNA_dropout],[layers_1_RPPA_dropout,layers_2_RPPA_dropout], [layer_final_dropout]]
-    BATCHNORM_LAYERS = [[layers_1_mRNA_batchnorm, layers_2_mRNA_batchnorm],[layers_1_DNA_batchnorm, layers_2_DNA_batchnorm],
-                        [layers_1_microRNA_batchnorm,layers_2_microRNA_batchnorm], [layers_1_RPPA_batchnorm, layers_2_RPPA_batchnorm],[layer_final_batchnorm]]
-
-
-    # Used for GCN input or final FCNN input in AE construction
-    INTEGRATED_LAYERS = [[layers_1, layers_2]]
-    INTEGRATED_ACTIV_FUNCS = [[layers_1_integrated_activfunc, layers_2_integrated_activfunc], [layer_final_activfunc]]
-    INTEGRATED_DROPOUT_LAYERS = [[layers_1_integrated_dropout, layers_2_integrated_dropout], [layer_final_dropout]]
-    INTEGRATED_BATCHNORM_LAYERS = [[layers_1_integrated_batchnorm, layers_2_integrated_batchnorm], [layer_final_batchnorm]]
-
-
-    ACTIV_FUNCS_AE =[[layers_1_mRNA_activfunc, layers_2_mRNA_activfunc], [layers_1_DNA_activfunc, layers_2_DNA_activfunc],
-                     [layers_1_microRNA_activfunc, layers_2_microRNA_activfunc]]
-    DROPOUT_LAYERS_AE = [[layers_1_mRNA_dropout, layers_2_mRNA_dropout], [layers_1_DNA_dropout, layers_2_DNA_dropout],
-                      [layers_1_microRNA_dropout, layers_2_microRNA_dropout]]
-    BATCHNORM_LAYERS_AE = [[layers_1_mRNA_batchnorm, layers_2_mRNA_batchnorm],[layers_1_DNA_batchnorm, layers_2_DNA_batchnorm],
-                    [layers_1_microRNA_batchnorm,layers_2_microRNA_batchnorm]]
-
-    # Second Integrated (Hierachical AE, Input into second AE)
-    INTEGRATED_LAYERS_C_AE = [[layers_c_1,layers_c_2]]
-    INTEGRATED_ACTIV_C_FUNCS_AE = [[layers_c_1_integrated_activfunc, layers_c_2_integrated_activfunc]]
-    INTEGRATED_DROPOUT_C_LAYERS_AE = [[layers_c_1_integrated_dropout, layers_c_2_integrated_dropout]]
-    INTEGRATED_BATCHNORM_C_LAYERS_AE = [[layers_c_1_integrated_batchnorm, layers_c_2_integrated_batchnorm]]
-
-    # AE Hierarichal with 'none' setting as first model
-    INTEGRATED_LAYERS_VIEWS = [[layers_1_mRNA_integrated, layers_2_mRNA_integrated],[layers_1_DNA_integrated, layers_2_DNA_integrated],
-                             [layers_1_microRNA_integrated, layers_2_microRNA_integrated]]
-    INTEGRATED_ACTIV_FUNCS_VIEWS = [[layers_1_mRNA_activfunc_integrated, layers_2_mRNA_activfunc_integrated],
-                                    [layers_1_DNA_activfunc_integrated, layers_2_DNA_activfunc_integrated],
-                                    [layers_1_microRNA_activfunc_integrated, layers_2_microRNA_activfunc_integrated]]
-    INTEGRATED_DROPOUT_LAYERS_VIEWS = [[layers_1_mRNA_dropout_integrated, layers_2_RPPA_dropout_integrated],
-                                       [layers_1_DNA_dropout_integrated, layers_2_DNA_dropout_integrated],
-                                       [layers_1_microRNA_dropout_integrated, layers_2_microRNA_dropout_integrated]]
-    INTEGRATED_BATCHNORM_LAYERS_VIEWS = [[layers_1_mRNA_batchnorm_integrated, layers_2_mRNA_batchnorm_integrated],
-                                         [layers_1_DNA_batchnorm_integrated, layers_2_DNA_batchnorm_integrated],
-                                         [layers_1_microRNA_batchnorm_integrated, layers_2_microRNA_batchnorm_integrated]]
-
-    # GCN
-    INTEGRATED_LAYERS_GCN = [layers_1,layers_2]
-    GRAPHCONV_LAYERS = [layer_1_graphconv]
-    GRAPHCONV_ACTIV_FUNCS = [layer_1_graphconv_activfunc]
-    ratio = 0.2
 
 
     if selection_method_train.lower() == 'pca' or selection_method_train.lower() == 'variance' or\
@@ -516,22 +360,30 @@ if __name__ == '__main__':
     if method_train == 'FCNN':
         print("######################## RUNNING FULLY CONNECTED NEURAL NET ####################################")
         FCNN.train(train_data, val_data, test_data,
-                 train_duration, val_duration, test_duration,
-                 train_event,val_event,test_event,
-                 n_epochs= N_EPOCHS,
-                 batch_size= BATCH_SIZE,
-                 l2_regularization= L2_REGULARIZATION_BOOL,
-                 l2_regularization_rate= L2_REGULARIZATION_RATE,
-                 learning_rate= LEARNING_RATE,
-                 prelu_rate = PRELU_RATE,
-                 layers=LAYERS,
-                 activation_layers= ACTIV_FUNCS,
-                 dropout = DROPOUT_BOOL,
-                 dropout_rate= DROPOUT_PROB,
-                 dropout_layers= DROPOUT_LAYERS,
-                 batchnorm= BATCHNORM_BOOL,
-                 batchnorm_layers= BATCHNORM_LAYERS,
-                 view_names = view_names_fix)
+                   train_duration, val_duration, test_duration,
+                   train_event, val_event, test_event,
+                   n_epochs = 100,
+                   batch_size= params['batch_size'],
+                   l2_regularization=params['l2_regularization_bool'],
+                   l2_regularization_rate=params['l2_regularization_rate'],
+                   learning_rate= params['learning_rate'],
+                   prelu_rate= params['prelu_rate'],
+                   layers=[[params['layers_1_mRNA'], params['layers_2_mRNA']],
+                           [params['layers_1_microRNA'], params['layers_2_microRNA']],
+                           [params['layers_1_RPPA'],params['layers_2_RPPA']]],
+                   activation_layers= [[params['layers_1_mRNA_activfunc'], params['layers_2_mRNA_activfunc']],
+                                       [params['layers_1_microRNA_activfunc'], params['layers_2_microRNA_activfunc']],
+                                       [params['layers_1_RPPA_activfunc'], params['layers_2_RPPA_activfunc']]],
+                   dropout = params['dropout_bool'],
+                   dropout_rate= params['dropout_prob'],
+                   dropout_layers= [[params['layers_1_mRNA_dropout'],params['layers_2_mRNA_dropout']],
+                                    [params['layers_1_microRNA_dropout'],params['layers_2_microRNA_dropout']],
+                                    [params['layers_1_RPPA_dropout'],params['layers_2_RPPA_dropout']]],
+                   batchnorm= params['batchnorm_bool'],
+                   batchnorm_layers= [[params['layers_1_mRNA_batchnorm'], params['layers_2_mRNA_batchnorm']],
+                                      [params['layers_1_microRNA_batchnorm'], params['layers_2_microRNA_batchnorm']],
+                                      [params['layers_1_RPPA_batchnorm'], params['layers_2_RPPA_batchnorm']]],
+                   view_names = view_names_fix)
 
 
         print("######################## FULLY CONNECTED NEURAL NET FINISHED ####################################")
@@ -543,26 +395,34 @@ if __name__ == '__main__':
 
         GCN.train(train_data, val_data, test_data,
                   train_duration, val_duration, test_duration,
-                  train_event,val_event,test_event,
-                  n_epochs = N_EPOCHS,
-                  batch_size= BATCH_SIZE,
-                  l2_regularization= L2_REGULARIZATION_BOOL,
-                  l2_regularization_rate= L2_REGULARIZATION_RATE,
-                  learning_rate= LEARNING_RATE,
-                  prelu_rate = PRELU_RATE,
-                  layers=INTEGRATED_LAYERS_GCN,
-                  activation_layers= INTEGRATED_ACTIV_FUNCS,
-                  dropout = DROPOUT_BOOL,
-                  dropout_rate= DROPOUT_PROB,
-                  dropout_layers= INTEGRATED_DROPOUT_LAYERS,
-                  batchnorm= BATCHNORM_BOOL,
-                  batchnorm_layers= INTEGRATED_BATCHNORM_LAYERS,
+                  train_event, val_event, test_event,
+                  n_epochs = 100,
+                  batch_size= params['batch_size'],
+                  l2_regularization=params['l2_regularization_bool'],
+                  l2_regularization_rate=params['l2_regularization_rate'],
+                  learning_rate= params['learning_rate'],
+                  prelu_rate= params['prelu_rate'],
+                  layers=[[params['layers_1_mRNA'], params['layers_2_mRNA']],
+                          [params['layers_1_microRNA'], params['layers_2_microRNA']],
+                          [params['layers_1_RPPA'],params['layers_2_RPPA']]],
+                  activation_layers= [[params['layers_1_mRNA_activfunc'], params['layers_2_mRNA_activfunc']],
+                                      [params['layers_1_microRNA_activfunc'], params['layers_2_microRNA_activfunc']],
+                                      [params['layers_1_RPPA_activfunc'], params['layers_2_RPPA_activfunc']]],
+                  dropout = params['dropout_bool'],
+                  dropout_rate= params['dropout_prob'],
+                  dropout_layers= [[params['layers_1_mRNA_dropout'],params['layers_2_mRNA_dropout']],
+                                   [params['layers_1_microRNA_dropout'],params['layers_2_microRNA_dropout']],
+                                   [params['layers_1_RPPA_dropout'],params['layers_2_RPPA_dropout']]],
+                  batchnorm= params['batchnorm_bool'],
+                  batchnorm_layers= [[params['layers_1_mRNA_batchnorm'], params['layers_2_mRNA_batchnorm']],
+                                     [params['layers_1_microRNA_batchnorm'], params['layers_2_microRNA_batchnorm']],
+                                     [params['layers_1_RPPA_batchnorm'], params['layers_2_RPPA_batchnorm']]],
                   processing_type= 'none',
                   edge_index= edge_index,
                   proteins_used= proteins_used,
-                  ratio=ratio,
-                  activation_layers_graphconv= GRAPHCONV_ACTIV_FUNCS,
-                  layers_graphconv= GRAPHCONV_LAYERS)
+                  ratio=None,
+                  activation_layers_graphconv= None,
+                  layers_graphconv= None)
 
 
         print("######################## GCN FINISHED ####################################")
@@ -573,36 +433,53 @@ if __name__ == '__main__':
         AE.train(train_data, val_data, test_data,
                  train_duration, val_duration, test_duration,
                  train_event, val_event, test_event,
-          n_epochs = N_EPOCHS,
-          batch_size= BATCH_SIZE,
-          l2_regularization=L2_REGULARIZATION_BOOL,
-          l2_regularization_rate=L2_REGULARIZATION_RATE,
-          learning_rate= LEARNING_RATE,
-          prelu_rate= PRELU_RATE,
-          layers=LAYERS,
-          activation_layers= ACTIV_FUNCS_AE,
-          dropout = DROPOUT_BOOL,
-          dropout_rate= DROPOUT_PROB,
-          dropout_layers= DROPOUT_LAYERS_AE,
-          batchnorm= BATCHNORM_BOOL,
-          batchnorm_layers= BATCHNORM_LAYERS_AE,
+          n_epochs = 100,
+          batch_size= params['batch_size'],
+          l2_regularization=params['l2_regularization_bool'],
+          l2_regularization_rate=params['l2_regularization_rate'],
+          learning_rate= params['learning_rate'],
+          prelu_rate= params['prelu_rate'],
+          layers=[[params['layers_1_mRNA'], params['layers_2_mRNA']],
+                  [params['layers_1_microRNA'], params['layers_2_microRNA']],
+                  [params['layers_1_RPPA'],params['layers_2_RPPA']]],
+          activation_layers= [[params['layers_1_mRNA_activfunc'], params['layers_2_mRNA_activfunc']],
+                              [params['layers_1_microRNA_activfunc'], params['layers_2_microRNA_activfunc']],
+                              [params['layers_1_RPPA_activfunc'], params['layers_2_RPPA_activfunc']]],
+          dropout = params['dropout_bool'],
+          dropout_rate= params['dropout_prob'],
+          dropout_layers= [[params['layers_1_mRNA_dropout'],params['layers_2_mRNA_dropout']],
+                           [params['layers_1_microRNA_dropout'],params['layers_2_microRNA_dropout']],
+                           [params['layers_1_RPPA_dropout'],params['layers_2_RPPA_dropout']]],
+          batchnorm= params['batchnorm_bool'],
+          batchnorm_layers= [[params['layers_1_mRNA_batchnorm'], params['layers_2_mRNA_batchnorm']],
+                             [params['layers_1_microRNA_batchnorm'], params['layers_2_microRNA_batchnorm']],
+                             [params['layers_1_RPPA_batchnorm'], params['layers_2_RPPA_batchnorm']]],
           view_names = view_names_fix,
-          cross_mutation= cross_mutation,
-          model_types =  model_types,
-          dropout_second = DROPOUT_C_BOOL_INTEGRATED,
-          dropout_rate_second = DROPOUT_C_PROB_INTEGRATED,
-          batchnorm_second = BATCHNORM_C_BOOL_INTEGRATED,
-          layers_second = INTEGRATED_LAYERS_C_AE,
-          activation_layers_second = INTEGRATED_ACTIV_C_FUNCS_AE,
-          dropout_layers_second = INTEGRATED_DROPOUT_C_LAYERS_AE,
-          batchnorm_layers_second = INTEGRATED_BATCHNORM_C_LAYERS_AE,
-          dropout_third = DROPOUT_BOOL_INTEGRATED,
-          dropout_rate_third = DROPOUT_PROB_INTEGRATED,
-          batchnorm_third= BATCHNORM_BOOL_INTEGRATED,
-          layers_third = INTEGRATED_LAYERS,
-          activation_layers_third = INTEGRATED_ACTIV_FUNCS,
-          dropout_layers_third = INTEGRATED_DROPOUT_LAYERS,
-          batchnorm_layers_third = INTEGRATED_BATCHNORM_LAYERS)
+          cross_mutation= params['cross_decoders_3_views'],
+          model_types =  ['none','cross_elementwiseavg'],
+          dropout_second = params['dropout_bool_hierachical'],
+          dropout_rate_second = params['dropout_prob_hierachical'],
+          batchnorm_second = params['batchnorm_bool_hierachical'],
+          layers_second = [[params['layers_1_mRNA_hierarichcal'], params['layers_2_mRNA_hierarichcal']],
+                           [params['layers_1_microRNA_hierarichcal'], params['layers_2_microRNA_hierarichcal']],
+                           [params['layers_1_RPPA_hierarichcal'],params['layers_2_RPPA_hierarichcal']]],
+          activation_layers_second = [[params['layers_1_mRNA_activfunc_hierarichcal'], params['layers_2_mRNA_activfunc_hierarichcal']],
+                                      [params['layers_1_microRNA_activfunc_hierarichcal'], params['layers_2_microRNA_activfunc_hierarichcal']],
+                                      [params['layers_1_RPPA_activfunc_hierarichcal'], params['layers_2_RPPA_activfunc_hierarichcal']]],
+          dropout_layers_second = [[params['layers_1_mRNA_dropout_hierarichcal'],params['layers_2_mRNA_dropout_hierarichcal']],
+                                   [params['layers_1_microRNA_dropout_hierarichcal'],params['layers_2_microRNA_dropout_hierarichcal']],
+                                   [params['layers_1_RPPA_dropout_hierarichcal'],params['layers_2_RPPA_dropout_hierarichcal']]],
+          batchnorm_layers_second = [[params['layers_1_mRNA_batchnorm_hierarichcal'], params['layers_2_mRNA_batchnorm_hierarichcal']],
+                                     [params['layers_1_microRNA_batchnorm_hierarichcal'], params['layers_2_microRNA_batchnorm_hierarichcal']],
+                                     [params['layers_1_RPPA_batchnorm_hierarichcal'], params['layers_2_RPPA_batchnorm_hierarichcal']]],
+          dropout_third = params['FCNN_dropout_bool'],
+          dropout_rate_third = params['FCNN_dropout_prob'],
+          batchnorm_third= params['FCNN_batchnorm_bool'],
+          layers_third = [[params['layers_1_FCNN'], params['layers_2_FCNN']]],
+          activation_layers_third = [[params['layers_1_FCNN_activfunc'], params['layers_2_FCNN_activfunc']],['none']],
+          dropout_layers_third = [params['layers_1_FCNN_dropout'],params['layers_2_FCNN_dropout']],
+          batchnorm_layers_third = [params['layers_1_FCNN_batchnorm'], params['layers_2_FCNN_batchnorm']],
+          loss_rate = params['loss_surv'])
 
         print("######################## AUTOENCODER FINISHED ####################################")
 

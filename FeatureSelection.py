@@ -127,6 +127,7 @@ class PPI():
         self.data = data
         self.feature_names = feature_names
         self.view_names = [x.upper() for x in view_names]
+        self.direc_set = 'Desktop'
 
         # Only DNA & mRNA data contains protein data
         if 'DNA' not in self.view_names and 'MRNA' not in self.view_names:
@@ -165,7 +166,7 @@ class PPI():
 
 
         prot_to_feat = pd.read_csv(
-            os.path.join("/Users", "marlon", "Desktop", "Project", "ProteinToFeature.csv"),index_col=0)
+            os.path.join("~", self.direc_set, "Project", "ProteinToFeature.csv"),index_col=0)
 
 
         samples = self.data[0].size(0)
@@ -317,8 +318,8 @@ class PPI():
         # Find Protein-Protein Interactions
         interactions1 = []
         interactions2 = []
-        #dir = os.path.expanduser('~/SUMO/Project/9606.protein.links.v11.5.txt.gz')
-        dir = os.path.expanduser('/Users/marlon/Desktop/Project/9606.protein.links.v11.5.txt.gz')
+        dir = os.path.expanduser('~/{}/Project/9606.protein.links.v11.5.txt.gz'.format(self.direc_set))
+       # dir = os.path.expanduser('/Users/marlon/Desktop/Project/9606.protein.links.v11.5.txt.gz')
         with gzip.open(dir, 'rt') as f:
             next(f) # Ignore the header
             for line in f:
@@ -367,6 +368,7 @@ class F_eigengene_matrices():
         self.duration = duration
         self.event = event
         self.cancer_name = cancer_name
+        self.direc_set = 'Desktop'
 
     def preprocess(self):
         """
@@ -404,12 +406,18 @@ class F_eigengene_matrices():
 
 
         if self.stage == 'train':
-            data_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/{}/{}_for_r.csv".format(self.cancer_name,self.view_name.upper()))
+            dir = os.path.expanduser('~/{}/Project/TCGAData/{}/{}_for_r.csv'.format(self.direc_set,self.cancer_name,self.view_name.upper()))
+           # data_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/{}/{}_for_r.csv".format(self.cancer_name,self.view_name.upper()))
+            data_df.to_csv(dir)
         elif self.stage == 'val':
-            data_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/{}/{}_val_for_r.csv".format(self.cancer_name,self.view_name.upper()))
+            dir = os.path.expanduser('~/{}/Project/TCGAData/{}/{}_val_for_r.csv'.format(self.direc_set,self.cancer_name,self.view_name.upper()))
+            data_df.to_csv(dir)
+          #  data_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/{}/{}_val_for_r.csv".format(self.cancer_name,self.view_name.upper()))
 
         else: # self.stage == 'test'
-            data_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/{}/{}_test_for_r.csv".format(self.cancer_name,self.view_name.upper()))
+            dir = os.path.expanduser('~/{}/Project/TCGAData/{}/{}_test_for_r.csv'.format(self.direc_set,self.cancer_name,self.view_name.upper()))
+            data_df.to_csv(dir)
+           # data_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/{}/{}_test_for_r.csv".format(self.cancer_name,self.view_name.upper()))
 
 
     def eigengene_multiplication(self):
@@ -440,15 +448,18 @@ class F_eigengene_matrices():
         eigengene_test_matrices =[]
         for view in views:
 
-            eigengene_matrix = pd.read_csv(os.path.join("/Users", "marlon", "Desktop", "Project","TCGAData", "{}/"
-                                                         "{}_eigengene_matrix.csv".format(self.cancer_name,view)),
+          #  eigengene_matrix = pd.read_csv(os.path.join("/Users", "marlon", "Desktop", "Project","TCGAData", "{}/"
+          #                                               "{}_eigengene_matrix.csv".format(self.cancer_name,view)),
+          #                                 index_col=0)
+            eigengene_matrix = pd.read_csv(os.path.join("~",self.direc_set, "Project","TCGAData", "{}/"
+                                                        "{}_eigengene_matrix.csv".format(self.cancer_name,view)),
                                            index_col=0)
 
-            eigengene_val_matrix = pd.read_csv(os.path.join("/Users", "marlon", "Desktop", "Project","TCGAData", "{}/"
+            eigengene_val_matrix = pd.read_csv(os.path.join("~",self.direc_set, "Project","TCGAData", "{}/"
                                                             "{}_val_eigengene_matrix.csv".format(self.cancer_name,view)),
                                                index_col=0)
 
-            eigengene_test_matrix = pd.read_csv(os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", "{}/"
+            eigengene_test_matrix = pd.read_csv(os.path.join("~",self.direc_set, "Project", "TCGAData", "{}/"
                                                              "{}_test_eigengene_matrix.csv".format(self.cancer_name,view)),
                                                 index_col=0)
 

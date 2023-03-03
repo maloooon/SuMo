@@ -92,7 +92,8 @@ class GCN(nn.Module):
             self.first_in = graphconvs[1]
 
 
-        else: # In this case pooling layer last layer before we apply FCNN
+        else: # In this case pooling layer last layer before we apply FCNN ; -1 added after testing  as rounding up
+            # mostly differs by one for some reason
             self.first_in = math.ceil(ratio * (graphconvs[0] * num_nodes))
 
 
@@ -298,109 +299,142 @@ def objective(trial):
     :param trial: Settings of the current trial of Hyperparameters
     :return: Concordance Index ; dtype : Float
     """
+
+    direc_set = 'Desktop'
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-# dir = os.path.expanduser('~/SUMO/Project/PreparedData/')
-    trainset, trainset_feat, valset,valset_feat, testset,testset_feat, num_nodes, num_features, edge_index = load_data()
+    # Load in data
+    dir = os.path.expanduser('~/{}/Project/PreparedData/'.format(direc_set))
+    #    trainset, trainset_feat, valset, valset_feat, testset, testset_feat = load_data()
+
+    trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4,testset_0,testset_1,testset_2,testset_3,testset_4,trainset_feat_0, \
+    trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4, num_nodes, num_features, edge_index = load_data(data_dir = dir)
 
 
     # Load in data (##### For testing for first fold, later on
     num_nodes = int(num_nodes)
     num_features = int(num_features)
 
-    trainset_feat = list(trainset_feat.values)
-    for idx,_ in enumerate(trainset_feat):
-        trainset_feat[idx] = trainset_feat[idx].item()
-
-    valset_feat = list(valset_feat.values)
-    for idx,_ in enumerate(valset_feat):
-        valset_feat[idx] = valset_feat[idx].item()
-
-    testset_feat = list(testset_feat.values)
-    for idx,_ in enumerate(testset_feat):
-        testset_feat[idx] = testset_feat[idx].item()
+    # Feature offsets need to be the same in train/val/test for each fold, otherwise NN wouldn't work (diff dimension inputs)
+    feat_offs = [trainset_feat_0,trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4]
 
 
+    for c2,_ in enumerate(feat_offs):
+        feat_offs[c2] = list(feat_offs[c2].values)
+        for idx,_ in enumerate(feat_offs[c2]):
+            feat_offs[c2][idx] = feat_offs[c2][idx].item()
 
-    for c,feat in enumerate(trainset_feat):
-        if c < len(trainset_feat) - 3: # train data
-            data_np = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32'))
-            data_tensor = torch.from_numpy(data_np).to(torch.float32)
-            data_tensor = data_tensor.to(device)
-            train_data = data_tensor
-        elif c == len(trainset_feat) - 3: # duration
-            duration_np = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')).squeeze(axis=1)
-            duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
-            duration_tensor = duration_tensor.to(device)
-            train_duration = duration_tensor
-        elif c == len(trainset_feat) -2: # event
-            event_np = (np.array((trainset.iloc[:, trainset_feat[c] : trainset_feat[c+1]]).values).astype('float32')).squeeze(axis=1)
-            event_tensor = torch.from_numpy(event_np).to(torch.float32)
-            event_tensor = event_tensor.to(device)
-            train_event = event_tensor
+    trainset = [trainset_0 ,trainset_1,trainset_2,trainset_3,trainset_4]
+    valset = [valset_0 ,valset_1,valset_2,valset_3,valset_4]
+    testset = [testset_0,testset_1,testset_2,testset_3,testset_4]
+    train_data_folds = []
+    train_duration_folds = []
+    train_event_folds = []
+    val_data_folds = []
+    val_duration_folds = []
+    val_event_folds = []
+    test_data_folds = []
 
 
 
-
-    for c,feat in enumerate(valset_feat):
-        if c < len(valset_feat) - 3: # train data views
-            data_np = np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')
-            data_tensor = torch.from_numpy(data_np).to(torch.float32)
-            data_tensor = data_tensor.to(device)
-            val_data = data_tensor
-        elif c == len(valset_feat) - 3: # duration
-            duration_np = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
-            duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
-            duration_tensor = duration_tensor.to(device)
-            val_duration = duration_tensor
-        elif c == len(valset_feat) -2: # event
-            event_np = (np.array((valset.iloc[:, valset_feat[c]: valset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
-            event_tensor = torch.from_numpy(event_np).to(torch.float32)
-            event_tensor = event_tensor.to(device)
-            val_event = event_tensor
-
-
-
-    for c,feat in enumerate(testset_feat):
-        if c < len(testset_feat) - 3: # train data views
-            data_np = np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')
-            data_tensor = torch.from_numpy(data_np).to(torch.float32)
-            data_tensor = data_tensor.to(device)
-            test_data = data_tensor
-        elif c == len(testset_feat) - 3: # duration
-            duration_np = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
-            duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
-            duration_tensor = duration_tensor.to(device)
-            test_duration = duration_tensor
-        elif c == len(testset_feat) -2: # event
-            event_np = (np.array((testset.iloc[:, testset_feat[c]: testset_feat[c + 1]]).values).astype('float32')).squeeze(axis=1)
-            event_tensor = torch.from_numpy(event_np).to(torch.float32)
-            event_tensor = event_tensor.to(device)
-            test_event = event_tensor
+    for c2,_ in enumerate(trainset):
+        for c,feat in enumerate(feat_offs[c2]):
+            if c < len(feat_offs[c2]) - 3: # train data
+                data_np = (np.array((trainset[c2].iloc[:, feat_offs[c2][c] : feat_offs[c2][c+1]]).values).astype('float32'))
+                data_tensor = torch.from_numpy(data_np).to(torch.float32)
+                data_tensor = data_tensor.to(device)
+                train_data = data_tensor
+            elif c == len(feat_offs[c2]) - 3: # duration
+                duration_np = (np.array((trainset[c2].iloc[:, feat_offs[c2][c] : feat_offs[c2][c+1]]).values).astype('float32')).squeeze(axis=1)
+                duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
+                duration_tensor = duration_tensor.to(device)
+                train_duration = duration_tensor
+            elif c == len(feat_offs[c2]) -2: # event
+                event_np = (np.array((trainset[c2].iloc[:, feat_offs[c2][c] : feat_offs[c2][c+1]]).values).astype('float32')).squeeze(axis=1)
+                event_tensor = torch.from_numpy(event_np).to(torch.float32)
+                event_tensor = event_tensor.to(device)
+                train_event = event_tensor
 
 
 
+
+        for c,feat in enumerate(feat_offs[c2]):
+            if c < len(feat_offs[c2]) - 3: # train data views
+                data_np = np.array((valset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')
+                data_tensor = torch.from_numpy(data_np).to(torch.float32)
+                data_tensor = data_tensor.to(device)
+                val_data = data_tensor
+            elif c == len(feat_offs[c2]) - 3: # duration
+                duration_np = (np.array((valset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')).squeeze(axis=1)
+                duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
+                duration_tensor = duration_tensor.to(device)
+                val_duration = duration_tensor
+            elif c == len(feat_offs[c2]) -2: # event
+                event_np = (np.array((valset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')).squeeze(axis=1)
+                event_tensor = torch.from_numpy(event_np).to(torch.float32)
+                event_tensor = event_tensor.to(device)
+                val_event = event_tensor
+
+
+
+        for c,feat in enumerate(feat_offs[c2]):
+            if c < len(feat_offs[c2]) - 3: # train data views
+                data_np = np.array((testset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')
+                data_tensor = torch.from_numpy(data_np).to(torch.float32)
+                data_tensor = data_tensor.to(device)
+                test_data = data_tensor
+            elif c == len(feat_offs[c2]) - 3: # duration
+                duration_np = (np.array((testset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')).squeeze(axis=1)
+                duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
+                duration_tensor = duration_tensor.to(device)
+                test_duration = duration_tensor
+            elif c == len(feat_offs[c2]) -2: # event
+                event_np = (np.array((testset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')).squeeze(axis=1)
+                event_tensor = torch.from_numpy(event_np).to(torch.float32)
+                event_tensor = event_tensor.to(device)
+                test_event = event_tensor
+
+        train_data_folds.append(train_data)
+        val_data_folds.append(val_data)
+        train_duration_folds.append(train_duration)
+        val_duration_folds.append(val_duration)
+        train_event_folds.append(train_event)
+        val_event_folds.append(val_event)
+        test_data_folds.append(test_data)
+
+    # Rename so we have same structure as in train function
+    train_data = train_data_folds
+    train_duration = train_duration_folds
+    train_event = train_event_folds
+    val_data = val_data_folds
+    val_duration = val_duration_folds
+    val_event = val_event_folds
+    test_data = test_data_folds
+
+
+    # Current fold to be optimized
+    c_fold = 0
 
     #reshape so we have the same structure as in train function
     if num_features == 1:
-        train_data = np.expand_dims(train_data,axis = 2)
-        val_data = np.expand_dims(val_data,axis = 2)
-        test_data = np.expand_dims(test_data,axis = 2)
+        train_data[c_fold] = torch.unsqueeze(train_data[c_fold],dim=2)
+        val_data[c_fold] = torch.unsqueeze(val_data[c_fold],dim = 2)
+        test_data[c_fold] = torch.unsqueeze(test_data[c_fold],dim = 2)
     else:
-        train_data = train_data.reshape(-1, num_nodes, num_features)
-        val_data = val_data.reshape(-1, num_nodes, num_features)
-        test_data = test_data.reshape(-1, num_nodes, num_features)
+        train_data[c_fold] = train_data[c_fold].reshape(-1, num_nodes, num_features)
+        val_data[c_fold] = val_data[c_fold].reshape(-1, num_nodes, num_features)
+        test_data[c_fold] = test_data[c_fold].reshape(-1, num_nodes, num_features)
 
 
-    dimensions_train = train_data.shape[1]
-    dimensions_val = val_data.shape[1]
-    dimensions_test = test_data.shape[1]
+    dimensions_train = train_data[c_fold].shape[1]
+    dimensions_val = val_data[c_fold].shape[1]
+    dimensions_test = test_data[c_fold].shape[1]
 
     assert (dimensions_train == dimensions_val == dimensions_test), 'Feature mismatch between train/test'
 
     dimensions = dimensions_train
 
     #Needed for GCN
-    edge_index = torch.LongTensor(edge_index) #.to(device)
+    edge_index = torch.LongTensor(edge_index).to(device)
 
 
  #   processing_type = trial.suggest_categorical('processing_type', ['normalize','normalizebyrow','normalizebycolumn','none'])
@@ -411,38 +445,38 @@ def objective(trial):
 
     if processing_type.lower() == 'normalize':
         for i in range(num_features):
-            train_data[:,:,i] = normalize(train_data[:,:,i])
-            val_data[:,:,i] = normalize(val_data[:,:,i])
-            test_data[:,:,i] = normalize(test_data[:,:,i])
+            train_data[c_fold][:,:,i] = normalize(train_data[c_fold][:,:,i])
+            val_data[c_fold][:,:,i] = normalize(val_data[c_fold][:,:,i])
+            test_data[c_fold][:,:,i] = normalize(test_data[c_fold][:,:,i])
     elif processing_type.lower() == 'normalizebyrow':
         for i in range(num_features):
-            train_data[:,:,i] = normalize_by_row(train_data[:,:,i])
-            val_data[:,:,i] = normalize_by_row(val_data[:,:,i])
-            test_data[:,:,i] = normalize_by_row(test_data[:,:,i])
+            train_data[c_fold][:,:,i] = normalize_by_row(train_data[c_fold][:,:,i])
+            val_data[c_fold][:,:,i] = normalize_by_row(val_data[c_fold][:,:,i])
+            test_data[c_fold][:,:,i] = normalize_by_row(test_data[c_fold][:,:,i])
     elif processing_type.lower() == 'normalizebycolumn':
         for i in range(num_features):
-            train_data[:,:,i] = normalize_by_column(train_data[:,:,i])
-            val_data[:,:,i] = normalize_by_column(val_data[:,:,i])
-            test_data[:,:,i] = normalize_by_column(test_data[:,:,i])
+            train_data[c_fold][:,:,i] = normalize_by_column(train_data[c_fold][:,:,i])
+            val_data[c_fold][:,:,i] = normalize_by_column(val_data[c_fold][:,:,i])
+            test_data[c_fold][:,:,i] = normalize_by_column(test_data[c_fold][:,:,i])
 
 
 
 
 
 
-    train_samples = len(train_duration)
-    val_samples = len(val_duration)
+    train_samples = len(train_duration[c_fold])
+    val_samples = len(val_duration[c_fold])
     test_samples = len(test_duration)
 
 
     # reshape structure for use of GCN # replace -1 with sample sizes
-    train_data = train_data.reshape(train_samples, num_nodes * num_features)
-    val_data = val_data.reshape(val_samples, num_nodes * num_features)
-    test_data = test_data.reshape(test_samples, num_nodes * num_features)
+    train_data[c_fold] = train_data[c_fold].reshape(train_samples, num_nodes * num_features)
+    val_data[c_fold] = val_data[c_fold].reshape(val_samples, num_nodes * num_features)
+    test_data[c_fold] = test_data[c_fold].reshape(test_samples, num_nodes * num_features)
 
     # Transforms for PyCox
-    train_surv = (train_duration, train_event)
-    val_data_full = (val_data, (val_duration, val_event))
+    train_surv = (train_duration[c_fold], train_event[c_fold])
+    val_data_full = (val_data[c_fold], (val_duration[c_fold], val_event[c_fold]))
 
 
 
@@ -462,6 +496,7 @@ def objective(trial):
 
 
 
+
     layers_1_FCNN = trial.suggest_int('layers_1_FCNN', 5, 300)
     layers_2_FCNN = trial.suggest_int('layers_2_FCNN', 5, 300)
 
@@ -470,7 +505,7 @@ def objective(trial):
 
     layers_1_FCNN_activfunc = trial.suggest_categorical('layers_1_FCNN_activfunc', ['relu','prelu','sigmoid'])
   #  layers_1_FCNN_activfunc = 'relu'
-    layers_2_FCNN_activfunc = trial.suggest_categorical('layers_2_FCNN_activfunc', ['relu','prelu', 'sigmoid'])
+    layers_2_FCNN_activfunc = trial.suggest_categorical('layers_2_FCNN_activfunc', ['relu','prelu','sigmoid'])
   #  layers_2_FCNN_activfunc = 'relu'
 
     FCNN_activation_functions = [[layers_1_FCNN_activfunc, layers_2_FCNN_activfunc]]
@@ -498,7 +533,7 @@ def objective(trial):
     FCNN_batchnorms.append([layer_final_batchnorm])
 
  #   out_1_graphconv = trial.suggest_int('out_1_graphconv', 5, 300)
-    out_1_graphconv = 2 # constant bc of some float error
+    out_1_graphconv = num_features # constant bc of some float error ; need to set to the same amount as in_features
 
  #   graphconv_1_activation_function = trial.suggest_categorical('graphconv_1_activation_function', ['relu','sigmoid'])
     graphconv_1_activation_function = 'relu'
@@ -548,14 +583,14 @@ def objective(trial):
 
     train_print = True
 
-    log = model.fit(train_data,
+    log = model.fit(train_data[c_fold],
                     train_surv,
                     batch_size,
                     n_epochs,
                     callbacks,
                     verbose=train_print,
                     val_data=val_data_full,
-                    val_batch_size= batch_size)
+                    val_batch_size= 16)
 
     # Plot it
 #    _ = log.plot()
@@ -570,26 +605,18 @@ def objective(trial):
 
     for c,fold in enumerate(train_data):
         try:
-            train_duration = train_duration.cpu().detach().numpy()
-            train_event = train_event.cpu().detach().numpy()
-            val_duration = val_duration.cpu().detach().numpy()
-            val_event = val_event.cpu().detach().numpy()
+            train_duration[c_fold] = train_duration[c_fold].cpu().detach().numpy()
+            train_event[c_fold] = train_event[c_fold].cpu().detach().numpy()
+            val_duration[c_fold] = val_duration[c_fold].cpu().detach().numpy()
+            val_event[c_fold] = val_event[c_fold].cpu().detach().numpy()
         except AttributeError: # in this case already numpy arrays
             pass
 
-    train = train_data , train_surv
+    train = train_data[c_fold] ,train_surv
 
     _ = model.compute_baseline_hazards(*train)
 
-    surv = model.predict_surv_df(test_data)
-
-    # Needed for PyCox (if already in numpy, no need to transform --> try/except for error handling)
-
-    try:
-        test_duration = test_duration.numpy()
-        test_event = test_event.numpy()
-    except AttributeError:
-        pass
+    surv = model.predict_surv_df(test_data[c_fold])
 
 
     # Plot it
@@ -608,31 +635,52 @@ def objective(trial):
         concordance_index = 1 - concordance_index
 
     #brier score
-    time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
-    _ = ev.brier_score(time_grid).plot
-    brier_score = ev.integrated_brier_score(time_grid)
+  #  time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
+  #  _ = ev.brier_score(time_grid).plot
+   # brier_score = ev.integrated_brier_score(time_grid)
 
     #binomial log-likelihood
-    binomial_score = ev.integrated_nbll(time_grid)
+   # binomial_score = ev.integrated_nbll(time_grid)
 
 
     return concordance_index
 
 
 
-def optuna_optimization(fold = 1):
+def optuna_optimization():
     """
     Optuna Optimization for Hyperparameters.
     """
 
-    EPOCHS = 150
-    study = optuna.create_study(direction='maximize',sampler=optuna.samplers.TPESampler(),pruner=optuna.pruners.MedianPruner())
+
+    # Set amount of different trials
+    EPOCHS = 10
+    study = optuna.create_study(directions=['maximize'],sampler=optuna.samplers.TPESampler(),pruner=optuna.pruners.MedianPruner())
     study.optimize(objective, n_trials = EPOCHS)
+    trial = study.best_trials
+    # Show change of c-Index across folds
+    fig = optuna.visualization.plot_optimization_history(study)
+    fig.show(renderer='browser')
+    # Show hyperparameter importance
+    fig = optuna.visualization.plot_param_importances(study)
+    fig.show(renderer='browser')
 
-    trial = study.best_trial
+    # Save the best trial for each fold
+    direc_set = 'Desktop'
+    dir = os.path.expanduser(r'~/{}/Project/Trial/FCNN_KIRC3_Standardize_PCA_BEST_3.txt'.format(direc_set))
+    with open(dir, 'w') as fp:
+        for item in trial:
+            # write each item on a new line
+            fp.write("%s\n" % item)
 
-    print("Best Concordance", trial.value)
-    print("Best Hyperparamters : {}".format(trial.params))
+
+    # Save all trials in dataframe
+#  df = study.trials_dataframe()
+#    df = df.sort_values('value')
+#  df.to_csv("~/SUMO/Project/Trial/FCNN_KIRC3_Standardize_PCA.csv")
+
+# print("Best Concordance Sum", trial.value)
+# print("Best Hyperparameters : {}".format(trial.params))
 
 
 
@@ -843,7 +891,7 @@ def train(train_data,val_data,test_data,
 
 
 
-def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/"):
+def load_data(data_dir):
 
     """
     Function to load data. Needed for Optuna Optimization.
@@ -851,26 +899,55 @@ def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/"):
     :return: data and feature offsets (for feature values, duration and event), number of nodes, features and edge_index
     """
 
-    trainset = pd.read_csv(
-        os.path.join(data_dir + "TrainData.csv"), index_col=0)
+    trainset_0 = pd.read_csv(
+        os.path.join(data_dir + "TrainData_0.csv"), index_col=0)
+    trainset_1 = pd.read_csv(
+        os.path.join(data_dir + "TrainData_1.csv"), index_col=0)
+    trainset_2 = pd.read_csv(
+        os.path.join(data_dir + "TrainData_2.csv"), index_col=0)
+    trainset_3 = pd.read_csv(
+        os.path.join(data_dir + "TrainData_3.csv"), index_col=0)
+    trainset_4 = pd.read_csv(
+        os.path.join(data_dir + "TrainData_4.csv"), index_col=0)
 
-    trainset_feat = pd.read_csv(
-        os.path.join(data_dir +"TrainDataFeatOffs.csv"), index_col=0)
+    trainset_feat_0 = pd.read_csv(
+        os.path.join(data_dir +"TrainDataFeatOffs_0.csv"), index_col=0)
+
+    trainset_feat_1 = pd.read_csv(
+        os.path.join(data_dir +"TrainDataFeatOffs_1.csv"), index_col=0)
+
+    trainset_feat_2 = pd.read_csv(
+        os.path.join(data_dir +"TrainDataFeatOffs_2.csv"), index_col=0)
+
+    trainset_feat_3 = pd.read_csv(
+        os.path.join(data_dir +"TrainDataFeatOffs_3.csv"), index_col=0)
+
+    trainset_feat_4 = pd.read_csv(
+        os.path.join(data_dir +"TrainDataFeatOffs_4.csv"), index_col=0)
 
 
-    valset = pd.read_csv(
-        os.path.join(data_dir + "ValData.csv"), index_col=0)
+    valset_0 = pd.read_csv(
+        os.path.join(data_dir + "ValData_0.csv"), index_col=0)
+    valset_1 = pd.read_csv(
+        os.path.join(data_dir + "ValData_1.csv"), index_col=0)
+    valset_2 = pd.read_csv(
+        os.path.join(data_dir + "ValData_2.csv"), index_col=0)
+    valset_3 = pd.read_csv(
+        os.path.join(data_dir + "ValData_3.csv"), index_col=0)
+    valset_4 = pd.read_csv(
+        os.path.join(data_dir + "ValData_4.csv"), index_col=0)
 
 
-    valset_feat = pd.read_csv(
-        os.path.join(data_dir +"ValDataFeatOffs.csv"), index_col=0)
-
-
-    testset = pd.read_csv(
-        os.path.join(data_dir +  "TestData.csv"), index_col=0)
-
-    testset_feat = pd.read_csv(
-        os.path.join(data_dir + "TestDataFeatOffs.csv"), index_col=0)
+    testset_0 = pd.read_csv(
+        os.path.join(data_dir +  "TestData_0.csv"), index_col=0)
+    testset_1 = pd.read_csv(
+        os.path.join(data_dir +  "TestData_1.csv"), index_col=0)
+    testset_2 = pd.read_csv(
+        os.path.join(data_dir +  "TestData_2.csv"), index_col=0)
+    testset_3 = pd.read_csv(
+        os.path.join(data_dir +  "TestData_3.csv"), index_col=0)
+    testset_4 = pd.read_csv(
+        os.path.join(data_dir +  "TestData_4.csv"), index_col=0)
 
     num_nodes = np.loadtxt(data_dir + "num_nodes.txt", unpack=False)
     num_features = np.loadtxt(data_dir + "num_features.txt", unpack=False)
@@ -883,5 +960,7 @@ def load_data(data_dir="/Users/marlon/Desktop/Project/PreparedData/"):
     edge_index = [list(edge_index_1), list(edge_index_2)]
 
 
-    return trainset, trainset_feat, valset,valset_feat, testset,testset_feat, num_nodes, num_features, edge_index
+    return trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4, \
+           testset_0,testset_1,testset_2,testset_3,testset_4, \
+           trainset_feat_0,trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4, num_nodes, num_features, edge_index
 

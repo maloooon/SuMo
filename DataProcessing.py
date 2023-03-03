@@ -187,6 +187,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         self.which_views = [x.upper() for x in which_views] # Decide which views to use for survival analysis
         self.n_folds = n_folds
         self.type_preprocess = type_preprocess
+        self.direc_set = 'Desktop' # dir is Desktop for own CPU or SUMO for GPU
 
     def setup(
             self,
@@ -207,6 +208,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                  n_test_samples : Int [Samples]
                  view_names : List of Strings
         """
+
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # Decide which views to look at :
         # First, check if the user views input are actually in the current loaded cancer
@@ -342,22 +344,44 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
 
-        #################### TESTING PURPOSES ###############################
+        ######################################## TESTING PURPOSES ##########################################
+        cancer = 'KIRC2VIEWS'
+        """
+       #  Save folds for testing purposes (hyperparameter searach)
+        for fold in range(self.n_folds):
+            #dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/LUAD3VIEWS/TrainFold_{}.csv".format(fold))
+            dir = os.path.expanduser("~/{}/Project/FoldsNew/{}/TrainFold_{}.csv".format(self.direc_set,cancer,fold))
+            data_folds[fold][0].to_csv(dir)
+            #dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/LUAD3VIEWS/ValFold_{}.csv".format(fold))
+            dir = os.path.expanduser("~/{}/Project/FoldsNew/{}/ValFold_{}.csv".format(self.direc_set,cancer,fold))
+            data_folds[fold][1].to_csv(dir)
+            #dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/LUAD3VIEWS/TrainFoldEvent_{}.csv".format(fold))
+            dir = os.path.expanduser("~/{}/Project/FoldsNew/{}/TrainFoldEvent_{}.csv".format(self.direc_set,cancer,fold))
+            np.savetxt(dir, data_folds_targets[fold][0], delimiter=",")
+            #dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/KIRC3VIEWS/ValFoldEvent_{}.csv".format(fold))
+            dir = os.path.expanduser("~/{}/Project/FoldsNew/{}/ValFoldEvent_{}.csv".format(self.direc_set,cancer,fold))
+            np.savetxt(dir,data_folds_targets[fold][1],delimiter=",")
+            #dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/LUAD3VIEWS/TrainFoldDuration_{}.csv".format(fold))
+            dir = os.path.expanduser("~/{}/Project/FoldsNew/{}/TrainFoldDuration_{}.csv".format(self.direc_set,cancer,fold))
+            np.savetxt(dir,data_folds_durations[fold][0],delimiter=",")
+            #dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/LUAD3VIEWS/ValFoldDuration_{}.csv".format(fold))
+            dir = os.path.expanduser("~/{}/Project/FoldsNew/{}/ValFoldDuration_{}.csv".format(self.direc_set,cancer,fold))
+            np.savetxt(dir,data_folds_durations[fold][1],delimiter=",")
 
-        # Save folds for testing purposes (hyperparameter searach)
-   #     for fold in range(self.n_folds):
-   #         dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/TrainFold_{}.csv".format(fold))
-   #         data_folds[fold][0].to_csv(dir)
-   #         dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/ValFold_{}.csv".format(fold))
-   #         data_folds[fold][1].to_csv(dir)
-   #         dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/TrainFoldEvent_{}.csv".format(fold))
-   #         np.savetxt(dir, data_folds_targets[fold][0], delimiter=",")
-   #         dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/ValFoldEvent_{}.csv".format(fold))
-   #         np.savetxt(dir,data_folds_targets[fold][1],delimiter=",")
-   #         dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/TrainFoldDuration_{}.csv".format(fold))
-   #         np.savetxt(dir,data_folds_durations[fold][0],delimiter=",")
-   #         dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/ValFoldDuration_{}.csv".format(fold))
-   #         np.savetxt(dir,data_folds_durations[fold][1],delimiter=",")
+        #dir =os.path.expanduser("/Users/marlon/Desktop/Project/Folds/Testset.csv")
+        dir =os.path.expanduser("~/{}/Project/FoldsNew/{}/Testset.csv".format(self.direc_set,cancer))
+        df_test.to_csv(dir)
+        #dir = "/Users/marlon/Desktop/Project/Folds/cols_std.txt"
+        dir = os.path.expanduser(r'~/{}/Project/FoldsNew/{}/cols_std.txt'.format(self.direc_set,cancer))
+        with open(dir, 'w') as fp:
+            for item in cols_std:
+        #write each item on a new line
+                fp.write("%s\n" % item)
+        #dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/Traintemp.csv")
+        dir = os.path.expanduser("~/{}/Project/FoldsNew/{}/Traintemp.csv".format(self.direc_set,cancer))
+        df_train_temp.to_csv(dir)
+
+        print("FOLD SAVING DONE")
 
 
 
@@ -366,34 +390,70 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         data_folds_targets = [[] for x in range(self.n_folds)]
         data_folds_durations = [[] for x in range(self.n_folds)]
 
+
         for fold in range(self.n_folds):
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/TrainFold_{}.csv".format(fold))
+          #  dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/TrainFold_{}.csv".format(fold))
+            dir = os.path.expanduser("~/{}/Project/FoldsNew/{}/TrainFold_{}.csv".format(self.direc_set,cancer,fold))
             data = pd.read_csv(dir)
             data.drop(columns=data.columns[0], axis=1, inplace=True)
             data_folds[fold].append(data)
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/ValFold_{}.csv".format(fold))
+          #  dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/ValFold_{}.csv".format(fold))
+            dir = os.path.expanduser("~/{}/Project/FoldsNew/{}/ValFold_{}.csv".format(self.direc_set,cancer,fold))
             data = pd.read_csv(dir)
             data.drop(columns=data.columns[0], axis=1, inplace=True)
             data_folds[fold].append(data)
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/TrainFoldEvent_{}.csv".format(fold))
+       #     dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/TrainFoldEvent_{}.csv".format(fold))
+            dir = os.path.expanduser("~/{}/Project/FoldsNew/{}/TrainFoldEvent_{}.csv".format(self.direc_set,cancer,fold))
             data = pd.read_csv(dir, header=None)
             data = data.to_numpy().squeeze(axis=1)
             data_folds_targets[fold].append(data)
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/ValFoldEvent_{}.csv".format(fold))
+          #  dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/ValFoldEvent_{}.csv".format(fold))
+            dir = os.path.expanduser("~/{}/Project/FoldsNew/{}/ValFoldEvent_{}.csv".format(self.direc_set,cancer,fold))
             data = pd.read_csv(dir, header=None)
             data = data.to_numpy().squeeze(axis=1)
             data_folds_targets[fold].append(data)
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/TrainFoldDuration_{}.csv".format(fold))
+          #  dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/TrainFoldDuration_{}.csv".format(fold))
+            dir = os.path.expanduser("~/{}/Project/FoldsNew/{}/TrainFoldDuration_{}.csv".format(self.direc_set,cancer,fold))
             data = pd.read_csv(dir, header=None)
             data = data.to_numpy().squeeze(axis=1)
             data_folds_durations[fold].append(data)
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/ValFoldDuration_{}.csv".format(fold))
+        #    dir = os.path.expanduser("/Users/marlon/Desktop/Project/Folds/ValFoldDuration_{}.csv".format(fold))
+            dir = os.path.expanduser("~/{}/Project/FoldsNew/{}/ValFoldDuration_{}.csv".format(self.direc_set,cancer,fold))
             data = pd.read_csv(dir, header=None)
             data = data.to_numpy().squeeze(axis=1)
             data_folds_durations[fold].append(data)
 
+       # dir =os.path.expanduser("/Users/marlon/Desktop/Project/Folds/Testset.csv")
+        dir =os.path.expanduser("~/{}/Project/FoldsNew/{}/Testset.csv".format(self.direc_set,cancer))
+        df_test = pd.read_csv(dir)
+        df_test.drop(columns=df_test.columns[0], axis=1, inplace=True)
+       # dir =os.path.expanduser("/Users/marlon/Desktop/Project/Folds/Traintemp.csv")
+        dir = os.path.expanduser("~/{}/Project/FoldsNew/{}/Traintemp.csv".format(self.direc_set,cancer))
+        df_train_temp = pd.read_csv(dir)
+        df_train_temp.drop(columns=df_train_temp.columns[0], axis=1, inplace=True)
+        cols_std = []
+        # open file and read the content in a list
+        dir = os.path.expanduser(r'~/{}/Project/FoldsNew/{}/cols_std.txt'.format(self.direc_set,cancer))
+        with open(dir, 'r') as fp:
+            for line in fp:
+                # remove linebreak from a current name
+                # linebreak is the last character of each line
+                x = line[:-1]
 
-        #################### TESTING PURPOSES ###############################
+                # add current item to the list
+                cols_std.append(x)
+
+        # Columns we don't want to standardize
+        cols_survival = [col_duration, col_event]
+        cols_drop = cols_survival
+
+        n_train_samples = df_train_temp.shape[0]
+        
+
+        #################### TESTING PURPOSES ############################### ######################## ########################
+        """
+
+
 
         n_train_fold_samples = []
         n_val_fold_samples = []
@@ -408,6 +468,38 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             n_train_fold_samples.append(data_folds_targets[fold][0].size)
             n_val_fold_samples.append(data_folds_targets[fold][1].size)
 
+
+        self.duration_test =(df_test[col_duration].values)
+        self.event_test = (df_test[col_event].values)
+
+
+
+        self.train_folds_events = [x[0] for x in data_folds_targets]
+        self.val_folds_events = [x[1] for x in data_folds_targets]
+        self.train_folds_durations = [x[0] for x in data_folds_durations]
+        self.val_folds_durations = [x[1] for x in data_folds_durations]
+        self.train_folds = []
+        self.val_folds = []
+
+
+
+
+        n_train_fold_samples = []
+        n_val_fold_samples = []
+
+        print("Cross validation : {} splits".format(self.n_folds))
+        for fold in range(self.n_folds):
+            print("Split {} : ".format(fold + 1))
+            print("non censored events in train : {} with {} samples in total".
+                  format(int(np.sum(data_folds_targets[fold][0])), data_folds_targets[fold][0].size))
+            print("non censored events in validation : {} with {} samples in total".
+                  format(int(np.sum(data_folds_targets[fold][1])), data_folds_targets[fold][1].size))
+            n_train_fold_samples.append(data_folds_targets[fold][0].size)
+            n_val_fold_samples.append(data_folds_targets[fold][1].size)
+
+        n_test_samples = df_test.shape[0]
+        print("non censored events in test : {} with {} samples in total".
+              format(int(sum(list(df_test[col_event].values))), n_test_samples))
 
 
 
@@ -537,8 +629,11 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         self.event_test = torch.from_numpy(self.event_test).to(torch.float32)
 
 
-        # Save preprocessed data
 
+        ############################## FOR TESTING HYPERPARAMETERS  #########################################
+        # Save preprocessed data
+        """
+        mode_pre = self.type_preprocess
         for c_fold in range(self.n_folds):
             all_train_data = copy.deepcopy(self.train_folds[c_fold])
             all_train_data.append(self.train_folds_durations[c_fold].unsqueeze(1))
@@ -546,8 +641,8 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
             train_data_c = torch.cat(tuple(all_train_data), dim=1)
             train_data_df = pd.DataFrame(train_data_c)
-        #    dir = os.path.expanduser('~/SUMO/Project/ProcessedNotFeatSelectedData/TrainData.csv')
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/ProcessedNotFeatSelectedData/Robust/TrainData_{}.csv".format(c_fold))
+            dir = os.path.expanduser('~/{}/Project/ProcessedNotFeatSelectedData/{}/{}/TrainData_{}.csv'.format(self.direc_set,mode_pre,cancer,c_fold))
+        #    dir = os.path.expanduser("/Users/marlon/Desktop/Project/ProcessedNotFeatSelectedData/TrainData_{}.csv".format(c_fold))
             train_data_df.to_csv(dir)
 
             all_val_data = copy.deepcopy(self.val_folds[c_fold])
@@ -556,14 +651,14 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
             val_data_c = torch.cat(tuple(all_val_data), dim=1)
             val_data_df = pd.DataFrame(val_data_c)
-          #  dir = os.path.expanduser('~/SUMO/Project/ProcessedNotFeatSelectedData/ValData.csv')
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/ProcessedNotFeatSelectedData/Robust/ValData_{}.csv".format(c_fold))
+            dir = os.path.expanduser('~/{}/Project/ProcessedNotFeatSelectedData/{}/{}/ValData_{}.csv'.format(self.direc_set,mode_pre,cancer,c_fold))
+          #  dir = os.path.expanduser("/Users/marlon/Desktop/Project/ProcessedNotFeatSelectedData/ValData_{}.csv".format(c_fold))
             val_data_df.to_csv(dir)
 
             # For Convenience, also load feature_offsets to this folder
             feat_offs_df = pd.DataFrame(self.feature_offsets)
-         #   dir = os.path.expanduser('~/SUMO/Project/ProcessedNotFeatSelectedData/FeatOffs.csv')
-            dir = os.path.expanduser("/Users/marlon/Desktop/Project/ProcessedNotFeatSelectedData/Robust/FeatOffs.csv".format(c_fold))
+            dir = os.path.expanduser('~/{}/Project/ProcessedNotFeatSelectedData/{}/{}/FeatOffs.csv'.format(self.direc_set,mode_pre,cancer,c_fold))
+         #   dir = os.path.expanduser("/Users/marlon/Desktop/Project/ProcessedNotFeatSelectedData/FeatOffs.csv".format(c_fold))
             feat_offs_df.to_csv(dir)
 
 
@@ -573,12 +668,12 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
         test_data_c = torch.cat(tuple(all_test_data), dim=1)
         test_data_df = pd.DataFrame(test_data_c)
-      #  dir = os.path.expanduser('~/SUMO/Project/ProcessedNotFeatSelectedData/TestData.csv')
-        dir = os.path.expanduser("/Users/marlon/Desktop/Project/ProcessedNotFeatSelectedData/Robust/TestData.csv")
+        dir = os.path.expanduser('~/{}/Project/ProcessedNotFeatSelectedData/{}/{}/TestData.csv'.format(self.direc_set,mode_pre,cancer))
+      #  dir = os.path.expanduser("/Users/marlon/Desktop/Project/ProcessedNotFeatSelectedData/TestData.csv")
         test_data_df.to_csv(dir)
+        """
 
-
-
+        ############################## FOR TESTING HYPERPARAMETERS  #########################################
 
 
         return n_train_fold_samples, n_val_fold_samples, n_test_samples, self.view_names
@@ -648,11 +743,15 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
 
-
+        """
         # For tuning purposes, load data in directly
+        ########## For tuning purposes, load data in directly ###########
 
-        trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4,featoffs,testset = load_data()
+        dir = os.path.expanduser("~/{}/Project/ProcessedNotFeatSelectedData/Standardize/KIRC2VIEWS/".format(self.direc_set))
+        trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4,featoffs,testset = load_data(data_dir=dir)
 
+        ####### SET VIEW COUNT FOR TESTING HYPERPARAMS ########
+        self.n_views = 2
         featoffs = list(featoffs.values)
         for idx,_ in enumerate(featoffs):
             featoffs[idx] = featoffs[idx].item()
@@ -710,19 +809,26 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
             self.train_folds_events[c] = torch.from_numpy(self.train_folds_events[c]).to(torch.float32)
             self.val_folds_durations[c] = torch.from_numpy(self.val_folds_durations[c]).to(torch.float32)
             self.val_folds_events[c] = torch.from_numpy(self.val_folds_events[c]).to(torch.float32)
+            for c_view in range(len(self.train_folds[c])):
+                self.train_folds[c][c_view] = torch.from_numpy(self.train_folds[c][c_view]).to(torch.float32)
+                self.val_folds[c][c_view] =torch.from_numpy(self.val_folds[c][c_view]).to(torch.float32)
 
         # Also cast train duration & events
         self.duration_test = torch.from_numpy(self.duration_test).to(torch.float32)
         self.event_test = torch.from_numpy(self.event_test).to(torch.float32)
+        for c_view in range(len(self.x_test)):
+            self.x_test[c_view] = torch.from_numpy(self.x_test[c_view]).to(torch.float32)
 
 
 
         views = []
-        read_in = open('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt', 'r')
+        #   dir = os.path.expanduser('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt')
+        dir = os.path.expanduser("~/{}/Project/TCGAData/cancerviews.txt".format(self.direc_set))
+        read_in = open(dir, 'r')
         for view in read_in:
             views.append(view)
 
-        view_names = [line[:-1] for line in views]
+        self.view_names = [line[:-1] for line in views]
 
 
         dimensions_train = [x.shape[1] for x in train_data]
@@ -732,6 +838,9 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
         assert (dimensions_train == dimensions_val == dimensions_test), 'Feature mismatch between train/test'
 
 
+        ############# Tuning purposes ######################
+
+        """
 
         if method.lower() == 'eigengenes':
             """Eigengene matrices Feature selection
@@ -788,15 +897,18 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
                 # We also need to set the R program to only calculate the test eigengenes in the first fold
                 # as the test set is the same across all folds
+                dir = os.path.expanduser('~/{}/Project/TCGAData/eigengene_mode.txt'.format(self.direc_set))
                 if c_fold == 0:
                     # Train/Val/Test data
                     mode = "all"
-                    with open('/Users/marlon/Desktop/Project/TCGAData/eigengene_mode.txt', 'w') as f:
+                   # with open('/Users/marlon/Desktop/Project/TCGAData/eigengene_mode.txt', 'w') as f:
+                   #     f.write(mode)
+                    with open(dir, 'w') as f:
                         f.write(mode)
                 else:
                     # Train/Val data
                     mode = "folds"
-                    with open('/Users/marlon/Desktop/Project/TCGAData/eigengene_mode.txt', 'w') as f:
+                    with open(dir, 'w') as f:
                         f.write(mode)
 
 
@@ -889,8 +1001,9 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
 
-
+            print("PCA feature selection...")
             for c,fold in enumerate(self.train_folds):
+                print("PCA Fold {}".format(c))
                 for view in range(self.n_views):
                     # Initialize PCA objects for both train and test with same components
                     view_train_PCA = FeatureSelection.F_PCA(self.train_folds[c][view], components=components[view])
@@ -1042,17 +1155,17 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
 
 
                 # Layer Sizes
-                layers_train = [[236,159], [181,35], [290,128]]
+                layers_train = [[236,159], [181,35]]
 
 
                 # Activation Functions
-                activation_functions_train = [['relu','relu'],['relu','sigmoid'],['relu','sigmoid']]
+                activation_functions_train = [['relu','relu'],['relu','sigmoid']]
 
                 # Batch Normalization
-                batch_normalization_train = [['yes','yes'],['no','yes'], ['yes','yes']]
+                batch_normalization_train = [['yes','yes'],['no','yes']]
 
                 # Dropout Layers
-                dropout_layers_train = [['yes','no'], ['yes','no'], ['no','no']]
+                dropout_layers_train = [['yes','no'], ['yes','no']]
 
 
 
@@ -1607,12 +1720,13 @@ def objective(trial):
     return full_loss
 
 
-def load_data(data_dir="/Users/marlon/Desktop/Project/ProcessedNotFeatSelectedData/Standardize/"):
+def load_data(data_dir):
     """
     Function to load data. Needed for Optuna Optimization.
     :param data_dir: Directory in which data is stored.
     :return: data and feature offsets (for feature values, duration and event)
     """
+
     trainset_0 = pd.read_csv(
         os.path.join(data_dir + "TrainData_0.csv"), index_col=0)
 

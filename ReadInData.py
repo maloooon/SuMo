@@ -18,6 +18,9 @@ def readcancerdata(cancer_name):
     #                'STAD','TGCT','THCA','THYM','UCEC' ,'UCS', 'UVM'
 
     # With input variant
+
+    direc_set = "Desktop" # dir is Desktop for own CPU or SUMO for GPU
+
     cancer_names = [cancer_name]
 
 
@@ -25,42 +28,42 @@ def readcancerdata(cancer_name):
 
     for c,_ in enumerate(cancer_names):
         print("Reading in " + str(_) + " data...")
-      #  data = pd.read_csv(
-      #      os.path.join("~", "SUMO", "Project", "TCGAData", str(_),
-      #                   str(_) + "Data.csv"), index_col=0)
         data = pd.read_csv(
-            os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", str(_),
+            os.path.join("~", direc_set, "Project", "TCGAData", str(_),
                          str(_) + "Data.csv"), index_col=0)
+      #  data = pd.read_csv(
+      #      os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", str(_),
+      #                   str(_) + "Data.csv"), index_col=0)
 
 
         print("Reading in " + str(_) + " offsets...")
-  #      feat_offset = pd.read_csv(
-   #         os.path.join("~", "SUMO", "Project", "TCGAData", str(_),
-   #                      str(_) + "DataFeatOffsets.csv"), index_col=0)
         feat_offset = pd.read_csv(
-            os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", str(_),
+            os.path.join("~", direc_set, "Project", "TCGAData", str(_),
                          str(_) + "DataFeatOffsets.csv"), index_col=0)
+    #    feat_offset = pd.read_csv(
+    #        os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", str(_),
+    #                     str(_) + "DataFeatOffsets.csv"), index_col=0)
         print("Reading in " + str(_) + " view names...")
 
-     #   view_names = pd.read_csv(
-     #       os.path.join("~", "SUMO", "Project", "TCGAData", str(_),
-      #                   str(_) + "Views.csv"), index_col=0)
-
         view_names = pd.read_csv(
-            os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", str(_),
+            os.path.join("~", direc_set, "Project", "TCGAData", str(_),
                          str(_) + "Views.csv"), index_col=0)
+
+     #   view_names = pd.read_csv(
+     #       os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", str(_),
+     #                    str(_) + "Views.csv"), index_col=0)
 
         views = HF.flatten(view_names.values.tolist())
         print("Reading in " + str(_) + " feature names...")
         names = []
         for c2,view in enumerate(views):
 
-      #      feat_names = pd.read_csv(
-      #          os.path.join("~", "SUMO", "Project", "TCGAData", str(_),
-      #                       str(view) + "FeatureNames.csv"), index_col=0)
             feat_names = pd.read_csv(
-                os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", str(_),
+                os.path.join("~", direc_set, "Project", "TCGAData", str(_),
                              str(view) + "FeatureNames.csv"), index_col=0)
+     #       feat_names = pd.read_csv(
+     #           os.path.join("/Users", "marlon", "Desktop", "Project", "TCGAData", str(_),
+     #                        str(view) + "FeatureNames.csv"), index_col=0)
             names.append((views[c2],HF.flatten(feat_names.values.tolist())))
 
 
@@ -73,3 +76,5 @@ def readcancerdata(cancer_name):
 
     return cancer_data
 
+
+#%%

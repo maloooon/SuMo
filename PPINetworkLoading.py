@@ -9,11 +9,10 @@ proteins = {}
 interactions1 = []
 interactions2 = []
 
-# Replace /Users/marlon/Desktop with dir = os.path.expanduser('~/SUMO ..')
-direc_set = 'Desktop'
+
+direc_set = 'SUMO'
 
 dir = os.path.expanduser('~/{}/Project/9606.protein.links.v11.5.txt.gz'.format(direc_set))
-#dir = os.path.expanduser('~/SUMO/Project/9606.protein.links.v11.5.txt.gz')
 with gzip.open(dir, 'rt') as f:
     next(f) # Ignore the header
     for line in f:
@@ -45,7 +44,7 @@ data = data.reset_index()
 
 
 
-# Replace with "~", "SUMO"
+
 # Read in all features across all cancer types
 features = pd.read_csv(
     os.path.join("~", direc_set, "Project", "TCGAData", "AllFeatures.csv"), index_col=0)
@@ -79,7 +78,6 @@ for idx,feat in enumerate(features):
 # Remove proteins for which we have no interaction information and
 # remove features (and therefore proteins) that are not included in any of the cancer types views
 # Start deleting ...
-
 to_delete_ = []
 for index, row in data.iterrows():
 
@@ -103,7 +101,6 @@ data_df = pd.DataFrame(data)
 
 
 dir = os.path.expanduser("~/{}/Project/ProteinToFeature.csv".format(direc_set))
-#dir = os.path.expanduser("~/SUMO/Project/ProteinToFeature.csv")
 data_df.to_csv(dir)
 
 

@@ -51,50 +51,23 @@ class AE_Hierarichal(nn.Module):
                  final_out_cross : Cross decoded output from AE ; dtype : Tuple of Tensors(n_samples_in_batch, n_features)
         """
 
+        if 'cross' in self.types[0].lower():
 
-        if self.types[0] == 'cross' \
-                or self.types[0] == 'cross_concat' \
-                or self.types[0] == 'cross_elementwiseavg' \
-                or self.types[0] == 'cross_elementwisemean' \
-                or self.types[0] == 'cross_elementwisemax' \
-                or self.types[0] == 'cross_elementwisemin' \
-                or self.types[0] == 'cross_overallavg' \
-                or self.types[0] == 'cross_overallmean' \
-                or self.types[0] == 'cross_overallmin' \
-                or self.types[0] == 'cross_overallmax':
+            integrated_element, final_out_1, final_out_1_cross, input_data_1 = self.ae_1(*x)
 
-            element_wise_avg, final_out_1, final_out_1_cross, input_data_1 = self.ae_1(*x)
+            if 'cross' in self.types[1].lower():
 
-            if self.types[1] == 'cross' \
-                    or self.types[1] == 'cross_concat' \
-                    or self.types[1] == 'cross_elementwiseavg' \
-                    or self.types[1] == 'cross_elementwisemean' \
-                    or self.types[1] == 'cross_elementwisemax' \
-                    or self.types[1] == 'cross_elementwisemin' \
-                    or self.types[1] == 'cross_overallavg' \
-                    or self.types[1] == 'cross_overallmean' \
-                    or self.types[1] == 'cross_overallmin' \
-                    or self.types[1] == 'cross_overallmax':
-
-                raise Exception("Cross 2 times does not work, since the first AE gives back an element wise average"
-                                " of all the views, thus we can't cross mutate over different views anymore")
+                raise Exception("Cross 2 times does not work, since the first AE gives back an integrated element"
+                                "of all the views, thus we can't cross mutate over different views anymore")
             else:
-                integrated, final_out_2, input_data_2 = self.ae_2(element_wise_avg)
+                integrated, final_out_2, input_data_2 = self.ae_2(integrated_element)
                 hazard = self.nn(integrated)
                 return final_out_1, final_out_2, final_out_1_cross, hazard, input_data_2, input_data_1
 
         else:
             view_data, final_out_1, input_data_1 = self.ae_1(*x)
-            if self.types[1] == 'cross' \
-                    or self.types[1] == 'cross_concat' \
-                    or self.types[1] == 'cross_elementwiseavg' \
-                    or self.types[1] == 'cross_elementwisemean' \
-                    or self.types[1] == 'cross_elementwisemax' \
-                    or self.types[1] == 'cross_elementwisemin' \
-                    or self.types[1] == 'cross_overallavg' \
-                    or self.types[1] == 'cross_overallmean' \
-                    or self.types[1] == 'cross_overallmin' \
-                    or self.types[1] == 'cross_overallmax':
+            if 'cross' in self.types[1].lower():
+
                 if self.types[0] != 'none':
                     raise Exception("Cross on the second AE only works if the output of the first AE still has"
                                     "different views and is not concatenated or averaged/minned/maxxed. Thus only "
@@ -130,56 +103,31 @@ class AE_Hierarichal(nn.Module):
          :param x: Data input (for each view) ; dtype : Tuple of Tensors(n_samples_in_batch, n_features)
          :return: hazard : "Risk ratio" ; dtype : Tensor(n_samples_in_batch, 1)
          """
+        if 'cross' in self.types[0].lower():
 
-        if self.types[0] == 'cross' \
-                or self.types[0] == 'cross_concat' \
-                or self.types[0] == 'cross_elementwiseavg' \
-                or self.types[0] == 'cross_elementwisemean' \
-                or self.types[0] == 'cross_elementwisemax' \
-                or self.types[0] == 'cross_elementwisemin' \
-                or self.types[0] == 'cross_overallavg' \
-                or self.types[0] == 'cross_overallmean' \
-                or self.types[0] == 'cross_overallmin' \
-                or self.types[0] == 'cross_overallmax':
 
-            element_wise_avg, final_out_1, final_out_1_cross, input_data_1 = self.ae_1(*x)
+            integrated_element, final_out_1, final_out_1_cross, input_data_1 = self.ae_1(*x)
 
-            if self.types[1] == 'cross' \
-                    or self.types[1] == 'cross_concat' \
-                    or self.types[1] == 'cross_elementwiseavg' \
-                    or self.types[1] == 'cross_elementwisemean' \
-                    or self.types[1] == 'cross_elementwisemax' \
-                    or self.types[1] == 'cross_elementwisemin' \
-                    or self.types[1] == 'cross_overallavg' \
-                    or self.types[1] == 'cross_overallmean' \
-                    or self.types[1] == 'cross_overallmin' \
-                    or self.types[1] == 'cross_overallmax':
-                raise Exception("Cross 2 times does not work, since the first AE gives back an element wise average"
-                                " of all the views, thus we can't cross mutate over different views anymore")
+            if 'cross' in self.types[1].lower():
+
+                raise Exception("Cross 2 times does not work, since the first AE gives back an integrated element"
+                                "of all the views, thus we can't cross mutate over different views anymore")
 
             else:
-                integrated, final_out_2, input_data_2 = self.ae_2(element_wise_avg)
+                integrated, final_out_2, input_data_2 = self.ae_2(integrated_element)
                 hazard = self.nn(integrated)
 
         else:
             view_data, final_out_1, input_data_1 = self.ae_1(*x)
 
-            if self.types[1] == 'cross' \
-                    or self.types[1] == 'cross_concat' \
-                    or self.types[1] == 'cross_elementwiseavg' \
-                    or self.types[1] == 'cross_elementwisemean' \
-                    or self.types[1] == 'cross_elementwisemax' \
-                    or self.types[1] == 'cross_elementwisemin' \
-                    or self.types[1] == 'cross_overallavg' \
-                    or self.types[1] == 'cross_overallmean' \
-                    or self.types[1] == 'cross_overallmin' \
-                    or self.types[1] == 'cross_overallmax':
+            if 'cross' in self.types[1].lower():
+
                 if self.types[0] != 'none':
                     raise Exception("Cross on the second AE only works if the output of the first AE still has"
                                     "different views and is not concatenated or averaged/minned/maxxed. Thus only "
                                     "works if we set the type of the first AE to none")
                 else:
-                    integrated, final_out_2, final_out_2_cross, input_data_2 = self.ae_2(*view_data) # *? weil hier noch versch. views
+                    integrated, final_out_2, final_out_2_cross, input_data_2 = self.ae_2(*view_data)
                     hazard = self.nn(integrated)
 
             else:
@@ -187,7 +135,7 @@ class AE_Hierarichal(nn.Module):
                     integrated, final_out_2, input_data_2 = self.ae_2(view_data)
                     hazard = self.nn(integrated)
                 else:
-                    integrated, final_out_2, input_data_2 = self.ae_2(*tuple(view_data)) # ?
+                    integrated, final_out_2, input_data_2 = self.ae_2(*tuple(view_data))
                     hazard = self.nn(integrated)
 
 
@@ -227,19 +175,10 @@ class AE_NN(nn.Module):
                  input data : Data input (same as x) ; dtype : Tuple of Tensors(n_samples_in_batch, n_features)
                  final_out_cross : Cross decoded output from AE ; dtype : Tuple of Tensors(n_samples_in_batch, n_features)
         """
+        if 'cross' in self.type.lower():
 
-        if self.type == 'cross' \
-                or self.type == 'cross_concat' \
-                or self.type == 'cross_elementwiseavg' \
-                or self.type == 'cross_elementwisemean' \
-                or self.type == 'cross_elementwisemax' \
-                or self.type == 'cross_elementwisemin' \
-                or self.type == 'cross_overallavg' \
-                or self.type == 'cross_overallmean' \
-                or self.type == 'cross_overallmin' \
-                or self.type == 'cross_overallmax':
-            element_wise_avg, final_out_cross, final_out, input_data = self.ae(*x) # TODO : change element wise name
-            hazard = self.nn(element_wise_avg)
+            integrated_element, final_out_cross, final_out, input_data = self.ae(*x)
+            hazard = self.nn(integrated_element)
             return final_out, final_out_cross, hazard, input_data
         else:
             integrated, final_out, input_data = self.ae(*x)
@@ -253,18 +192,10 @@ class AE_NN(nn.Module):
         :param x: Data input (for each view) ; dtype : Tuple of Tensors(n_samples_in_batch, n_features)
         :return: hazard : "Risk ratio" ; dtype : Tensor(n_samples_in_batch, 1)
         """
-        if self.type == 'cross' \
-                or self.type == 'cross_concat' \
-                or self.type == 'cross_elementwiseavg' \
-                or self.type == 'cross_elementwisemean' \
-                or self.type == 'cross_elementwisemax' \
-                or self.type == 'cross_elementwisemin' \
-                or self.type == 'cross_overallavg' \
-                or self.type == 'cross_overallmean' \
-                or self.type == 'cross_overallmin' \
-                or self.type == 'cross_overallmax':
-            element_wise_avg, final_out_cross, final_out, input_data = self.ae(*x) # TODO  : change element wise name
-            hazard = self.nn(element_wise_avg)
+        if 'cross' in self.type.lower():
+
+            integrated_element, final_out_cross, final_out, input_data = self.ae(*x)
+            hazard = self.nn(integrated_element)
             return hazard
         else:
             integrated, final_out, input_data = self.ae(*x)
@@ -303,8 +234,8 @@ class AE(nn.Module):
                                            'overallmin','overallavg', 'cross' or 'cross_k' where k is on of the
                                            mentionted types]
         :param cross_mutation : Choose additional decoder for view ; dtype : List of Int [Indices of decoders for view,
-                                e.g [1,3,0,2] will decode features of view 1 with decoder of view 2 (and 1),
-                                features of view 2 with decoder of view 4 (and 2) ...] ; dtype : List or Tuple
+                                e.g [1,3,0,2] will decode features of view 0 with decoder of view 1 (and 0), features of view
+                                              1 with decoder of view 3 (and 1) .. ; dtype : List or Tuple
         :param print_bool : Choose whether to print the models structure or not ; dtype : Boolean
         """
         super().__init__()
@@ -411,7 +342,7 @@ class AE(nn.Module):
                     else:
                         self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
                                                                              n_hidden_layers_dims[c][c2]),
-                                                                             activ_funcs[c][c2]))
+                                                                   activ_funcs[c][c2]))
 
 
                 elif c2 == len(view): # Last layer
@@ -456,17 +387,7 @@ class AE(nn.Module):
 
             concatenated_features = sum([dim for dim in self.middle_dims])
 
-
-        if type_ae.lower() == 'cross' \
-                or type_ae.lower() == 'cross_concat'\
-                or type_ae.lower() == 'cross_elementwiseavg' \
-                or type_ae.lower() == 'cross_elementwisemean' \
-                or type_ae.lower() == 'cross_elementwisemax'\
-                or type_ae.lower() == 'cross_elementwisemin' \
-                or type_ae.lower() =='cross_overallavg' \
-                or type_ae.lower() == 'cross_overallmean' \
-                or type_ae.lower() =='cross_overallmax' \
-                or type_ae.lower() =='cross_overallmin':
+        if 'cross' in type_ae.lower():
 
 
             # We are only interested in the decoding stages, thus we only look at the hidden layers starting at the
@@ -484,7 +405,7 @@ class AE(nn.Module):
 
             for c, view in enumerate(n_hidden_layers_dims):
                 # If the bottleneck dimensional size of view i is not the same size as first decoding layer for view j,
-                # if we want to decode view i with decoder of view j...
+                # if we want to decode view i with decoder of view j... and sizes i != j
                 if n_hidden_layers_dims[c][middle_pos[c]] != n_hidden_layers_dims[cross_mutation[c]][middle_pos[cross_mutation[c]]]:
                     self.needs_help_bool[c] = True
                     # In this case we need a helping layer
@@ -517,19 +438,11 @@ class AE(nn.Module):
                 print("Finally, for Concat Integration, the output of each view between encoder and decoder  is concatenated  ({} features) "
                       "and will be passed to a NN for survival analysis".format(concatenated_features))
 
-            if type_ae.lower() == 'cross' \
-                or type_ae.lower() == 'cross_concat' \
-                or type_ae.lower() == 'cross_elementwiseavg' \
-                or type_ae.lower() == 'cross_elementwisemean' \
-                or type_ae.lower() == 'cross_elementwisemax' \
-                or type_ae.lower() == 'cross_elementwisemin' \
-                or type_ae.lower() =='cross_overallavg' \
-                or type_ae.lower() =='cross_overallmean' \
-                or type_ae.lower() =='cross_overallmax' \
-                or type_ae.lower() =='cross_overallmin':
+            if 'cross' in type_ae.lower():
+
                 for c, _ in enumerate(self.helping_layer):
                     print( "For CrossAE implementation we have the following helping layers : {} for view {}"
-                       .format(self.helping_layer[c], self.views[c]))
+                           .format(self.helping_layer[c], self.views[c]))
                 print("Finally, for CrossAE, the output of each view between encoder and decoder  is integrated" # TODO : cross_concat print auch hier
                       ", thus {} elements  will be passed to a NN for survival analysis or 1 in the case of overall cross implementation".format(mmm_output_dimension))
 
@@ -567,6 +480,7 @@ class AE(nn.Module):
 
     def forward(self,*x):
 
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # list of lists to store encoded features for each view
         # Note that encoded features will have BOTH features for encoding stage and decoding stage !
         input_data_raw = x
@@ -630,7 +544,7 @@ class AE(nn.Module):
 
 
 
-        if self.type_ae.lower() == 'overallmean'\
+        if self.type_ae.lower() == 'overallmean' \
                 or self.type_ae.lower() == 'overallavg' \
                 or self.type_ae.lower() == 'cross_overallavg' \
                 or self.type_ae.lower() == 'cross_overallmean':
@@ -644,56 +558,43 @@ class AE(nn.Module):
             overall_min = torch.amin(concatenated_features,1,True)
 
 
-        # element wise avg needs all the views to have the same dim (so we can take the avg over each value),
-        # If they don't, we take the averages where we can and else just use singleton values of views as "avg"
-        # find largest middle hidden feat dim
-        size = 0
+        # Elementwise integration needs all views to have the same amount of features in the bottleneck layer.
         hidden_sizes = []
-        for _ in data_middle:
+        for idx,_ in enumerate(data_middle):
             # store sizes of each middle hidden feat dim
             hidden_sizes.append(_.size(1))
-            if _.size(1) > size:
-                size = _.size(1)
+            # Take arbitrary view for size as they need to be of the same size for elementwise integration
+            size = _.size(1)
 
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        element_wise_avg = torch.empty(batch_size,size).to(device)
-        element_wise_max = torch.empty(batch_size,size).to(device)
-        element_wise_min = torch.empty(batch_size,size).to(device)
+            # Add dimension so we can concatenate tensors by element
 
 
-
-        for x in range(size):
-
-            for i in range(batch_size):
-                temp = []
-                for _ in data_middle:
-                    # element for averaging exists :
-                    if _.size(1) - 1 >= x: # -1 due to indexing
-                        temp.append(_[i][x])
-                if self.type_ae.lower() == 'cross' \
-                        or self.type_ae.lower() == 'elementwisemean' \
-                        or self.type_ae.lower() == 'elementwiseavg' \
-                        or self.type_ae.lower() == 'cross_elementwisemean':
-                    mean = torch.mean(torch.stack(temp))
-                    element_wise_avg[i][x] = mean
-                if self.type_ae.lower() == 'elementwisemax' or self.type_ae.lower() == 'cross_elementwisemax':
-                    max = torch.amax(torch.stack(temp))
-                    element_wise_max[i][x] = max
-                if self.type_ae.lower() == 'elementwisemin' or self.type_ae.lower() == 'cross_elementwisemin':
-                    min = torch.amin(torch.stack(temp))
-                    element_wise_min[i][x] = min
-
+        # Create copy of data_middle
+        data_middle_temp = []
+        for i in data_middle:
+            data_middle_temp.append(torch.empty_like(i).copy_(i))
+        for c,_ in enumerate(data_middle_temp):
+            # Unsqueeze each view so we get single dimensional values
+            data_middle_temp[c] = data_middle_temp[c].unsqueeze(2)
+        # Concatenate data
 
         if self.type_ae.lower() == 'cross' \
-                or self.type_ae.lower() == 'cross_concat' \
-                or self.type_ae.lower() == 'cross_elementwiseavg' \
-                or self.type_ae.lower() == 'cross_elementwisemean' \
-                or self.type_ae.lower() == 'cross_elementwisemax' \
-                or self.type_ae.lower() == 'cross_elementwisemin' \
-                or self.type_ae.lower() =='cross_overallavg' \
-                or self.type_ae.lower() =='cross_overallmean' \
-                or self.type_ae.lower() =='cross_overallmax' \
-                or self.type_ae.lower() =='cross_overallmin':
+                or self.type_ae.lower() == 'elementwisemean' \
+                or self.type_ae.lower() == 'elementwiseavg' \
+                or self.type_ae.lower() == 'cross_elementwisemean' or self.type_ae.lower() == 'cross_elementwiseavg':
+            assert (len(hidden_sizes) == hidden_sizes.count(size)), "For elementwise integration, amount of features in each view for the bottleneck layer need to be of the same size."
+            before_calc = torch.cat(tuple(data_middle_temp),dim=2)
+            element_wise_avg = (torch.mean(before_calc,2))
+        if self.type_ae.lower() == 'elementwisemax' or self.type_ae.lower() == 'cross_elementwisemax':
+            assert (len(hidden_sizes) == hidden_sizes.count(size)), "For elementwise integration, amount of features in each view for the bottleneck layer need to be of the same size."
+            before_calc = torch.cat(tuple(data_middle_temp),dim=2)
+            element_wise_max = (torch.amax(before_calc,2))
+        if self.type_ae.lower() == 'elementwisemin' or self.type_ae.lower() == 'cross_elementwisemin':
+            assert (len(hidden_sizes) == hidden_sizes.count(size)), "For elementwise integration, amount of features in each view for the bottleneck layer need to be of the same size."
+            before_calc = torch.cat(tuple(data_middle_temp),dim=2)
+            element_wise_min = (torch.amin(before_calc,2))
+
+        if 'cross' in self.type_ae.lower():
 
             for c,view in enumerate(self.hidden_layers):
                 # If we need to apply the helping layer ...
@@ -716,7 +617,7 @@ class AE(nn.Module):
                         # all other layers
                         cross_features[c].append(self.hidden_layers[self.cross_mutation[c]][c2 + 1](cross_features[c][-1]))
 
-         #   final_out_cross = torch.cat(tuple([dim[-1] for dim in cross_features]), dim=-1)
+            #   final_out_cross = torch.cat(tuple([dim[-1] for dim in cross_features]), dim=-1)
 
             final_out_cross = tuple([dim[-1] for dim in cross_features])                                                           # X
 
@@ -731,7 +632,7 @@ class AE(nn.Module):
         # For training purposes, we will also need the final decoder output of the AE
         # Concatenate everything so that we have the same structure as the input tensors (one tensor stores one whole
         # sample, access features via feature offsets)
-      #  final_out = torch.cat(tuple([dim[-1] for dim in encoded_features]), dim=-1)
+        #  final_out = torch.cat(tuple([dim[-1] for dim in encoded_features]), dim=-1)
 
         final_out = tuple([dim[-1] for dim in encoded_features])                                                                           # X
 
@@ -842,11 +743,11 @@ class LossHierarichcalAESingleCross(nn.Module):
         self.cross_position = cross_position
 
 
-    def forward(self, final_out_1, final_out_2, final_out_cross, hazard, element_wise_avg, input_data_1,duration, event):
+    def forward(self, final_out_1, final_out_2, final_out_cross, hazard, integrated_element, input_data_1,duration, event):
         """
         :param final_out: Decoded output of the AE ; dtype : TupleTree of Tensor(n_samples_in_batch, n_features)
         :param final_out_cross : Cross decoded output of the AE ; dtype : TupleTree of Tensor(n_samples_in_batch, n_features)
-        :param element_wise_avg : Input for the second AE ; dtype : List of Tensor(n_samples_in_batch, n_features) TODO : check dtype, name
+        :param integrated_element : Input for the second AE ; dtype : List of Tensor(n_samples_in_batch, n_features)
         :param duration: Duration value ; dtype : Tensor(n_samples_in_batch,)
         :param event : Event value ; dtype : Tensor(n_samples_in_batch,)
         :param input_data: Input for the AE ; dtype : TupleTree of Tensor(n_samples_in_batch, n_features)
@@ -870,7 +771,7 @@ class LossHierarichcalAESingleCross(nn.Module):
                 loss_ae_1_full += (loss_ae_1)
 
 
-        view_data = element_wise_avg
+        view_data = integrated_element
 
 
         if self.decoding_bool == True:
@@ -1049,19 +950,33 @@ class LossAECrossHazard(nn.Module):
 
 
 
-def objective(trial):
+def objective(trial, n_fold, t_preprocess,feature_selection_type, model_types, decoder_bool,cancer,mode):
     """
     Optuna Optimization for Hyperparameters.
     :param trial: Settings of the current trial of Hyperparameters
+    :param n_fold: number of fold to be optimized ; dtype : Int
+    :param t_preprocess: type of preprocess ; dtype : String
+    :param feature_selection_type : type of feature selection ; dtype : String
+    :param model_type : types of AE model(s) ; dtype : List of String(s)
+    :param decoder_bool : decide whether second decoder will be applied ; dtype : Boolean
+    :param cancer : name of the cancer used to load the data ; dtype : String
     :return: Concordance Index ; dtype : Float
     """
-    direc_set = 'Desktop'
+
+    print("Fold : {}, preprocess type : {}, feature selection type : {}, model : {}, decoder : {}, cancer : {}".format(n_fold,t_preprocess,feature_selection_type,model_types,decoder_bool,cancer))
+    direc_set = 'SUMO'
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # Load in data
-    dir = os.path.expanduser('~/{}/Project/PreparedData/'.format(direc_set))
+    preprocess_type = t_preprocess
+
+    if mode == 'prepared_data':
+        dir = os.path.expanduser('~/{}/Project/PreparedData/{}/{}/{}/'.format(direc_set,cancer,feature_selection_type,preprocess_type))
+    else:
+        dir = os.path.expanduser('~/{}/Project/PreparedData/'.format(direc_set)) # TODO: TEST
 
 
-    trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4,\
+
+    trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4, \
     testset_0,testset_1,testset_2,testset_3,testset_4,trainset_feat_0, \
     trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4 = load_data(data_dir = dir)
 
@@ -1091,11 +1006,11 @@ def objective(trial):
     val_event_folds = []
     test_data_folds = []
 
-
+    # LOAD IN DATA
     for c2,_ in enumerate(trainset):
         train_data = []
         for c,feat in enumerate(feat_offs[c2]):
-            if c < len(feat_offs[c2]) - 3: # train data views
+            if c < len(feat_offs[c2]) - 4: # train data views # CHANGED -3 to -5  TO NOT LOOK AT microRNA and RPPA
                 data_np = np.array((trainset[c2].iloc[:, feat_offs[c2][c] : feat_offs[c2][c+1]]).values).astype('float32')
                 data_tensor = torch.from_numpy(data_np).to(torch.float32)
                 data_tensor = data_tensor.to(device)
@@ -1116,7 +1031,7 @@ def objective(trial):
 
         val_data = []
         for c,feat in enumerate(feat_offs[c2]):
-            if c < len(feat_offs[c2]) - 3: # train data views
+            if c < len(feat_offs[c2]) - 4: # train data views # CHANGED -3 to -5  TO NOT LOOK AT microRNA and RPPA
                 data_np = np.array((valset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')
                 data_tensor = torch.from_numpy(data_np).to(torch.float32)
                 data_tensor = data_tensor.to(device)
@@ -1138,7 +1053,7 @@ def objective(trial):
 
         test_data = []
         for c,feat in enumerate(feat_offs[c2]):
-            if c < len(feat_offs[c2]) - 3: # train data views
+            if c < len(feat_offs[c2]) - 4: # train data views # CHANGED -3 to -5  TO NOT LOOK AT microRNA and RPPA
                 data_np = np.array((testset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')
                 data_tensor = torch.from_numpy(data_np).to(torch.float32)
                 data_tensor = data_tensor.to(device)
@@ -1176,27 +1091,29 @@ def objective(trial):
 
     views = []
     dir = os.path.expanduser('~/{}/Project/TCGAData/cancerviews.txt'.format(direc_set))
-   # dir = os.path.expanduser('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt')
+    # dir = os.path.expanduser('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt')
     read_in = open(dir, 'r')
     for view in read_in:
         views.append(view)
 
     view_names = [line[:-1] for line in views]
 
+    ###### TESTING
+    view_names = ['MRNA','DNA','MICRORNA']
 
 
-    second_decoder_bool = False
-    model_types = ['concat']
+
+    second_decoder_bool = decoder_bool
     # Current fold to be optimized
-    c_fold = 0
-
+    c_fold = n_fold
+    #print("Fold:", c_fold, " model type : ", model_types, "second decoder :", second_decoder_bool, " Preprocess Type: ", preprocess_type)
     ##################################### HYPERPARAMETER SEARCH SETTINGS ##############################################
     l2_regularization_bool = trial.suggest_categorical('l2_regularization_bool', [True,False])
     learning_rate = trial.suggest_float("learning_rate", 1e-5,1e-1,log=True)
     l2_regularization_rate = trial.suggest_float("l2_regularization_rate", 1e-6,1e-3, log=True)
-  #  batch_size = trial.suggest_int("batch_size", 5, 200)
-    batch_size = trial.suggest_categorical("batch_size", [5,16,32,64,128,256])
-  #  n_epochs = trial.suggest_int("n_epochs", 10,100) ########### TESTING
+    #  batch_size = trial.suggest_int("batch_size", 5, 200)
+    batch_size = trial.suggest_categorical("batch_size", [7,17,33,64,128,256])
+    #  n_epochs = trial.suggest_int("n_epochs", 10,100) ########### TESTING
     n_epochs = 100
     dropout_prob = trial.suggest_float("dropout_prob", 0,0.5,step=0.1)
     dropout_bool = trial.suggest_categorical('dropout_bool', [True,False])
@@ -1236,19 +1153,21 @@ def objective(trial):
     batchnorms = []
     batchnorms_hierarchical = []
     batchnorms_hierarchical_integrated = []
-
     if 'MRNA' in view_names:
-        layers_1_mRNA = trial.suggest_int('layers_1_mRNA', 32, 64)
-        layers_2_mRNA = trial.suggest_int('layers_2_mRNA', 16, 32)
+        layers_1_mRNA = trial.suggest_categorical('layers_1_mRNA', [32,64,96,128])
+        layers_2_mRNA = trial.suggest_categorical('layers_2_mRNA', [8,16,32])
+
         layers_1_mRNA_activfunc = trial.suggest_categorical('layers_1_mRNA_activfunc', ['relu','sigmoid','prelu'])
         layers_2_mRNA_activfunc = trial.suggest_categorical('layers_2_mRNA_activfunc', ['relu','sigmoid','prelu'])
         layers_1_mRNA_dropout = trial.suggest_categorical('layers_1_mRNA_dropout', ['yes','no'])
         layers_2_mRNA_dropout = trial.suggest_categorical('layers_2_mRNA_dropout', ['yes','no'])
         layers_1_mRNA_batchnorm = trial.suggest_categorical('layers_1_mRNA_batchnorm', ['yes', 'no'])
         layers_2_mRNA_batchnorm = trial.suggest_categorical('layers_2_mRNA_batchnorm', ['yes', 'no'])
+
+        """
         if len(model_types) == 2 and model_types[0] == 'none':
-            layers_1_mRNA_hierarichcal = trial.suggest_int('layers_1_mRNA_hierarichcal', 128, 256)
-            layers_2_mRNA_hierarichcal = trial.suggest_int('layers_2_mRNA_hierarichcal', 32, 128)
+            layers_1_mRNA_hierarichcal = trial.suggest_int('layers_1_mRNA_hierarichcal', 32, 96)
+            layers_2_mRNA_hierarichcal = trial.suggest_int('layers_2_mRNA_hierarichcal', 8, 32)
             layers_1_mRNA_activfunc_hierarichcal = trial.suggest_categorical('layers_1_mRNA_activfunc_hierarichcal', ['relu','sigmoid','prelu'])
             layers_2_mRNA_activfunc_hierarichcal = trial.suggest_categorical('layers_2_mRNA_activfunc_hierarichcal', ['relu','sigmoid','prelu'])
             layers_1_mRNA_dropout_hierarichcal = trial.suggest_categorical('layers_1_mRNA_dropout_hierarichcal', ['yes','no'])
@@ -1259,7 +1178,7 @@ def objective(trial):
             activation_functions_hierarchical.append([layers_1_mRNA_activfunc_hierarichcal, layers_2_mRNA_activfunc_hierarichcal])
             dropouts_hierarchical.append([layers_1_mRNA_dropout_hierarichcal, layers_2_mRNA_dropout_hierarichcal])
             batchnorms_hierarchical.append([layers_1_mRNA_batchnorm_hierarichcal, layers_2_mRNA_batchnorm_hierarichcal])
-
+        """
 
 
         layers.append([layers_1_mRNA,layers_2_mRNA])
@@ -1267,20 +1186,23 @@ def objective(trial):
         dropouts.append([layers_1_mRNA_dropout, layers_2_mRNA_dropout])
         batchnorms.append([layers_1_mRNA_batchnorm, layers_2_mRNA_batchnorm])
 
-
+    #JUMPER1
     if 'DNA' in view_names:
-        layers_1_DNA = trial.suggest_int('layers_1_DNA', 32, 64)
-        layers_2_DNA = trial.suggest_int('layers_2_DNA', 16, 32)
+        layers_1_DNA = trial.suggest_categorical('layers_1_DNA', [32,64,96,128])
+        if 'concat' in model_types[0] or 'overall' in model_types[0]:
+            layers_2_DNA = trial.suggest_categorical('layers_2_DNA',[8,16,32])
+        if 'elementwise' in model_types[0]:
+            layers_2_DNA = layers_2_mRNA
         layers_1_DNA_activfunc = trial.suggest_categorical('layers_1_DNA_activfunc', ['relu','sigmoid','prelu'])
         layers_2_DNA_activfunc = trial.suggest_categorical('layers_2_DNA_activfunc', ['relu','sigmoid','prelu'])
         layers_1_DNA_dropout = trial.suggest_categorical('layers_1_DNA_dropout', ['yes','no'])
         layers_2_DNA_dropout = trial.suggest_categorical('layers_2_DNA_dropout', ['yes','no'])
         layers_1_DNA_batchnorm = trial.suggest_categorical('layers_1_DNA_batchnorm', ['yes', 'no'])
         layers_2_DNA_batchnorm = trial.suggest_categorical('layers_2_DNA_batchnorm', ['yes', 'no'])
-
+        """
         if len(model_types) == 2 and model_types[0] == 'none':
-            layers_1_DNA_hierarichcal = trial.suggest_int('layers_1_DNA_hierarichcal', 128, 256)
-            layers_2_DNA_hierarichcal = trial.suggest_int('layers_2_DNA_hierarichcal', 32, 128)
+            layers_1_DNA_hierarichcal = trial.suggest_int('layers_1_DNA_hierarichcal', 8, 16)
+            layers_2_DNA_hierarichcal = trial.suggest_int('layers_2_DNA_hierarichcal', 4, 8)
             layers_1_DNA_activfunc_hierarichcal = trial.suggest_categorical('layers_1_DNA_activfunc_hierarichcal', ['relu','sigmoid', 'prelu'])
             layers_2_DNA_activfunc_hierarichcal = trial.suggest_categorical('layers_2_DNA_activfunc_hierarichcal', ['relu','sigmoid', 'prelu'])
             layers_1_DNA_dropout_hierarichcal = trial.suggest_categorical('layers_1_DNA_dropout_hierarichcal', ['yes','no'])
@@ -1291,7 +1213,7 @@ def objective(trial):
             activation_functions_hierarchical.append([layers_1_DNA_activfunc_hierarichcal, layers_2_DNA_activfunc_hierarichcal])
             dropouts_hierarchical.append([layers_1_DNA_dropout_hierarichcal, layers_2_DNA_dropout_hierarichcal])
             batchnorms_hierarchical.append([layers_1_DNA_batchnorm_hierarichcal, layers_2_DNA_batchnorm_hierarichcal])
-
+        """
 
         layers.append([layers_1_DNA,layers_2_DNA])
         activation_functions.append([layers_1_DNA_activfunc, layers_2_DNA_activfunc])
@@ -1300,18 +1222,21 @@ def objective(trial):
 
 
     if 'MICRORNA' in view_names:
-        layers_1_microRNA = trial.suggest_int('layers_1_microRNA', 32, 64)
-        layers_2_microRNA = trial.suggest_int('layers_2_microRNA', 16, 32)
+        layers_1_microRNA = trial.suggest_categorical('layers_1_microRNA', [32,64,96,128])
+        if 'concat' in model_types[0] or 'overall' in model_types[0]:
+            layers_2_microRNA = trial.suggest_categorical('layers_2_microRNA',[8,16,32])
+        if 'elementwise' in model_types[0]:
+            layers_2_microRNA = layers_2_mRNA
         layers_1_microRNA_activfunc = trial.suggest_categorical('layers_1_microRNA_activfunc', ['relu','sigmoid','prelu'])
         layers_2_microRNA_activfunc = trial.suggest_categorical('layers_2_microRNA_activfunc', ['relu','sigmoid','prelu'])
         layers_1_microRNA_dropout = trial.suggest_categorical('layers_1_microRNA_dropout', ['yes','no'])
         layers_2_microRNA_dropout = trial.suggest_categorical('layers_2_microRNA_dropout', ['yes','no'])
         layers_1_microRNA_batchnorm = trial.suggest_categorical('layers_1_microRNA_batchnorm', ['yes', 'no'])
         layers_2_microRNA_batchnorm = trial.suggest_categorical('layers_2_microRNA_batchnorm', ['yes', 'no'])
-
+        """
         if len(model_types) == 2 and model_types[0] == 'none':
-            layers_1_microRNA_hierarichcal = trial.suggest_int('layers_1_microRNA_hierarichcal', 128, 256)
-            layers_2_microRNA_hierarichcal = trial.suggest_int('layers_2_microRNA_hierarichcal', 32, 128)
+            layers_1_microRNA_hierarichcal = trial.suggest_int('layers_1_microRNA_hierarichcal', 8, 16)
+            layers_2_microRNA_hierarichcal = trial.suggest_int('layers_2_microRNA_hierarichcal', 4, 8)
             layers_1_microRNA_activfunc_hierarichcal = trial.suggest_categorical('layers_1_microRNA_activfunc_hierarichcal', ['relu','sigmoid', 'prelu'])
             layers_2_microRNA_activfunc_hierarichcal = trial.suggest_categorical('layers_2_microRNA_activfunc_hierarichcal', ['relu','sigmoid', 'prelu'])
             layers_1_microRNA_dropout_hierarichcal = trial.suggest_categorical('layers_1_microRNA_dropout_hierarichcal', ['yes','no'])
@@ -1322,7 +1247,7 @@ def objective(trial):
             activation_functions_hierarchical.append([layers_1_microRNA_activfunc_hierarichcal, layers_2_microRNA_activfunc_hierarichcal])
             dropouts_hierarchical.append([layers_1_microRNA_dropout_hierarichcal, layers_2_microRNA_dropout_hierarichcal])
             batchnorms_hierarchical.append([layers_1_microRNA_batchnorm_hierarichcal, layers_2_microRNA_batchnorm_hierarichcal])
-
+        """
         layers.append([layers_1_microRNA,layers_2_microRNA])
         activation_functions.append([layers_1_microRNA_activfunc, layers_2_microRNA_activfunc])
         dropouts.append([layers_1_microRNA_dropout, layers_2_microRNA_dropout])
@@ -1330,7 +1255,7 @@ def objective(trial):
 
 
     if 'RPPA' in view_names:
-        layers_1_RPPA = trial.suggest_int('layers_1_RPPA', 32, 64)
+        layers_1_RPPA = trial.suggest_int('layers_1_RPPA', 64, 96)
         layers_2_RPPA = trial.suggest_int('layers_2_RPPA', 16, 32)
         layers_1_RPPA_activfunc = trial.suggest_categorical('layers_1_RPPA_activfunc', ['relu','sigmoid','prelu'])
         layers_2_RPPA_activfunc = trial.suggest_categorical('layers_2_RPPA_activfunc', ['relu','sigmoid','prelu'])
@@ -1338,10 +1263,10 @@ def objective(trial):
         layers_2_RPPA_dropout = trial.suggest_categorical('layers_2_RPPA_dropout', ['yes','no'])
         layers_1_RPPA_batchnorm = trial.suggest_categorical('layers_1_RPPA_batchnorm', ['yes', 'no'])
         layers_2_RPPA_batchnorm = trial.suggest_categorical('layers_2_RPPA_batchnorm', ['yes', 'no'])
-
+        """
         if len(model_types) == 2 and model_types[0] == 'none':
-            layers_1_RPPA_hierarichcal = trial.suggest_int('layers_1_RPPA_hierarichcal', 128, 256)
-            layers_2_RPPA_hierarichcal = trial.suggest_int('layers_2_RPPA_hierarichcal', 32, 128)
+            layers_1_RPPA_hierarichcal = trial.suggest_int('layers_1_RPPA_hierarichcal', 8, 16)
+            layers_2_RPPA_hierarichcal = trial.suggest_int('layers_2_RPPA_hierarichcal', 4, 8)
             layers_1_RPPA_activfunc_hierarichcal = trial.suggest_categorical('layers_1_RPPA_activfunc_hierarichcal', ['relu','sigmoid', 'prelu'])
             layers_2_RPPA_activfunc_hierarichcal = trial.suggest_categorical('layers_2_RPPA_activfunc_hierarichcal', ['relu','sigmoid', 'prelu'])
             layers_1_RPPA_dropout_hierarichcal = trial.suggest_categorical('layers_1_RPPA_dropout_hierarichcal', ['yes','no'])
@@ -1352,7 +1277,7 @@ def objective(trial):
             activation_functions_hierarchical.append([layers_1_RPPA_activfunc_hierarichcal, layers_2_RPPA_activfunc_hierarichcal])
             dropouts_hierarchical.append([layers_1_RPPA_dropout_hierarichcal, layers_2_RPPA_dropout_hierarichcal])
             batchnorms_hierarchical.append([layers_1_RPPA_batchnorm_hierarichcal, layers_2_RPPA_batchnorm_hierarichcal])
-
+        """
 
         layers.append([layers_1_RPPA,layers_2_RPPA])
         activation_functions.append([layers_1_RPPA_activfunc, layers_2_RPPA_activfunc])
@@ -1361,23 +1286,6 @@ def objective(trial):
 
 
 
-    if len(model_types) == 2 and model_types[0] != 'none':
-    # In this case we already have done integration method and have single omic data structure left
-        layers_1_hierarichcal_integrated = trial.suggest_int('layers_1_hierarichcal_integrated', 128, 256)
-        layers_2_hierarichcal_integrated = trial.suggest_int('layers_2_hierarichcal_integrated', 32, 128)
-        layers_1_activfunc_hierarichcal_integrated = trial.suggest_categorical('layers_1_activfunc_hierarichcal_integrated', ['relu','sigmoid', 'prelu'])
-        layers_2_activfunc_hierarichcal_integrated = trial.suggest_categorical('layers_2_activfunc_hierarichcal_integrated', ['relu','sigmoid', 'prelu'])
-        layers_1_dropout_hierarichcal_integrated = trial.suggest_categorical('layers_1_dropout_hierarichcal_integrated', ['yes','no'])
-        layers_2_dropout_hierarichcal_integrated = trial.suggest_categorical('layers_2_dropout_hierarichcal_integrated', ['yes','no'])
-        layers_1_batchnorm_hierarichcal_integrated = trial.suggest_categorical('layers_1_batchnorm_hierarichcal_integrated', ['yes', 'no'])
-        layers_2_batchnorm_hierarichcal_integrated = trial.suggest_categorical('layers_2_batchnorm_hierarichcal_integrated', ['yes', 'no'])
-        dropout_prob_hierachical_integrated = trial.suggest_float("dropout_prob_hierachical_integrated", 0,0.5,step=0.1)
-        dropout_bool_hierachical_integrated = trial.suggest_categorical('dropout_bool_hierachical_integrated', [True,False])
-        batchnorm_bool_hierachical_integrated = trial.suggest_categorical('batchnorm_bool_hierachical_integrated',[True,False])
-        layers_hierarchical_integrated.append([layers_1_hierarichcal_integrated,layers_2_hierarichcal_integrated])
-        activation_functions_hierarchical_integrated.append([layers_1_activfunc_hierarichcal_integrated, layers_2_activfunc_hierarichcal_integrated])
-        dropouts_hierarchical_integrated.append([layers_1_dropout_hierarichcal_integrated, layers_2_dropout_hierarichcal_integrated])
-        batchnorms_hierarchical_integrated.append([layers_1_batchnorm_hierarichcal_integrated, layers_2_batchnorm_hierarichcal_integrated])
 
 
 
@@ -1386,67 +1294,69 @@ def objective(trial):
 
 
 
-    # for cross implementation # TODO : warning bc of data structure, how can this be done in another way with optuna ?
-    if len(layers) == 4 and 'cross' in model_types[0]:
-        cross_decoder_4_views = trial.suggest_categorical("cross_decoders_4_views",[(0,1,2,3),(0,1,3,2),(1,0,2,3),(1,0,3,2)]) #TODO: fulfill with chatgpt
-    if len(layers) == 3 and 'cross' in model_types[0]:
-        cross_decoders_3_views = trial.suggest_categorical("cross_decoders_3_views",[(0,1,2),(0,2,1),(2,1,0),(1,2,0),(1,0,2),(2,0,1)])
-    if len(layers) == 2 and 'cross' in model_types[0]:
-        cross_decoders_2_views = trial.suggest_categorical("cross_decoders_2_views",[(0,1),(1,0)]) # TODO : als string definieren ; dann splitten für NN call
+
+    # for cross implementation
+    if len(model_types) == 2:
+        if len(layers) == 3 and ('cross' in model_types[0] or 'cross' in model_types[1]):
+            cross_decoders_3_views = trial.suggest_categorical("cross_decoders_3_views",[(0,2,1),(2,1,0),(1,2,0),(1,0,2),(2,0,1)])
+
+        if len(layers) == 2 and ('cross' in model_types[0] or 'cross' in model_types[1]):
+            # No suggesting since for 2 views we only have one cross possibilty :
+            # Decode view 0 with view 1 decoder and vice versa
+            cross_decoders_2_views = (1,0)
+
+    else:
+        if len(layers) == 3 and ('cross' in model_types[0]):
+            cross_decoders_3_views = trial.suggest_categorical("cross_decoders_3_views",[(0,2,1),(2,1,0),(1,2,0),(1,0,2),(2,0,1)])
+
+        if len(layers) == 2 and ('cross' in model_types[0]):
+            # No suggesting since for 2 views we only have one cross possibilty :
+            # Decode view 0 with view 1 decoder and vice versa
+            cross_decoders_2_views = (1,0)
 
 
 
-
-
-
-
-  #  print("MODEL TYPES : ", model_types)
+    #  print("MODEL TYPES : ", model_types)
 
     # for concatenated data input into FCNN (no hierarichcal AE)
     out_sizes = []
     for c_layer in range(len(layers)):
         out_sizes.append(layers[c_layer][-1])
 
-    in_feats_second_NN_concat = sum(out_sizes)
+    in_feats_second_NN_concat = [sum(out_sizes)]
 
     # for element-wise avg/min/max input into FCNN (no hierarichcal AE)
 
     # Size is the one of the largest output dim of AE layers
-    in_feats_second_NN_element_wise = max([i[-1] for i in layers])
+    in_feats_second_NN_element_wise = [max([i[-1] for i in layers])]
 
-    # After hierarichcal integrated method
-    if len(model_types) == 2:
-#        in_feats_third_NN_element_wise = max([i[-1] for i in layers_hierarchical_integrated])
 
-        out_sizes_hierachical = []
-
-#        in_feats_third_NN_concat = layers_hierarchical_integrated[0][-1] # integrated method has only one layer left
-
-        for c_layer in range(len(layers_hierarchical)):
-            out_sizes_hierachical.append(layers_hierarchical[c_layer][-1])
-
-        in_feats_third_NN_concat_hierachical = sum(out_sizes_hierachical)
-
-        in_feats_third_NN_elementwise_hierachical = max([i[-1] for i in layers_hierarchical])
-
-        # if first model type is none, we need to take bottleneck dimensions for second AE
-        in_feats_second_AE_hierachical = [x[-1] for x in layers]
-
-    in_feats_second_NN_overall = 1
 
     # After concat FCNN (concatenated input into FCNN)
-
+    #JUMPER1
     # This is needed in nearly every case, just not if we don't integrate the data in the autoencoders in any way
     # (basically just let AE work as feature selection method)
-    layers_1_FCNN = trial.suggest_int('layers_1_FCNN', 32,64)
-    layers_2_FCNN = trial.suggest_int('layers_2_FCNN', 16, 32)
+    if len(model_types) == 1:
+        if 'concat' in model_types[0]:
+            size_of_fcnn_layer_1 = sum([layers_2_mRNA,layers_2_DNA,layers_2_microRNA])
+        if 'elementwise' in model_types[0]:
+            size_of_fcnn_layer_1 = max(layers_2_mRNA,layers_2_DNA,layers_2_microRNA)
+        if 'overall' in model_types[0]:
+            size_of_fcnn_layer_1 = 1
+    if len(model_types) == 2:
+        #in this case, the second AE always works on overall settings
+        size_of_fcnn_layer_1 = 1
+    #   layers_1_FCNN = size_of_overall
+    layers_1_FCNN = size_of_fcnn_layer_1
+    #layers_1_FCNN = trial.suggest_int('layers_1_FCNN', size_of_overall,size_of_overall)
+    layers_2_FCNN = trial.suggest_int('layers_2_FCNN', 8,size_of_fcnn_layer_1)
 
     layers_FCNN = [[layers_1_FCNN,layers_2_FCNN]]
 
     layers_1_FCNN_activfunc = trial.suggest_categorical('layers_1_FCNN_activfunc', ['relu','sigmoid','prelu'])
     layers_2_FCNN_activfunc = trial.suggest_categorical('layers_2_FCNN_activfunc', ['relu','sigmoid','prelu'])
 
-    FCNN_activation_functions = [layers_1_FCNN_activfunc, layers_2_FCNN_activfunc]
+    FCNN_activation_functions = [layers_1_FCNN_activfunc,layers_2_FCNN_activfunc]
 
     FCNN_dropout_prob = trial.suggest_float("FCNN_dropout_prob", 0,0.5,step=0.1)
     FCNN_dropout_bool = trial.suggest_categorical('FCNN_dropout_bool', [True,False])
@@ -1461,7 +1371,33 @@ def objective(trial):
     layers_1_FCNN_batchnorm = trial.suggest_categorical('layers_1_FCNN_batchnorm', ['yes', 'no'])
     layers_2_FCNN_batchnorm = trial.suggest_categorical('layers_2_FCNN_batchnorm', ['yes', 'no'])
 
-    FCNN_batchnorms = [layers_1_FCNN_batchnorm, layers_2_FCNN_batchnorm]
+    FCNN_batchnorms = [layers_1_FCNN_batchnorm,layers_2_FCNN_batchnorm]
+
+
+    if len(model_types) == 2 and model_types[0] != 'none':
+        # In this case we already have done integration method and have single omic data structure left
+        if 'concat' in model_types[0]:
+            feats_in = sum(out_sizes)
+        if 'elementwise' in model_types[0]:
+            # can be the last layer of aribtrary view from the first AE, as they need to have the same size
+            # for elementwise integration
+            feats_in = layers_2_DNA
+
+        layers_1_hierarichcal_integrated = feats_in # trial.suggest_int('layers_1_hierarichcal_integrated', feats_in, feats_in)
+        layers_2_hierarichcal_integrated = trial.suggest_int('layers_2_hierarichcal_integrated',8, feats_in)
+        layers_1_activfunc_hierarichcal_integrated = trial.suggest_categorical('layers_1_activfunc_hierarichcal_integrated', ['relu','sigmoid', 'prelu'])
+        layers_2_activfunc_hierarichcal_integrated = trial.suggest_categorical('layers_2_activfunc_hierarichcal_integrated', ['relu','sigmoid', 'prelu'])
+        layers_1_dropout_hierarichcal_integrated = trial.suggest_categorical('layers_1_dropout_hierarichcal_integrated', ['yes','no'])
+        layers_2_dropout_hierarichcal_integrated = trial.suggest_categorical('layers_2_dropout_hierarichcal_integrated', ['yes','no'])
+        layers_1_batchnorm_hierarichcal_integrated = trial.suggest_categorical('layers_1_batchnorm_hierarichcal_integrated', ['yes', 'no'])
+        layers_2_batchnorm_hierarichcal_integrated = trial.suggest_categorical('layers_2_batchnorm_hierarichcal_integrated', ['yes', 'no'])
+        dropout_prob_hierachical_integrated = trial.suggest_float("dropout_prob_hierachical_integrated", 0,0.5,step=0.1)
+        dropout_bool_hierachical_integrated = trial.suggest_categorical('dropout_bool_hierachical_integrated', [True,False])
+        batchnorm_bool_hierachical_integrated = trial.suggest_categorical('batchnorm_bool_hierachical_integrated',[True,False])
+        layers_hierarchical_integrated.append([layers_1_hierarichcal_integrated,layers_2_hierarichcal_integrated])
+        activation_functions_hierarchical_integrated.append([layers_1_activfunc_hierarichcal_integrated, layers_2_activfunc_hierarichcal_integrated])
+        dropouts_hierarchical_integrated.append([layers_1_dropout_hierarichcal_integrated, layers_2_dropout_hierarichcal_integrated])
+        batchnorms_hierarchical_integrated.append([layers_1_batchnorm_hierarichcal_integrated, layers_2_batchnorm_hierarichcal_integrated])
 
 
 
@@ -1497,62 +1433,91 @@ def objective(trial):
     val_data_full = (val_data[c_fold], (val_duration[c_fold], val_event[c_fold]))
 
 
-    layers_u = copy.deepcopy(layers)
-    activation_functions_u = copy.deepcopy(activation_functions)
-    dropouts_u = copy.deepcopy(dropouts)
-    batchnorms_u = copy.deepcopy(batchnorms)
+    # layers_u = copy.deepcopy(layers)
+    # activation_functions_u = copy.deepcopy(activation_functions)
+    # dropouts_u = copy.deepcopy(dropouts)
+    # batchnorms_u = copy.deepcopy(batchnorms)
+    if "cross" in model_types[0]:
+        if len(layers) == 2:
+            cross_setting = cross_decoders_2_views
+        elif len(layers) == 3:
+            cross_setting = cross_decoders_3_views
+    else:
+        cross_setting = None
+
     all_models.append(AE(views = view_names,
                          in_features= dimensions,
-                         n_hidden_layers_dims= layers_u,
-                         activ_funcs=activation_functions_u,
+                         n_hidden_layers_dims= layers,
+                         activ_funcs=activation_functions,
                          dropout_bool= dropout_bool,
                          dropout_prob= dropout_prob,
-                         dropout_layers= dropouts_u,
+                         dropout_layers= dropouts,
                          batch_norm_bool= batchnorm_bool,
-                         batch_norm= batchnorms_u,
+                         batch_norm= batchnorms,
                          type_ae=model_types[0],
-                         cross_mutation=None,
+                         cross_mutation=cross_setting,
                          print_bool=False,
                          prelu_init= prelu_rate)).to(device)
 
+    # Feature dimension are the input dimensions for the FCNN, feature dimensions h(ierachical) for the second AE
+    if len(model_types) == 1:
+        if "overall" in model_types[0]:
+            feature_dimension_FCNN = [1]
+        elif "elementwise" in model_types[0]:
+            feature_dimension_FCNN = in_feats_second_NN_element_wise
+        elif "concat" in model_types[0]:
+            feature_dimension_FCNN = in_feats_second_NN_concat
+
+    if len(model_types) == 2:
+        if "elementwise" in model_types[0] and "overall" in model_types[1]:
+            feature_dimension_h = in_feats_second_NN_element_wise
+            feature_dimension_FCNN = [1]
+        #  feature_dimension = in_feats_third_NN_elementwise_hierachical
+        if "concat" in model_types[0] and "overall" in model_types[1]:
+            feature_dimension_h = in_feats_second_NN_concat
+            feature_dimension_FCNN = [1]
+        #   feature_dimension = in_feats_third_NN_concat_hierachical
 
     # Hierachical AE no integration : in_features must be sizes of bottleneck dimensions of first AE
-  #  all_models.append(AE(views = view_names,
-   #                      in_features= in_feats_second_AE_hierachical,
-   #                      n_hidden_layers_dims= layers_hierarchical,
-   #                      activ_funcs=activation_functions_hierarchical,
-   #                      dropout_bool= dropout_bool_hierachical,
-   #                      dropout_prob= dropout_prob_hierachical,
-   #                      dropout_layers= dropouts_hierarchical,
-   #                      batch_norm_bool= batchnorm_bool_hierachical,
-   #                      batch_norm= batchnorms_hierarchical,
-   #                      type_ae=model_types[1],
-   #                      cross_mutation=None,
-   #                      print_bool=False,
-   #                      prelu_init= prelu_rate)).to(device)
 
-    layers_FCNN_u = copy.deepcopy(layers_FCNN)
-    FCNN_activation_functions_u = copy.deepcopy(FCNN_activation_functions)
-    FCNN_dropouts_u = copy.deepcopy(FCNN_dropouts)
-    FCNN_batchnorms_u = copy.deepcopy(FCNN_batchnorms)
+    if len(model_types) == 2:
+        all_models.append(AE(views = ['AE'],
+                             in_features= feature_dimension_h,
+                             n_hidden_layers_dims= layers_hierarchical_integrated,
+                             activ_funcs=activation_functions_hierarchical_integrated,
+                             dropout_bool= dropout_bool_hierachical_integrated,
+                             dropout_prob= dropout_prob_hierachical_integrated,
+                             dropout_layers= dropouts_hierarchical_integrated,
+                             batch_norm_bool= batchnorm_bool_hierachical_integrated,
+                             batch_norm= batchnorms_hierarchical_integrated,
+                             type_ae=model_types[1],
+                             cross_mutation=None,
+                             print_bool=False,
+                             prelu_init= prelu_rate)).to(device)
+
+
+    #JUMPER1 (layer size)
+
+
     all_models.append(FCNN.NN_changeable(views = ['AE'],
-                                       in_features = [in_feats_second_NN_concat],
-                                       n_hidden_layers_dims= layers_FCNN_u,
-                                       activ_funcs = [FCNN_activation_functions_u,['none']],
-                                       dropout_prob=FCNN_dropout_prob,
-                                       dropout_layers=FCNN_dropouts_u,
-                                       batch_norm = FCNN_batchnorms_u,
-                                       dropout_bool=FCNN_dropout_bool,
-                                       batch_norm_bool=FCNN_batchnorm_bool,
-                                       print_bool=False,
-                                       prelu_init = prelu_rate)).to(device)
+                                         in_features = feature_dimension_FCNN,
+                                         n_hidden_layers_dims= layers_FCNN,
+                                         activ_funcs = [FCNN_activation_functions,['none']],
+                                         dropout_prob=FCNN_dropout_prob,
+                                         dropout_layers=FCNN_dropouts,
+                                         batch_norm = FCNN_batchnorms,
+                                         dropout_bool=FCNN_dropout_bool,
+                                         batch_norm_bool=FCNN_batchnorm_bool,
+                                         print_bool=False,
+                                         prelu_init = prelu_rate)).to(device)
 
 
 
+    if len(model_types) == 2:
+        full_net = AE_Hierarichal(all_models, types=model_types)
 
-  #  full_net = AE_Hierarichal(all_models, types=model_types)
-
-    full_net = AE_NN(all_models, type=model_types[0])
+    if len(model_types) == 1:
+        full_net = AE_NN(all_models, type=model_types[0])
 
 
     # set optimizer
@@ -1565,17 +1530,36 @@ def objective(trial):
     #   cross_pos = model_types.index("cross") + 1
     #   model = models.CoxPH(full_net,optimizer, loss=LossHierarichcalAESingleCross(alpha=[0.4,0.4,0.2], decoding_bool=True, cross_position=cross_pos)) # Change Loss here
 
-    loss_concat = LossAEConcatHazard(loss_surv)
-    loss_cross = LossAECrossHazard(loss_surv)
+
+    if len(model_types) == 1:
+        if "cross" in model_types[0]:
+            loss_func = LossAECrossHazard(loss_surv)
+        else:
+            loss_func = LossAEConcatHazard(loss_surv)
+
 
     # if second decoder, we need to use loss_3 ; else normal 2 valued loss
     if len(model_types) == 2:
-        loss_hierachical_no_cross = LossHierarichcalAE(loss_3_values_hierarchical,decoding_bool=True)
-        loss_hierachical_cross = LossHierarichcalAESingleCross(loss_3_values_hierarchical, cross_position=1)
+        if second_decoder_bool == False:
+            loss_val  = [loss_surv, 1-loss_surv]
+            if "cross" in model_types[0]:
+                loss_func = LossHierarichcalAESingleCross(loss_val, cross_position=1,decoding_bool=second_decoder_bool)
+            else:
+                loss_func = LossHierarichcalAE(loss_val,decoding_bool=second_decoder_bool)
+        else:
+            loss_val = loss_3_values_hierarchical
+            if "cross" in model_types[0]:
+                loss_func = LossHierarichcalAESingleCross(loss_val, cross_position=1,decoding_bool=second_decoder_bool)
+            else:
+                loss_func = LossHierarichcalAE(loss_val,decoding_bool=second_decoder_bool)
+
+
+        # decoding bool False : loss = [loss_surv, 1-loss_surv] ; else loss_3_values_hierarchical
+    #   loss_hierachical_no_cross = LossHierarichcalAE(loss_3_values_hierarchical,decoding_bool=second_decoder_bool)
     # loss : alpha * surv_loss + (1-alpha) * ae_loss
     model = models.CoxPH(full_net,
                          optimizer,
-                         loss=loss_concat)
+                         loss=loss_func)
     model.set_device(torch.device(device))
     print_loss = False
 
@@ -1585,11 +1569,11 @@ def objective(trial):
                     n_epochs,
                     verbose=print_loss,
                     val_data= val_data_full,
-                    val_batch_size= 16,
+                    val_batch_size= batch_size,
                     callbacks=callbacks)
 
     # Plot it
- #   _ = log.plot()
+    #   _ = log.plot()
 
     # Change for EvalSurv-Function
     try:
@@ -1631,44 +1615,64 @@ def objective(trial):
     if concordance_index < 0.5:
         concordance_index = 1 - concordance_index
 
+    # Can also be optimized with brier score or binomial log-likelihood
     #brier score
-  #  time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
-  ##  _ = ev.brier_score(time_grid).plot
-  #  brier_score = ev.integrated_brier_score(time_grid)
+    #  time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
+    ##  _ = ev.brier_score(time_grid).plot
+    #  brier_score = ev.integrated_brier_score(time_grid)
 
     #binomial log-likelihood
- #   binomial_score = ev.integrated_nbll(time_grid)
+    #   binomial_score = ev.integrated_nbll(time_grid)
 
 
     return concordance_index
 
 
 
-def optuna_optimization():
+def optuna_optimization(n_fold, t_preprocess,feature_selection_type,model_type,decoder_bool,cancer,mode):
     """
     Optuna Optimization for Hyperparameters.
+    :param n_fold: number of fold to be optimized ; dtype : Int
+    :param t_preprocess: type of preprocess ; dtype : String
+    :param feature_selection_type : type of feature selection ; dtype : String
+    :param model_type : types of AE model(s) ; dtype : List of String(s)
+    :param decoder_bool : decide whether second decoder will be applied ; dtype : Boolean
+    :param cancer : name of the cancer used to load the data ; dtype : String
     """
 
 
     # Set amount of different trials
-    EPOCHS = 30
+    EPOCHS = 100
+
+    func = lambda trial: objective(trial, n_fold, t_preprocess,feature_selection_type, model_type, decoder_bool,cancer,mode)
+
+
     study = optuna.create_study(directions=['maximize'],sampler=optuna.samplers.TPESampler(),pruner=optuna.pruners.MedianPruner())
-    study.optimize(objective, n_trials = EPOCHS)
+    study.optimize(func, n_trials = EPOCHS)
     trial = study.best_trials
-    # Show change of c-Index across folds
-    fig = optuna.visualization.plot_optimization_history(study)
-    fig.show(renderer='browser')
-    # Show hyperparameter importance
-    fig = optuna.visualization.plot_param_importances(study)
-    fig.show(renderer='browser')
 
     # Save the best trial for each fold
-    direc_set = 'Desktop'
-    dir = os.path.expanduser(r'~/{}/Project/Trial/FCNN_KIRC3_Standardize_PCA_BEST_3.txt'.format(direc_set))
+    direc_set = 'SUMO'
+
+    dir = os.path.expanduser(r'~/{}/Project/Trial/{}/{}/AE_{}_{}_{}_{}_{}.txt'.format(direc_set,model_type[0],t_preprocess,t_preprocess,cancer,feature_selection_type,model_type[0],n_fold))
     with open(dir, 'w') as fp:
         for item in trial:
             # write each item on a new line
             fp.write("%s\n" % item)
+
+
+
+    # Show change of c-Index across folds
+    fig = optuna.visualization.plot_optimization_history(study)
+    dir = os.path.expanduser(r'~/{}/Project/Trial/{}/{}/AE_{}_{}_{}_{}_{}_C-INDICES.png'.format(direc_set,model_type[0],t_preprocess,t_preprocess,cancer,feature_selection_type,model_type[0],n_fold))
+    # fig.show()
+    fig.write_image(dir)
+    # fig.show(renderer='browser')
+    # Show hyperparameter importance
+    fig = optuna.visualization.plot_param_importances(study)
+    dir = os.path.expanduser(r'~/{}/Project/Trial/{}/{}/AE_{}_{}_{}_{}_{}_HPARAMOPTIMIZING.png'.format(direc_set,model_type[0],t_preprocess,t_preprocess,cancer,feature_selection_type,model_type[0],n_fold))
+    fig.write_image(dir)
+
 
 
     # Save all trials in dataframe
@@ -1771,8 +1775,8 @@ def train(train_data,val_data,test_data,
 
 
 
-#:param ae_hierarichcal_bool : Choose whether this AE is the second AE in the pipeline ; dtype : Boolean
-#:param ae_hierarichcal_decoding_bool : Choose whether the second AE has a decoder ; dtype : Boolean
+    #:param ae_hierarichcal_bool : Choose whether this AE is the second AE in the pipeline ; dtype : Boolean
+    #:param ae_hierarichcal_decoding_bool : Choose whether the second AE has a decoder ; dtype : Boolean
 
 
     for c,fold in enumerate(train_data):
@@ -1910,16 +1914,16 @@ def train(train_data,val_data,test_data,
         dropout_layers_u_3 = copy.deepcopy(dropout_layers_third)
         batchnorm_layers_u_3 = copy.deepcopy(batchnorm_layers_third)
         all_models.append(FCNN.NN_changeable(views = ['AE'],
-                                           in_features = in_feats_third_NN_elementwise,
-                                           n_hidden_layers_dims= layers_u_3,
-                                           activ_funcs = activation_layers_u_3,
-                                           dropout_prob=dropout_rate_third,
-                                           dropout_layers=dropout_layers_u_3,
-                                           batch_norm =batchnorm_layers_u_3,
-                                           dropout_bool=dropout_third,
-                                           batch_norm_bool=batchnorm_third,
-                                           print_bool=False,
-                                           prelu_init= prelu_rate))
+                                             in_features = in_feats_third_NN_elementwise,
+                                             n_hidden_layers_dims= layers_u_3,
+                                             activ_funcs = activation_layers_u_3,
+                                             dropout_prob=dropout_rate_third,
+                                             dropout_layers=dropout_layers_u_3,
+                                             batch_norm =batchnorm_layers_u_3,
+                                             dropout_bool=dropout_third,
+                                             batch_norm_bool=batchnorm_third,
+                                             print_bool=False,
+                                             prelu_init= prelu_rate))
 
 
 
@@ -1935,7 +1939,7 @@ def train(train_data,val_data,test_data,
 
         full_net = AE_Hierarichal(all_models, types=model_types)
 
-     #   full_net = AE_NN(all_models, type=model_types[0])
+        #   full_net = AE_NN(all_models, type=model_types[0])
 
 
         # set optimizer
@@ -1991,9 +1995,9 @@ def train(train_data,val_data,test_data,
         surv = model.predict_surv_df(test_data[c_fold])
 
         # Plot it
-  #      surv.iloc[:, :5].plot()
-  #      plt.ylabel('S(t | x)')
-  #      _ = plt.xlabel('Time')
+        #      surv.iloc[:, :5].plot()
+        #      plt.ylabel('S(t | x)')
+        #      _ = plt.xlabel('Time')
 
 
         # Evaluate with concordance, brier score and binomial log-likelihood

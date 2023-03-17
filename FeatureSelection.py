@@ -7,6 +7,7 @@ import subprocess
 import HelperFunctions as HF
 from collections import defaultdict
 import gzip
+import copy
 
 
 
@@ -19,7 +20,7 @@ class F_PCA():
 
     def __init__(self, data, components = 10):
         """
-        :param data: Data input of one view ; dtype : Tensor TODO :check if numpy array or tensor
+        :param data: Data input of one view ; dtype : Tensor
         :param components: Number of Principal Components ; dtype : Int
         """
         self.components = components
@@ -39,7 +40,7 @@ class F_PCA():
         """
         Fit and transform data with PCA ; This is used for training data
         :param pca: PCA object
-        :return: data after fitting and transforming it using PCA ; dtype : Tensor TODO : check
+        :return: data after fitting and transforming it using PCA ; dtype : ndarray of shape (n_samples, n_components)
         """
         train_data = pca.fit_transform(self.data)
 
@@ -51,7 +52,7 @@ class F_PCA():
         Transform data with PCA ; This is used for validation and test data, as we transform the data based on the fitted
                                   train representation
         :param pca: PCA object
-        :return: data after transforming it using PCA ; dtype : Tensor TODO : check
+        :return: data after transforming it using PCA ; dtype : ndarray of shape (n_samples, n_components)
         """
         test_data = pca.transform(self.data)
 
@@ -69,7 +70,7 @@ class F_VARIANCE():
     def __init__(self, data, threshold = 0.5):
         """
 
-        :param data: data: Data input of one view ; dtype : Tensor TODO :check if numpy array or tensor
+        :param data: data: Data input of one view ; dtype : Tensor
         :param threshold: Drop all features where 100 - threshold * 100 % of the values are similar; dtype : Float
         """
         self.data = data
@@ -91,7 +92,7 @@ class F_VARIANCE():
         """
         Fit and transform data with Variance threshold ; This is used for training data
         :param vt: Variance threshold object
-        :return: data after fitting and transforming it using Variance threshold ; dtype : Tensor TODO : check
+        :return: data after fitting and transforming it using Variance threshold ; dtype : ndarray array of shape (n_samples, n_features_new)
         """
 
         train_data = vt.fit_transform(self.data)
@@ -104,7 +105,7 @@ class F_VARIANCE():
                                                  as we transform the data based on the fitted
                                                  train representation
         :param vt: Variance threshold object
-        :return: data after transforming it using Variance threshold ; dtype : Tensor TODO : check
+        :return: data after transforming it using Variance threshold ; dtype : ndarray array of shape (n_samples, n_features_new)
         """
 
         test_data = vt.transform(self.data)
@@ -117,21 +118,26 @@ class PPI():
        Protein data from String DB.
     """
 
-    def __init__(self,data, feature_names, view_names):
+    def __init__(self,data, feature_names, view_names,columns_removed):
         """
         :param data: Data input ; dtype : List of Tensors(n_samples, n_features) [Tensor for each view]
         :param feature_names: Names of Features for all views ;
                               dtype : Tuple(Name of View (String), List containing feature names (Strings) for this view)
+        :param columns_removed : Removed features due to preprocessing ; List of strings
         :param view_names: Names of Views ; dtype : List of Strings
         """
         self.data = data
         self.feature_names = feature_names
         self.view_names = [x.upper() for x in view_names]
-        self.direc_set = 'Desktop'
+        self.columns_removed = columns_removed
+        self.direc_set = 'SUMO'
 
         # Only DNA & mRNA data contains protein data
         if 'DNA' not in self.view_names and 'MRNA' not in self.view_names:
             raise Exception("neither DNA nor mRNA data in input : no protein data.")
+
+
+
 
 
 
@@ -144,6 +150,18 @@ class PPI():
                 temp.append(x[1])
 
         self.feature_names = temp
+
+        temp = [[] for i in range(len(self.view_names))]
+        for c, view in enumerate(self.feature_names):
+            for feat_name in view:
+                if feat_name not in columns_removed:
+                    temp[c].append(feat_name)
+
+
+        # Delete features which have been deleted due to preprocessing
+        self.feature_names = temp
+
+        # temp is a list of lists of each views remaining feature names
 
 
 
@@ -159,11 +177,7 @@ class PPI():
                  proteins_used : Protein - Index mapping ; dtype : Dictionary(Protein - Index)
         """
 
-        # Read in protein data
         print("Reading in protein data...")
-     #   prot_to_feat = pd.read_csv(
-     #       os.path.join("~", "SUMO", "Project", "ProteinToFeature.csv"),index_col=0)
-
 
         prot_to_feat = pd.read_csv(
             os.path.join("~", self.direc_set, "Project", "ProteinToFeature.csv"),index_col=0)
@@ -205,15 +219,15 @@ class PPI():
         # Find features for which we have protein mappings
         # This list will store all indices that have mappings so we can access feature names and proteins by it
         all_features_mapped_indices = [[] for _ in range(len(self.feature_names))]
-        # also store indices just for the current cancer, as we need that to access the correct values in data
-        cancer_features_mapped_indices = [[] for _ in range(len(self.feature_names))] # len is amount views
+        # Also store indices just for the current cancer, as we need that to access the correct values in data
+        cancer_features_mapped_indices = [[] for _ in range(len(self.feature_names))]
 
         print("Mapping features to proteins ...")
         # Store proteins with indices
         proteins_used = {}
 
         for c,view in enumerate(fixed_features):
-            # miRNA/RPPA no protein data
+            # microRNA/RPPA no protein data
             if self.view_names[c] == 'MIRNA' or self.view_names[c] == 'RPPA':
                 continue
             for c2,_ in enumerate(view):
@@ -224,8 +238,8 @@ class PPI():
                     # Then we can add the protein to used proteins ...
                     if all_proteins[idx] not in proteins_used:
                         proteins_used[all_proteins[idx]] = len(proteins_used)
-                    all_features_mapped_indices[c].append(idx) # this will help us to get the index for the right protein
-                    cancer_features_mapped_indices[c].append(c2) # this will help us to get the index for the right feature values
+                    all_features_mapped_indices[c].append(idx) # This will help us to get the index for the right protein
+                    cancer_features_mapped_indices[c].append(c2) # This will help us to get the index for the right feature values
 
 
         all_mappings = []
@@ -248,7 +262,7 @@ class PPI():
 
 
             for c,view in enumerate(cancer_features_mapped_indices):
-                # miRNA/RPPA no protein-protein data
+                # microRNA/RPPA no protein-protein data
                 if self.view_names[c] == 'MIRNA' or self.view_names[c] == 'RPPA':
                     continue
                 for c2,_ in enumerate(view):
@@ -257,12 +271,12 @@ class PPI():
                     prot_to_feat_values[all_proteins[idx]][c].append(self.data[c][sample,_].item())
                     # Protein - Feature value view type mapping
                     prot_to_feat_values_indices[all_proteins[idx]].append(c)
-            # all mappings : for all samples
+            # All mappings : for all samples
             all_mappings.append(prot_to_feat_values)
             all_mappings_indices.append(prot_to_feat_values_indices)
 
 
-        # for missing values for certain feature values in protein mapping, we take the median of features for
+        # For missing values for certain feature values in protein mapping, we take the median of features for
         # this view
         all_medians = []
 
@@ -288,28 +302,50 @@ class PPI():
 
 
 
+        protein_to_delete = [[] for _ in range(samples)]
+        temp = copy.deepcopy(all_mappings)
         # Add Median values if needed
         print("Mapping feature values to proteins...")
         features_used = [[] for _ in range(samples)]
         # For all samples ...
-        for c,mapping in enumerate(all_mappings):
+        for c,mapping in enumerate(temp):       # all_mappings
             # For certain sample ...
             for c2,protein_idx in enumerate(mapping):
                 # For certain protein in sample ...
                 for c3, feat_values in enumerate(mapping[protein_idx]):
-                    # If we have no feature value for this view, we add the median
+                    # If we have no feature value for this view, we add the median # TODO : maybe delete
+
+                    # Proteins which don't have mappings to each view that could possibly have one will be deleted
                     if len(feat_values) == 0:
+                        protein_to_delete[c].append(protein_idx)
+                        del all_mappings[c][protein_idx]
+                        # Also delete from used proteins
+                        try:
+                            del proteins_used[protein_idx]
+                        except KeyError:
+                            pass
+
                         # set median in place
-                        all_mappings[c][protein_idx][c3].append(all_medians[c][c3])
+                    #   all_mappings[c][protein_idx][c3].append(all_medians[c][c3])
+                    # Try setting 0 instead of median and check if results get better
+                    #   all_mappings[c][protein_idx][c3].append(0)
 
 
-            for feat_values_listed in mapping.values():
 
-                features_dlisted = HF.flatten(feat_values_listed) # dlisted : List of lists
+
+
+
+
+            #for feat_values_listed in mapping.values():
+            for feat_values_listed in all_mappings[c].values():
+
+                features_dlisted = HF.flatten(feat_values_listed)
 
                 # Store feature values as themselves, as we can now access their respective protein via index of proteins_used
-
                 features_used[c].append(features_dlisted)
+
+
+        # also delete from used proteins
 
 
         # Turn into tensor
@@ -319,7 +355,6 @@ class PPI():
         interactions1 = []
         interactions2 = []
         dir = os.path.expanduser('~/{}/Project/9606.protein.links.v11.5.txt.gz'.format(self.direc_set))
-       # dir = os.path.expanduser('/Users/marlon/Desktop/Project/9606.protein.links.v11.5.txt.gz')
         with gzip.open(dir, 'rt') as f:
             next(f) # Ignore the header
             for line in f:
@@ -362,13 +397,13 @@ class F_eigengene_matrices():
         :param cancer_name: Current cancer name ; dtype : String
         """
         self.data = data
-        self.stage = stage # test or train stage
+        self.stage = stage
         self.mask = mask
         self.view_name = view_name
         self.duration = duration
         self.event = event
         self.cancer_name = cancer_name
-        self.direc_set = 'Desktop'
+        self.direc_set = 'SUMO'
 
     def preprocess(self):
         """
@@ -407,17 +442,17 @@ class F_eigengene_matrices():
 
         if self.stage == 'train':
             dir = os.path.expanduser('~/{}/Project/TCGAData/{}/{}_for_r.csv'.format(self.direc_set,self.cancer_name,self.view_name.upper()))
-           # data_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/{}/{}_for_r.csv".format(self.cancer_name,self.view_name.upper()))
+
             data_df.to_csv(dir)
         elif self.stage == 'val':
             dir = os.path.expanduser('~/{}/Project/TCGAData/{}/{}_val_for_r.csv'.format(self.direc_set,self.cancer_name,self.view_name.upper()))
             data_df.to_csv(dir)
-          #  data_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/{}/{}_val_for_r.csv".format(self.cancer_name,self.view_name.upper()))
 
-        else: # self.stage == 'test'
+
+        else:
             dir = os.path.expanduser('~/{}/Project/TCGAData/{}/{}_test_for_r.csv'.format(self.direc_set,self.cancer_name,self.view_name.upper()))
             data_df.to_csv(dir)
-           # data_df.to_csv("/Users/marlon/Desktop/Project/TCGAData/{}/{}_test_for_r.csv".format(self.cancer_name,self.view_name.upper()))
+
 
 
     def eigengene_multiplication(self):
@@ -448,22 +483,20 @@ class F_eigengene_matrices():
         eigengene_test_matrices =[]
         for view in views:
 
-          #  eigengene_matrix = pd.read_csv(os.path.join("/Users", "marlon", "Desktop", "Project","TCGAData", "{}/"
-          #                                               "{}_eigengene_matrix.csv".format(self.cancer_name,view)),
-          #                                 index_col=0)
+
             eigengene_matrix = pd.read_csv(os.path.join("~",self.direc_set, "Project","TCGAData", "{}/"
-                                                        "{}_eigengene_matrix.csv".format(self.cancer_name,view)),
+                                                                                                  "{}_eigengene_matrix.csv".format(self.cancer_name,view)),
                                            index_col=0)
 
             eigengene_val_matrix = pd.read_csv(os.path.join("~",self.direc_set, "Project","TCGAData", "{}/"
-                                                            "{}_val_eigengene_matrix.csv".format(self.cancer_name,view)),
+                                                                                                      "{}_val_eigengene_matrix.csv".format(self.cancer_name,view)),
                                                index_col=0)
 
             eigengene_test_matrix = pd.read_csv(os.path.join("~",self.direc_set, "Project", "TCGAData", "{}/"
-                                                             "{}_test_eigengene_matrix.csv".format(self.cancer_name,view)),
+                                                                                                        "{}_test_eigengene_matrix.csv".format(self.cancer_name,view)),
                                                 index_col=0)
 
-            # reset index bc R saves starting at index 1
+            # Reset index bc R saves starting at index 1
             eigengene_matrix.reset_index()
             eigengene_val_matrix.reset_index()
             eigengene_test_matrix.reset_index()

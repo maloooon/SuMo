@@ -9,9 +9,9 @@ if __name__ == '__main__':
     Load in all Cancer Types and concatenate their views, duration and event respectively by samples.
     """
 
-    dir = "Desktop" # dir is Desktop for own CPU or SUMO for GPU
-    # Path where initial cancer data is stored
+    direc_set = "SUMO" # Dir is Desktop for own CPU or SUMO for GPU
 
+    # Path where initial cancer data is stored
     dir_path = os.path.expanduser('~/{}/Project/TCGAData'.format(dir))
     cancer_types = 0
 
@@ -26,7 +26,7 @@ if __name__ == '__main__':
                'STAD','TGCT','THCA','THYM','UCEC' ,'UCS', 'UVM']
     # Store all cancer data (each in a sublist)
     cancer_data = [[] for x in range(len(cancers))]
-    # store Feature sizes per view
+    # Store Feature sizes per view
     n_features = [[] for x in range(len(cancers))]
     # Store which iews we have for the data (at most mRNA, DNA, microRNA and RPPA)
     views = [[] for x in range(len(cancers))]
@@ -40,7 +40,7 @@ if __name__ == '__main__':
     not_dropped_indices = [set() for x in range(len(cancers))]
 
 
-    # For GPU, replace "/Users", "marlon", "Desktop"       with "~", "SUMO"
+
 
     for c, cancer_name in enumerate(cancers):
         # Read mRNA data if it exists
@@ -197,9 +197,9 @@ if __name__ == '__main__':
     # Drop samples with missing duration and unnecessary samples (duration < 0)
     for c,x in enumerate(cancer_data_dfs):
         x.drop(x.index[drop_indices[c]],inplace=True)
-        x.drop(x[x["duration"] == ''].index, axis = 0, inplace= True) # drop samples with missing duration values
+        x.drop(x[x["duration"] == ''].index, axis = 0, inplace= True) # Drop samples with missing duration values
         x.drop(x[x["duration"].isnull().values].index, axis = 0, inplace= True)
-        x.drop(x[x["duration"] <= str(0)].index, axis = 0, inplace= True) # drop samples with duration values smaller than or 0
+        x.drop(x[x["duration"] <= str(0)].index, axis = 0, inplace= True) # Drop samples with duration values smaller than or 0
 
         # In the end, reset indices
         x.reset_index(inplace=True, drop=True)

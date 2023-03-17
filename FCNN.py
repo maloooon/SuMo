@@ -9,6 +9,7 @@ from pycox.evaluation import EvalSurv
 from torch.optim import Adam
 import os
 import optuna
+import matplotlib as plt
 
 
 
@@ -97,8 +98,8 @@ class NN_changeable(nn.Module):
                         if activ_funcs[c][c2] != 'none':
                             self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
                                                                                  n_hidden_layers_dims[c][c2]),
-                                                                                 nn.BatchNorm1d(n_hidden_layers_dims[c][c2]),
-                                                                                 activ_funcs[c][c2]))
+                                                                       nn.BatchNorm1d(n_hidden_layers_dims[c][c2]),
+                                                                       activ_funcs[c][c2]))
                         # Use no activation function
                         else:
                             self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
@@ -111,7 +112,7 @@ class NN_changeable(nn.Module):
                         if activ_funcs[c][c2] != 'none':
                             self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
                                                                                  n_hidden_layers_dims[c][c2]),
-                                                                                 activ_funcs[c][c2]))
+                                                                       activ_funcs[c][c2]))
                         # Use no activation function
                         else:
                             self.hidden_layers[c].append(nn.Sequential(nn.Linear(in_features[c],
@@ -126,8 +127,8 @@ class NN_changeable(nn.Module):
                         if activ_funcs[c][c2] != 'none':
                             self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][c2-1],
                                                                                  n_hidden_layers_dims[c][c2]),
-                                                                                 nn.BatchNorm1d(n_hidden_layers_dims[c][c2]),
-                                                                                 activ_funcs[c][c2]))
+                                                                       nn.BatchNorm1d(n_hidden_layers_dims[c][c2]),
+                                                                       activ_funcs[c][c2]))
                         # Use no activation function
                         else:
                             self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][c2-1],
@@ -140,7 +141,7 @@ class NN_changeable(nn.Module):
                         if activ_funcs[c][c2] != 'none':
                             self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][c2-1],
                                                                                  n_hidden_layers_dims[c][c2]),
-                                                                                 activ_funcs[c][c2]))
+                                                                       activ_funcs[c][c2]))
                         # Use no activation function
                         else:
                             self.hidden_layers[c].append(nn.Sequential(nn.Linear(n_hidden_layers_dims[c][c2-1],
@@ -186,12 +187,12 @@ class NN_changeable(nn.Module):
         if print_bool == True:
             # Print the model
             print("Data input has the following views : {}, each containing {} features.".format(self.views,
-                                                                                                    self.in_features))
+                                                                                                 self.in_features))
 
             print("Dropout : {}, Batch Normalization : {}".format(dropout_bool, batch_norm_bool))
             for c,_ in enumerate(self.views):
                 print("The view {} has the following pipeline : {}".format(_, self.hidden_layers[c],
-                                                                                            ))
+                                                                           ))
                 if dropout_bool == True:
                     print("dropout in layers : {}".format(dropout_layers[c]))
 
@@ -231,7 +232,7 @@ class NN_changeable(nn.Module):
                 if c2 == 0: #first layer
                     # Apply dropout layer
                     if self.dropout_bool == True and self.dropout_layers[c][c2] == 'yes':
-                      #  encoded_features[c][c2] = self.dropout(encoded_features[c][c2])
+                        #  encoded_features[c][c2] = self.dropout(encoded_features[c][c2])
                         data_ordered[c] = self.dropout(data_ordered[c])
                     encoded_features[c].append(self.hidden_layers[c][c2](data_ordered[c]))
 
@@ -262,24 +263,35 @@ class NN_changeable(nn.Module):
 
 
 
-def objective(trial):
+def objective(trial, n_fold, t_preprocess,feature_selection_type,cancer,mode):
     """
     Optuna Optimization for Hyperparameters.
     :param trial: Settings of the current trial of Hyperparameters
     :return: Concordance Index ; dtype : Float
     """
 
-    direc_set = 'Desktop'
+
+
+
+
+
+    #JUMPER1
+    direc_set = 'SUMO'
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # Load in data
-    dir = os.path.expanduser('~/{}/Project/PreparedData/'.format(direc_set))
-    #    trainset, trainset_feat, valset, valset_feat, testset, testset_feat = load_data()
+    preprocess_type = t_preprocess
+    if mode == 'prepared_data':
+        dir = os.path.expanduser('~/{}/Project/PreparedData/{}/{}/{}/'.format(direc_set,cancer,feature_selection_type,preprocess_type))
+    else:
+        dir = os.path.expanduser('~/{}/Project/PreparedData/'.format(direc_set)) # TODO: TEST
+
 
     trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4,testset_0,testset_1,testset_2,testset_3,testset_4,trainset_feat_0, \
-    trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4 = load_data(data_dir = dir)
+    trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4,view_names= load_data(data_dir = dir)
 
 
-
+    # For tests, we just look at mRNA and DNA
+    view_names = ['MRNA','DNA']
     # Feature offsets need to be the same in train/val/test for each fold, otherwise NN wouldn't work (diff dimension inputs)
     feat_offs = [trainset_feat_0,trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4]
 
@@ -304,11 +316,11 @@ def objective(trial):
     val_event_folds = []
     test_data_folds = []
 
-
+    # LOAD IN DATA
     for c2,_ in enumerate(trainset):
         train_data = []
         for c,feat in enumerate(feat_offs[c2]):
-            if c < len(feat_offs[c2]) - 3: # train data views
+            if c < len(feat_offs[c2]) - 5:  # train data views # CHANGED -3 to -5  TO NOT LOOK AT microRNA and RPPA
                 data_np = np.array((trainset[c2].iloc[:, feat_offs[c2][c] : feat_offs[c2][c+1]]).values).astype('float32')
                 data_tensor = torch.from_numpy(data_np).to(torch.float32)
                 data_tensor = data_tensor.to(device)
@@ -329,7 +341,7 @@ def objective(trial):
 
         val_data = []
         for c,feat in enumerate(feat_offs[c2]):
-            if c < len(feat_offs[c2]) - 3: # train data views
+            if c < len(feat_offs[c2]) - 5: # train data views # CHANGED -3 to -5  TO NOT LOOK AT microRNA and RPPA
                 data_np = np.array((valset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')
                 data_tensor = torch.from_numpy(data_np).to(torch.float32)
                 data_tensor = data_tensor.to(device)
@@ -351,7 +363,7 @@ def objective(trial):
 
         test_data = []
         for c,feat in enumerate(feat_offs[c2]):
-            if c < len(feat_offs[c2]) - 3: # train data views
+            if c < len(feat_offs[c2]) - 5: # train data views # CHANGED -3 to -5  TO NOT LOOK AT microRNA and RPPA
                 data_np = np.array((testset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')
                 data_tensor = torch.from_numpy(data_np).to(torch.float32)
                 data_tensor = data_tensor.to(device)
@@ -387,23 +399,11 @@ def objective(trial):
     test_data = test_data_folds
 
 
-    views = []
-    dir = os.path.expanduser('~/{}/Project/TCGAData/cancerviews.txt'.format(direc_set))
-    # dir = os.path.expanduser('/Users/marlon/Desktop/Project/TCGAData/cancerviews.txt')
-    read_in = open(dir, 'r')
-    for view in read_in:
-        views.append(view)
-
-    view_names = [line[:-1] for line in views]
 
 
-    ######## TESTING PURPOSES ########
- #   view_names = ['MRNA','MICRORNA','RPPA']
-    ####### TESTING PURPOSES ########
-
-
+    #JUMPER1
     # Current fold to be optimized
-    c_fold = 0
+    c_fold = n_fold
     # Optimize each fold on its own
 
 
@@ -412,7 +412,7 @@ def objective(trial):
     learning_rate = trial.suggest_float("learning_rate", 1e-5,1e-1,log=True)
     l2_regularization_rate = trial.suggest_float("l2_regularization_rate", 1e-6,1e-3, log=True)
     #   batch_size = trial.suggest_int("batch_size", 5, 200)
-    batch_size = trial.suggest_categorical("batch_size", [32,64,128])
+    batch_size = trial.suggest_categorical("batch_size", [7,17,33,64,128,256])
     #  n_epochs = trial.suggest_int("n_epochs", 10,100)
     n_epochs = 100
     dropout_prob = trial.suggest_float("dropout_prob", 0,0.5,step=0.1)
@@ -428,8 +428,8 @@ def objective(trial):
     batchnorms = []
 
     if 'MRNA' in view_names:
-        layers_1_mRNA = trial.suggest_int('layers_1_mRNA', 32, 96)
-        layers_2_mRNA = trial.suggest_int('layers_2_mRNA', 8, 32)
+        layers_1_mRNA = trial.suggest_categorical('layers_1_mRNA', [32,64,96])
+        layers_2_mRNA = trial.suggest_categorical('layers_2_mRNA', [8,16,32])
         layers_1_mRNA_activfunc = trial.suggest_categorical('layers_1_mRNA_activfunc', ['relu','sigmoid','prelu'])
         layers_2_mRNA_activfunc = trial.suggest_categorical('layers_2_mRNA_activfunc', ['relu','sigmoid','prelu'])
         layers_1_mRNA_dropout = trial.suggest_categorical('layers_1_mRNA_dropout', ['yes','no'])
@@ -443,14 +443,15 @@ def objective(trial):
         batchnorms.append([layers_1_mRNA_batchnorm, layers_2_mRNA_batchnorm])
 
     if 'DNA' in view_names:
-        layers_1_DNA = trial.suggest_int('layers_1_DNA', 32, 96)
-        layers_2_DNA = trial.suggest_int('layers_2_DNA', 8, 32)
+        layers_1_DNA = trial.suggest_categorical('layers_1_DNA', [32,64,96])
+        layers_2_DNA = trial.suggest_categorical('layers_2_DNA', [8,16,32])
         layers_1_DNA_activfunc = trial.suggest_categorical('layers_1_DNA_activfunc', ['relu','sigmoid','prelu'])
         layers_2_DNA_activfunc = trial.suggest_categorical('layers_2_DNA_activfunc', ['relu','sigmoid','prelu'])
         layers_1_DNA_dropout = trial.suggest_categorical('layers_1_DNA_dropout', ['yes','no'])
         layers_2_DNA_dropout = trial.suggest_categorical('layers_2_DNA_dropout', ['yes','no'])
         layers_1_DNA_batchnorm = trial.suggest_categorical('layers_1_DNA_batchnorm', ['yes', 'no'])
         layers_2_DNA_batchnorm = trial.suggest_categorical('layers_2_DNA_batchnorm', ['yes', 'no'])
+
         layers.append([layers_1_DNA,layers_2_DNA])
         activation_functions.append([layers_1_DNA_activfunc, layers_2_DNA_activfunc])
         dropouts.append([layers_1_DNA_dropout, layers_2_DNA_dropout])
@@ -510,18 +511,14 @@ def objective(trial):
     val_data_full = (val_data[c_fold], (val_duration[c_fold], val_event[c_fold]))
 
 
-    layers_u = copy.deepcopy(layers)
-    activation_layers_u = copy.deepcopy(activation_functions)
-    dropout_layers_u = copy.deepcopy(dropouts)
-    batchnorm_layers_u = copy.deepcopy(batchnorms)
 
     net = NN_changeable(views=view_names,
                         in_features=dimensions,
-                        n_hidden_layers_dims=layers_u,
-                        activ_funcs=activation_layers_u,
+                        n_hidden_layers_dims=layers,
+                        activ_funcs=activation_functions,
                         dropout_prob=dropout_prob,
-                        dropout_layers=dropout_layers_u,
-                        batch_norm=batchnorm_layers_u,
+                        dropout_layers=dropouts,
+                        batch_norm=batchnorms,
                         dropout_bool=dropout_bool,
                         batch_norm_bool=batchnorm_bool,
                         print_bool=False,
@@ -549,12 +546,12 @@ def objective(trial):
                     n_epochs,
                     callbacks = callbacks,
                     val_data=val_data_full,
-                    val_batch_size= 5,
+                    val_batch_size= batch_size,
                     verbose=print_loss)
 
 
     # Plot it
-   # _ = log.plot()
+    # _ = log.plot()
 
     # Change for EvalSurv-Function
     try:
@@ -612,7 +609,7 @@ def objective(trial):
 
 
 
-def optuna_optimization():
+def optuna_optimization(n_fold,t_preprocess,feature_selection_type,cancer, mode):
     """
     Optuna Optimization for Hyperparameters.
     """
@@ -620,23 +617,31 @@ def optuna_optimization():
 
     # Set amount of different trials
     EPOCHS = 100
-    study = optuna.create_study(directions=['maximize'],sampler=optuna.samplers.TPESampler(),pruner=optuna.pruners.MedianPruner())
-    study.optimize(objective, n_trials = EPOCHS)
-    trial = study.best_trials
-   # Show change of c-Index across folds
-    fig = optuna.visualization.plot_optimization_history(study)
-    fig.show(renderer='browser')
-    # Show hyperparameter importance
-    fig = optuna.visualization.plot_param_importances(study)
-    fig.show(renderer='browser')
+    func = lambda trial: objective(trial, n_fold, t_preprocess,feature_selection_type,cancer,mode)
 
-    # Save the best trial for each fold
-    direc_set = 'Desktop'
-    dir = os.path.expanduser(r'~/{}/Project/Trial/FCNN_KIRC3_Standardize_PCA_BEST_3.txt'.format(direc_set))
+    study = optuna.create_study(directions=['maximize'],sampler=optuna.samplers.TPESampler(),pruner=optuna.pruners.MedianPruner())
+    study.optimize(func, n_trials = EPOCHS)
+    trial = study.best_trials
+
+    direc_set = 'SUMO'
+    dir = os.path.expanduser(r'~/{}/Project/Trial/FCNN_{}_{}_{}_BEST_{}_VAR2L.txt'.format(direc_set,cancer,t_preprocess,feature_selection_type,n_fold))
     with open(dir, 'w') as fp:
         for item in trial:
             # write each item on a new line
             fp.write("%s\n" % item)
+    # Show change of c-Index across folds
+    fig = optuna.visualization.plot_optimization_history(study)
+    dir = os.path.expanduser(r'~/{}/Project/Trial/FCNN_{}_{}_{}_BEST_{}_C-INDICES_VAR2L.png'.format(direc_set,cancer,t_preprocess,feature_selection_type,n_fold))
+    # fig.show()
+    fig.write_image(dir)
+    # fig.show(renderer='browser')
+    # Show hyperparameter importance
+    fig = optuna.visualization.plot_param_importances(study)
+    dir = os.path.expanduser(r'~/{}/Project/Trial/FCNN_{}_{}_{}_BEST_{}_HPARAMIMPORTANCE_VAR2L.png'.format(direc_set,cancer,t_preprocess,feature_selection_type,n_fold))
+    fig.write_image(dir)
+    #JUMPER1
+    # Save the best trial for each fold
+
 
 
     # Save all trials in dataframe
@@ -784,12 +789,12 @@ def train(train_data,val_data,test_data,
                         n_epochs,
                         callbacks = callbacks,
                         val_data=val_data_full,
-                        val_batch_size= 5,
+                        val_batch_size= batch_size,
                         verbose=print_loss)
 
 
         # Plot it
-  #      _ = log.plot()
+        #      _ = log.plot()
 
         # Change for EvalSurv-Function
         try:
@@ -816,9 +821,9 @@ def train(train_data,val_data,test_data,
         surv = model.predict_surv_df(test_data[c_fold])
 
         # Plot it
-   #     surv.iloc[:, :5].plot()
-   #     plt.ylabel('S(t | x)')
-   #     _ = plt.xlabel('Time')
+        #     surv.iloc[:, :5].plot()
+        #     plt.ylabel('S(t | x)')
+        #     _ = plt.xlabel('Time')
 
 
 
@@ -851,6 +856,7 @@ def load_data(data_dir):
     :param data_dir: Directory in which data is stored.
     :return: data and feature offsets (for feature values, duration and event)
     """
+
 
     trainset_0 = pd.read_csv(
         os.path.join(data_dir + "TrainData_0.csv"), index_col=0)
@@ -902,15 +908,19 @@ def load_data(data_dir):
     testset_4 = pd.read_csv(
         os.path.join(data_dir +  "TestData_4.csv"), index_col=0)
 
+    view_names = open(os.path.join(data_dir + "ViewNames.txt"),"r")
+    views = view_names.read().split("\n")
+    # "" gets appened as last element in view list somehow
+    del views[-1]
+
 
     #testset_feat = pd.read_csv(
     #    os.path.join(data_dir + "TestDataFeatOffs.csv"), index_col=0)
 
 
-    return trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4,\
+    return trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4, \
            testset_0,testset_1,testset_2,testset_3,testset_4, \
-           trainset_feat_0,trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4
-
+           trainset_feat_0,trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4,views
     # return trainset, trainset_feat, valset, valset_feat, testset, testset_feat
 
 

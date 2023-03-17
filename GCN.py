@@ -13,6 +13,7 @@ import pandas as pd
 import os
 import optuna
 from torch_geometric.nn import global_max_pool as gmp
+import copy
 
 
 
@@ -150,10 +151,10 @@ class GCN(nn.Module):
             else:
                 # Batch normalization
                 if batchnorm_bool == True and batchnorm_layers[0][c] == 'yes':
-                     self.hidden_layers.append(nn.Sequential(nn.Linear(n_hidden_layer_dims[c-1], n_hidden_layer_dims[c]),
+                    self.hidden_layers.append(nn.Sequential(nn.Linear(n_hidden_layer_dims[c-1], n_hidden_layer_dims[c]),
                                                             nn.BatchNorm1d(n_hidden_layer_dims[c]),
                                                             activ_funcs[0][c]))
-                     self.params_for_print.append(self.hidden_layers[-1])
+                    self.params_for_print.append(self.hidden_layers[-1])
 
                 # No batch normalization
                 else:
@@ -204,8 +205,8 @@ class GCN(nn.Module):
             elif self.activ_funcs_graphconv[0].lower() == 'sigmoid':
                 x = torch.sigmoid(self.conv1(x=x, edge_index=batch.edge_index))
                 # PreLU doesn't work here for some reason
-        #    elif self.activ_funcs_graphconv[0].lower() == 'prelu':
-        #        x = nn.PReLU(self.conv1(x=x, edge_index=batch.edge_index))
+            #    elif self.activ_funcs_graphconv[0].lower() == 'prelu':
+            #        x = nn.PReLU(self.conv1(x=x, edge_index=batch.edge_index))
 
             x, edge_index, _, batch, perm, score = self.pool1(
                 x, batch.edge_index, None, batch.batch)
@@ -249,9 +250,15 @@ class GCN(nn.Module):
             x = gmp(x, batch)
             x = x.view(batch_size, -1)
             for layer_c, layer in enumerate(self.hidden_layers):
+                # Last Layer
+                if layer_c == len(self.hidden_layers) - 1:
+                    if self.dropout_bool == True and self.dropout_layers[-1][0] == 'yes':
+                        x = self.dropout(x)
+                # Other Layers
+                else:
+                    if self.dropout_bool == True and self.dropout_layers[0][layer_c] == 'yes':
+                        x = self.dropout(x)
                 x = layer(x)
-                if self.dropout_bool == True and self.dropout_layers[layer_c] == 'yes':
-                    x = self.dropout(x)
 
 
 
@@ -293,7 +300,7 @@ def normalize_by_column(data):
 
 
 
-def objective(trial):
+def objective(trial,n_fold,cancer,t_preprocess,layer_amount):
     """
     Optuna Optimization for Hyperparameters.
     :param trial: Settings of the current trial of Hyperparameters
@@ -302,15 +309,15 @@ def objective(trial):
 
     direc_set = 'Desktop'
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # Load in data
-    dir = os.path.expanduser('~/{}/Project/PreparedData/'.format(direc_set))
-    #    trainset, trainset_feat, valset, valset_feat, testset, testset_feat = load_data()
+    # Load in data                  # TODO : change , no_median for testing
+    dir = os.path.expanduser('~/{}/Project/PreparedData/{}/PPI/median/{}/'.format(direc_set,cancer,t_preprocess))
 
+    print("Runnin for cancer {} with preprocessing type {} on fold {}".format(cancer,t_preprocess,n_fold))
     trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4,testset_0,testset_1,testset_2,testset_3,testset_4,trainset_feat_0, \
     trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4, num_nodes, num_features, edge_index = load_data(data_dir = dir)
 
 
-    # Load in data (##### For testing for first fold, later on
+    # Load in data
     num_nodes = int(num_nodes)
     num_features = int(num_features)
 
@@ -335,7 +342,7 @@ def objective(trial):
     test_data_folds = []
 
 
-
+    # LOAD IN DATA
     for c2,_ in enumerate(trainset):
         for c,feat in enumerate(feat_offs[c2]):
             if c < len(feat_offs[c2]) - 3: # train data
@@ -412,7 +419,7 @@ def objective(trial):
 
 
     # Current fold to be optimized
-    c_fold = 0
+    c_fold = n_fold
 
     #reshape so we have the same structure as in train function
     if num_features == 1:
@@ -437,7 +444,7 @@ def objective(trial):
     edge_index = torch.LongTensor(edge_index).to(device)
 
 
- #   processing_type = trial.suggest_categorical('processing_type', ['normalize','normalizebyrow','normalizebycolumn','none'])
+    #   processing_type = trial.suggest_categorical('processing_type', ['normalize','normalizebyrow','normalizebycolumn','none'])
 
     # Best results : normalize/standardize in preprocessing, 'none' in postprocessing
     processing_type = 'none'
@@ -483,44 +490,39 @@ def objective(trial):
     l2_regularization_bool = trial.suggest_categorical('l2_regularization_bool', [True,False])
     learning_rate = trial.suggest_float("learning_rate", 1e-5,1e-1,log=True)
     l2_regularization_rate = trial.suggest_float("l2_regularization_rate", 1e-6,1e-3, log=True)
-  #  batch_size = trial.suggest_int("batch_size", 5, 200) # TODO : batch size so wählen, dass train samples/ batch_size und val samples/batch_size nie 1 ergeben können, da sonst Error : noch besser error abfangen und einfach skippen, da selten passiert !
-    batch_size = trial.suggest_categorical("batch_size", [8,16,32,64,128,256])
-  #  n_epochs = trial.suggest_int("n_epochs", 10,20) # setting num of epochs to 10-20 instead of 10-100 bc. it takes too much time
-    n_epochs = 30
+    batch_size = trial.suggest_categorical("batch_size", [5,17,32,64,128])
+    n_epochs = 100
     dropout_prob = trial.suggest_float("dropout_prob", 0,0.5,step=0.1)
     dropout_bool = trial.suggest_categorical('dropout_bool', [True,False])
     batchnorm_bool = trial.suggest_categorical('batchnorm_bool',[True,False])
     prelu_rate = trial.suggest_float('prelu_rate',0,1,step=0.05)
-    ratio = trial.suggest_float('ratio', 0,1,step=0.1)
+    ratio = trial.suggest_float('ratio', 0.1,0.9,step=0.1)
+   # ratio = 0.7
+   # ratio = 0.2
+  #  layers_1_FCNN = 4
+   # layers_2_FCNN =2
+    layers_1_FCNN = trial.suggest_categorical('layers_1_FCNN',[4,8])
+    layers_2_FCNN = trial.suggest_categorical('layers_2_FCNN',[1,2])
 
-
-
-
-
-    layers_1_FCNN = trial.suggest_int('layers_1_FCNN', 5, 300)
-    layers_2_FCNN = trial.suggest_int('layers_2_FCNN', 5, 300)
 
     layers_FCNN = [layers_1_FCNN,layers_2_FCNN]
 
-
     layers_1_FCNN_activfunc = trial.suggest_categorical('layers_1_FCNN_activfunc', ['relu','prelu','sigmoid'])
-  #  layers_1_FCNN_activfunc = 'relu'
     layers_2_FCNN_activfunc = trial.suggest_categorical('layers_2_FCNN_activfunc', ['relu','prelu','sigmoid'])
-  #  layers_2_FCNN_activfunc = 'relu'
+
 
     FCNN_activation_functions = [[layers_1_FCNN_activfunc, layers_2_FCNN_activfunc]]
 
 
     layers_1_FCNN_dropout = trial.suggest_categorical('layers_1_FCNN_dropout', ['yes','no'])
     layers_2_FCNN_dropout = trial.suggest_categorical('layers_2_FCNN_dropout', ['yes','no'])
- #   layers_3_FCNN_dropout = trial.suggest_categorical('layers_3_FCNN_dropout', ['yes','no'])
 
     FCNN_dropouts = [[layers_1_FCNN_dropout, layers_2_FCNN_dropout]]
 
 
     layers_1_FCNN_batchnorm = trial.suggest_categorical('layers_1_FCNN_batchnorm', ['yes', 'no'])
     layers_2_FCNN_batchnorm = trial.suggest_categorical('layers_2_FCNN_batchnorm', ['yes', 'no'])
- #   layers_3_FCNN_batchnorm = trial.suggest_categorical('layers_3_FCNN_batchnorm', ['yes', 'no'])
+    #   layers_3_FCNN_batchnorm = trial.suggest_categorical('layers_3_FCNN_batchnorm', ['yes', 'no'])
 
     FCNN_batchnorms = [[layers_1_FCNN_batchnorm, layers_2_FCNN_batchnorm]]
 
@@ -532,28 +534,28 @@ def objective(trial):
     FCNN_dropouts.append([layer_final_dropout])
     FCNN_batchnorms.append([layer_final_batchnorm])
 
- #   out_1_graphconv = trial.suggest_int('out_1_graphconv', 5, 300)
-    out_1_graphconv = num_features # constant bc of some float error ; need to set to the same amount as in_features
+   # out_1_graphconv = 16
+    out_1_graphconv = trial.suggest_categorical('out_1_graphconv', [1,2,4,8])
+  #  out_1_graphconv = num_features # constant bc of some float error ; need to set to the same amount as num_features
 
- #   graphconv_1_activation_function = trial.suggest_categorical('graphconv_1_activation_function', ['relu','sigmoid'])
-    graphconv_1_activation_function = 'relu'
-
+    graphconv_1_activation_function = trial.suggest_categorical('graphconv_1_activation_function', ['relu','sigmoid'])
+    #  graphconv_1_activation_function = 'relu'
+  #  out_2_graphconv = 4
     # decide whether second graphconv layer
-  #  out_2_graphconv = trial.suggest_int('out_2_graphconv', 5, 300)
- #   graphconv_2_activation_function = trial.suggest_categorical('graphconv_2_activation_function', ['relu','sigmoid'])
+    out_2_graphconv = trial.suggest_categorical('out_2_graphconv', [1,2,4,8])
+    graphconv_2_activation_function = trial.suggest_categorical('graphconv_2_activation_function', ['relu','sigmoid'])
 
     # if no second graphconv layer, take it out here
- #   graphconvs = [out_1_graphconv, out_2_graphconv]
-    graphconvs = [out_1_graphconv]
-  #  graphconvs_activation_functions = [graphconv_1_activation_function, graphconv_2_activation_function]
-    graphconvs_activation_functions = [graphconv_1_activation_function]
+    graphconvs = [out_1_graphconv, out_2_graphconv]
+   # graphconvs = [out_1_graphconv]
+    graphconvs_activation_functions = [graphconv_1_activation_function, graphconv_2_activation_function]
+   # graphconvs_activation_functions = [graphconv_1_activation_function]
 
 
 
     callbacks = [tt.callbacks.EarlyStopping(patience=10)]
 
 
-    torch.manual_seed(0)
 
     net = GCN(num_nodes = num_nodes,
               edge_index = edge_index,
@@ -590,10 +592,10 @@ def objective(trial):
                     callbacks,
                     verbose=train_print,
                     val_data=val_data_full,
-                    val_batch_size= 16)
+                    val_batch_size= batch_size)
 
     # Plot it
-#    _ = log.plot()
+    #    _ = log.plot()
 
     # Change for EvalSurv-Function
     try:
@@ -620,9 +622,9 @@ def objective(trial):
 
 
     # Plot it
- #   surv.iloc[:, :5].plot()
- #   plt.ylabel('S(t | x)')
- #   _ = plt.xlabel('Time')
+    #   surv.iloc[:, :5].plot()
+    #   plt.ylabel('S(t | x)')
+    #   _ = plt.xlabel('Time')
 
 
     ev = EvalSurv(surv, test_duration, test_event, censor_surv='km')
@@ -635,52 +637,45 @@ def objective(trial):
         concordance_index = 1 - concordance_index
 
     #brier score
-  #  time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
-  #  _ = ev.brier_score(time_grid).plot
-   # brier_score = ev.integrated_brier_score(time_grid)
+    #  time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
+    #  _ = ev.brier_score(time_grid).plot
+    # brier_score = ev.integrated_brier_score(time_grid)
 
     #binomial log-likelihood
-   # binomial_score = ev.integrated_nbll(time_grid)
+    # binomial_score = ev.integrated_nbll(time_grid)
 
 
     return concordance_index
 
 
 
-def optuna_optimization():
+def optuna_optimization(n_fold,cancer,t_preprocess,layer_amount):
     """
     Optuna Optimization for Hyperparameters.
     """
 
 
     # Set amount of different trials
-    EPOCHS = 10
-    study = optuna.create_study(directions=['maximize'],sampler=optuna.samplers.TPESampler(),pruner=optuna.pruners.MedianPruner())
-    study.optimize(objective, n_trials = EPOCHS)
-    trial = study.best_trials
-    # Show change of c-Index across folds
-    fig = optuna.visualization.plot_optimization_history(study)
-    fig.show(renderer='browser')
-    # Show hyperparameter importance
-    fig = optuna.visualization.plot_param_importances(study)
-    fig.show(renderer='browser')
+    EPOCHS = 30
+    func = lambda trial: objective(trial, n_fold,cancer,t_preprocess,layer_amount)
 
-    # Save the best trial for each fold
+    study = optuna.create_study(directions=['maximize'],sampler=optuna.samplers.TPESampler(),pruner=optuna.pruners.MedianPruner())
+    study.optimize(func, n_trials = EPOCHS)
+    trial = study.best_trials
     direc_set = 'Desktop'
-    dir = os.path.expanduser(r'~/{}/Project/Trial/FCNN_KIRC3_Standardize_PCA_BEST_3.txt'.format(direc_set))
+    dir = os.path.expanduser(r'~/{}/Project/Trial/GCN/{}/{}/GCN_BEST_{}.txt'.format(direc_set,layer_amount,t_preprocess,n_fold))
     with open(dir, 'w') as fp:
         for item in trial:
             # write each item on a new line
             fp.write("%s\n" % item)
-
-
-    # Save all trials in dataframe
-#  df = study.trials_dataframe()
-#    df = df.sort_values('value')
-#  df.to_csv("~/SUMO/Project/Trial/FCNN_KIRC3_Standardize_PCA.csv")
-
-# print("Best Concordance Sum", trial.value)
-# print("Best Hyperparameters : {}".format(trial.params))
+    # Show change of c-Index across folds
+    fig = optuna.visualization.plot_optimization_history(study)
+    dir = os.path.expanduser(r'~/{}/Project/Trial/GCN/{}/{}/GCN_{}_C-INDICES.png'.format(direc_set,layer_amount,t_preprocess,n_fold))
+    fig.write_image(dir)
+    # Show hyperparameter importance
+    fig = optuna.visualization.plot_param_importances(study)
+    dir = os.path.expanduser(r'~/{}/Project/Trial/GCN/{}/{}/GCN_{}_HPARAMIMPORTANCE.png'.format(direc_set,layer_amount,t_preprocess,n_fold))
+    fig.write_image(dir)
 
 
 
@@ -741,10 +736,30 @@ def train(train_data,val_data,test_data,
     """
 
 
-    # As we use PPI feature selection in GCN, we don't have multiple views structure : we don't need numpy transforms
+
 
     ############################# FOLD X ###################################
     for c_fold,fold in enumerate(train_data):
+
+
+        # For GPU acceleration, we need to have everything as tensors for the training loop, but pycox EvalSurv
+        # Needs duration & event to be numpy arrays, thus at the start we set duration/event to tensors
+        # and before EvalSurv to numpy
+        try:
+            test_duration = torch.from_numpy(test_duration).to(torch.float32)
+            test_event = torch.from_numpy(test_event).to(torch.float32)
+        except TypeError:
+            pass
+
+
+
+        try:
+            train_duration[c_fold] = torch.from_numpy(train_duration[c_fold]).to(torch.float32)
+            train_event[c_fold] = torch.from_numpy(train_event[c_fold]).to(torch.float32)
+            val_duration[c_fold] = torch.from_numpy(val_duration[c_fold]).to(torch.float32)
+            val_event[c_fold] = torch.from_numpy(val_event[c_fold]).to(torch.float32)
+        except TypeError:
+            pass
 
         print("Split {} : ".format(c_fold + 1))
         print("Train data has shape : {} ".format(train_data[c_fold].shape))
@@ -805,19 +820,25 @@ def train(train_data,val_data,test_data,
 
         torch.manual_seed(0)
 
+        layers_u = copy.deepcopy(layers)
+        activation_layers_u = copy.deepcopy(activation_layers_u)
+        dropout_layers_u = copy.deepcopy(dropout_layers)
+        batchnorm_layers_u = copy.deepcopy(batchnorm_layers)
+        activation_layers_graphconv_u = copy.deepcopy(activation_layers_graphconv)
+        layers_graphconv_u = copy.deepcopy(layers_graphconv)
         net = GCN(num_nodes = len(proteins_used),
                   edge_index = edge_index,
                   in_features=num_features,
-                  n_hidden_layer_dims=layers,
-                  activ_funcs=activation_layers,
+                  n_hidden_layer_dims=layers_u,
+                  activ_funcs=activation_layers_u,
                   dropout_bool= dropout,
                   dropout_prob= dropout_rate,
                   dropout_layers=dropout_layers,
                   batchnorm_bool=batchnorm,
-                  batchnorm_layers=batchnorm_layers,
-                  activ_funcs_graphconv= activation_layers_graphconv,
+                  batchnorm_layers=batchnorm_layers_u,
+                  activ_funcs_graphconv= activation_layers_graphconv_u,
                   ratio=ratio,
-                  graphconvs=layers_graphconv,
+                  graphconvs=layers_graphconv_u,
                   prelu_init= prelu_rate,
                   print_bool= False)
 
@@ -842,11 +863,28 @@ def train(train_data,val_data,test_data,
                         val_batch_size= batch_size)
 
         # Plot it
-        _ = log.plot()
+        #    _ = log.plot()
+
+        # Change for EvalSurv-Function
+        try:
+            test_duration = test_duration.cpu().detach().numpy()
+            test_event = test_event.cpu().detach().numpy()
+        except AttributeError:
+            pass
+
+
+        for c,fold in enumerate(train_data):
+            try:
+                train_duration[c_fold] = train_duration[c_fold].cpu().detach().numpy()
+                train_event[c_fold] = train_event[c_fold].cpu().detach().numpy()
+                val_duration[c_fold] = val_duration[c_fold].cpu().detach().numpy()
+                val_event[c_fold] = val_event[c_fold].cpu().detach().numpy()
+            except AttributeError: # in this case already numpy arrays
+                pass
 
         train = train_data[c_fold] , train_surv
 
-        _ = model.compute_baseline_hazards(*train)
+        _ = model.compute_baseline_hazards(*train) # TODO without *train ?
 
         surv = model.predict_surv_df(test_data[c_fold])
 
@@ -860,9 +898,9 @@ def train(train_data,val_data,test_data,
 
 
         # Plot it
-    #    surv.iloc[:, :5].plot()
-    #    plt.ylabel('S(t | x)')
-    #    _ = plt.xlabel('Time')
+        #    surv.iloc[:, :5].plot()
+        #    plt.ylabel('S(t | x)')
+        #    _ = plt.xlabel('Time')
 
 
         ev = EvalSurv(surv, test_duration, test_event, censor_surv='km')

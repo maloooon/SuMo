@@ -443,7 +443,7 @@ class AE(nn.Module):
                 for c, _ in enumerate(self.helping_layer):
                     print( "For CrossAE implementation we have the following helping layers : {} for view {}"
                            .format(self.helping_layer[c], self.views[c]))
-                print("Finally, for CrossAE, the output of each view between encoder and decoder  is integrated" # TODO : cross_concat print auch hier
+                print("Finally, for CrossAE, the output of each view between encoder and decoder  is integrated" 
                       ", thus {} elements  will be passed to a NN for survival analysis or 1 in the case of overall cross implementation".format(mmm_output_dimension))
 
             if type_ae.lower() == 'elementwisemean' or type_ae.lower() == 'elementwiseavg':
@@ -823,7 +823,7 @@ class LossHierarichcalAE(nn.Module):
     def forward(self, final_out_1, final_out_2, hazard, view_data, input_data_1,duration, event):
         """
         :param final_out: Decoded output of the AE ; dtype : TupleTree of Tensor(n_samples_in_batch, n_features)
-        :param view_data : Input for the second AE ; dtype : List of Tensor(n_samples_in_batch, n_features) TODO : check dtype
+        :param view_data : Input for the second AE ; dtype : List of Tensor(n_samples_in_batch, n_features)
         :param duration: Duration value ; dtype : Tensor(n_samples_in_batch,)
         :param event : Event value ; dtype : Tensor(n_samples_in_batch,)
         :param input_data: Input for the AE ; dtype : TupleTree of Tensor(n_samples_in_batch, n_features)
@@ -832,7 +832,7 @@ class LossHierarichcalAE(nn.Module):
         """
         loss_surv = self.loss_surv(hazard, duration, event)
         # Final_out_1 will always have multiple view structure as it is the decoder of the first AE, which takes
-        # multiple views as input // TODO : check for one view ob richtig übergeben wird oder len(...) dann falsch liest
+        # multiple views as input
         views_1 = len(final_out_1)
         loss_ae_1_full = 0
         # AE loss for each view
@@ -972,7 +972,7 @@ def objective(trial, n_fold, t_preprocess,feature_selection_type, model_types, d
     if mode == 'prepared_data':
         dir = os.path.expanduser('~/{}/Project/PreparedData/{}/{}/{}/'.format(direc_set,cancer,feature_selection_type,preprocess_type))
     else:
-        dir = os.path.expanduser('~/{}/Project/PreparedData/'.format(direc_set)) # TODO: TEST
+        dir = os.path.expanduser('~/{}/Project/PreparedData/'.format(direc_set))
 
 
 

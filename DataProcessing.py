@@ -686,7 +686,7 @@ class SurvMultiOmicsDataModule(pl.LightningDataModule):
                  folds_durations : duration values for training/validation folds ; dtype : List of Lists of numpy arrays
 
         Train/Validation splits, their targets (event values), their duration values
-                 ; dtype : List of Numpy Arrays, List of Numpy Arrays, List of Numpy Arrays TODO :check
+                 ; dtype : List of Numpy Arrays, List of Numpy Arrays, List of Numpy Arrays
         """
         if k_folds == 1:  # If only a single split is wanted, we split in 80/20 train/validation
             skfold = StratifiedKFold(n_splits=5,shuffle=True,random_state=42)

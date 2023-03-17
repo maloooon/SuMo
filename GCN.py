@@ -176,7 +176,7 @@ class GCN(nn.Module):
         """
 
         :param data: Data Input ; dtype : Tuple/List of Tensor(n_samples_in_batch,n_proteins * n_features)
-        :return: "Risk ratio" ; dtype : Tensor(n_samples_in_batch,1) TODO : Namen finden, den man auch in der BA dann benutzt
+        :return: "Risk ratio" ; dtype : Tensor(n_samples_in_batch,1)
         """
         batch_size = data.shape[0]
         x = data[:, :self.num_nodes * self.in_features]
@@ -309,7 +309,7 @@ def objective(trial,n_fold,cancer,t_preprocess,layer_amount):
 
     direc_set = 'Desktop'
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # Load in data                  # TODO : change , no_median for testing
+    # Load in data
     dir = os.path.expanduser('~/{}/Project/PreparedData/{}/PPI/median/{}/'.format(direc_set,cancer,t_preprocess))
 
     print("Runnin for cancer {} with preprocessing type {} on fold {}".format(cancer,t_preprocess,n_fold))
@@ -884,7 +884,7 @@ def train(train_data,val_data,test_data,
 
         train = train_data[c_fold] , train_surv
 
-        _ = model.compute_baseline_hazards(*train) # TODO without *train ?
+        _ = model.compute_baseline_hazards(*train)
 
         surv = model.predict_surv_df(test_data[c_fold])
 

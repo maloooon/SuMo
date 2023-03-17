@@ -211,7 +211,7 @@ class NN_changeable(nn.Module):
         """
         Forward function of the Fully Connected Neural Net
         :param x: Data Input (for each view) ; dtype : Tuple/List of Tensor(n_samples_in_batch, n_features)
-        :return: "Risk ratio" ; dtype : Tensor(n_samples_in_batch,1) TODO : Namen finden, den man auch in der BA dann benutzt
+        :return: "Risk ratio" ; dtype : Tensor(n_samples_in_batch,1)
         """
 
         if type(x[0]) is list:
@@ -283,7 +283,7 @@ def objective(trial, n_fold, t_preprocess,feature_selection_type,cancer,mode):
     if mode == 'prepared_data':
         dir = os.path.expanduser('~/{}/Project/PreparedData/{}/{}/{}/'.format(direc_set,cancer,feature_selection_type,preprocess_type))
     else:
-        dir = os.path.expanduser('~/{}/Project/PreparedData/'.format(direc_set)) # TODO: TEST
+        dir = os.path.expanduser('~/{}/Project/PreparedData/'.format(direc_set))
 
 
     trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4,testset_0,testset_1,testset_2,testset_3,testset_4,trainset_feat_0, \

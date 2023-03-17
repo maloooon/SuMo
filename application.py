@@ -53,7 +53,7 @@ def FeatureSelectFoldsAndSave(direc_set = 'SUMO', name_cancer ='KIRC', which_vie
     dir = os.path.expanduser("~/{}/Project/ProcessedNotFeatSelectedData/{}/{}/cols_remove.txt".format(direc_set,preprocess_type,folds_folder_name))
     temp = open(dir,"r")
     cols_remove = temp.read().split("\n")
-    del cols_remove[-1]         # TODO : no median rausmachen, nur für Tests hier
+    del cols_remove[-1]
     main_dir = '~/{}/Project/PreparedData/{}/{}/{}'.format(direc_set,folds_folder_name,feature_selection_type,preprocess_type)
 
     if feature_selection_type.lower() == 'ppi':

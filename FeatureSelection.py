@@ -313,7 +313,7 @@ class PPI():
             for c2,protein_idx in enumerate(mapping):
                 # For certain protein in sample ...
                 for c3, feat_values in enumerate(mapping[protein_idx]):
-                    # If we have no feature value for this view, we add the median # TODO : maybe delete
+                    # If we have no feature value for this view, we add the median #
 
                     # Proteins which don't have mappings to each view that could possibly have one will be deleted
                     if len(feat_values) == 0:

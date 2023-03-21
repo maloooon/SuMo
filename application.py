@@ -22,6 +22,19 @@ def get_free_gpu_idx():
 def FeatureSelectFoldsAndSave(direc_set = 'SUMO', name_cancer ='KIRC', which_views = [], n_folds = 5,folds_folder_name='KIRP4VIEWS',feature_selection_type = 'PCA',
                               components_PCA = [100,100,100,100],preprocess_type = 'MaxAbs'):
 
+    """
+    Select Features and save data.
+    Load prepared (preprocessed&feature selected) cancer.
+    :param direc_set: Decide if on Desktop or GPU environment ; dtype : String
+    :param name_cancer_folder: Folder to load cancer from ; type : String
+    :param which_views: Name of the views to be analyzed ; dtype : List of strings
+    :param n_folds: Number of folds ; dtype : Int
+    :param preprocess_type: Type of preprocessing (MinMax/Robust/Standardize/MaxAbs) ; dtype : String
+    :param feature_selection_type: Type of feature selection (PCA/Variance/PPI) ; dtype : String
+    :param components_PCA: PCA components to choose ; dtype : List of int (one for each view)
+    :return:
+    """
+
     cancer_data = ReadInData.readcancerdata(name_cancer)
     data = cancer_data[0][0]
     feature_offsets = cancer_data[0][1]
@@ -230,11 +243,14 @@ def FeatureSelectFoldsAndSave(direc_set = 'SUMO', name_cancer ='KIRC', which_vie
 
 def PreprocessFoldsAndSave(direc_set = 'SUMO', name_cancer ='KIRC', which_views = [], n_folds = 5,folds_folder_name='KIRP4VIEWS', preprocess_type = 'MaxAbs'):
     """
+    Preprocess data and save it.
     Preprocess the folds,and save data.
-    :param direc_set:
-    :param folds_folder_name:
-    :param feature_selection_type:
-    :param feature_names:
+    :param direc_set: Decide if on Desktop or GPU environment ; dtype : String
+    :param name_cancer : Name of the cancer ; dtype : String
+    :param which_views: Name of the views to be analyzed ; dtype : List of strings
+    :param n_folds: Number of folds ; dtype : Int
+    :param folds_folder_name: Folder to save data in ; type : String
+    :param preprocess_type: Type of preprocessing (MinMax/Robust/Standardize/MaxAbs) ; dtype : String
     """
 
     cancer_data = ReadInData.readcancerdata(name_cancer)
@@ -273,11 +289,11 @@ def PreprocessFoldsAndSave(direc_set = 'SUMO', name_cancer ='KIRC', which_views 
 def SaveFolds(direc_set = 'SUMO', name_cancer = 'KIRC', which_views=[],n_folds=5,folds_folder_name='KIRP4VIEWS'):
     """
     Save cross validated folds.
-    :param direct_set:
-    :param name_cancer:
-    :param which_views:
-    :param n_folds:
-    :param folds_folder_name:
+    :param direct_set: Decide if on Desktop or GPU environment ; dtype : String
+    :param name_cancer: Name of the cancer which we are currently analyzing ; dtype : String
+    :param which_views: Decide which views to look at (use [] if you want to use all possible ones) ; dtype : List of Strings
+    :param n_folds: Number of folds ; dtype : Int
+    :param folds_folder_name: Folder to save data in ; type : String
     """
 
     # 4 views STAD,LUAD,LAML,KIRC,KIRP,LIHC,LUSC,MESO,UVM
@@ -312,17 +328,17 @@ def LoadPreparedCancer(direc_set = 'SUMO', name_cancer_folder = 'KIRC2', n_folds
                        preprocess_type='Standardize',feature_selection_type='PCA',nn_type='FCNN',nn_setting=['concat'],
                        mode='tune'):
     """
-
-    :param direc_set:
-    :param name_cancer_folder:
-    :param which_views:
-    :param n_folds:
-    :param preprocess_type:
-    :param feature_selection_type:
-    :param nn_type:
-    :param nn_setting:
-    :param mode:
-    :param components_PCA:
+    Load prepared (preprocessed&feature selected) cancer.
+    :param direc_set: Decide if on Desktop or GPU environment ; dtype : String
+    :param name_cancer_folder: Folder to load cancer from ; type : String
+    :param which_views: Name of the views to be analyzed ; dtype : List of strings
+    :param n_folds: Number of folds ; dtype : Int
+    :param preprocess_type: Type of preprocessing (MinMax/Robust/Standardize/MaxAbs) ; dtype : String
+    :param feature_selection_type: Type of feature selection (PCA/Variance/PPI) ; dtype : String
+    :param nn_type: Type of neural network (FCNN/AE/GCN) ; dtype : String
+    :param nn_setting: Setting of neural network (AE & GCN have different settings) ; dtype : List of strings
+    :param mode: Decide whether to train and optimize (Train/Tune) ; dtype : String
+    :param components_PCA: PCA components to choose ; dtype : List of int (one for each view)
     :return:
     """
 
@@ -410,21 +426,33 @@ def LoadPreparedCancer(direc_set = 'SUMO', name_cancer_folder = 'KIRC2', n_folds
                     fp.write("%s\n" % item)
 
 
+
+
+
+
+
+
+#################### OLD FUNCTION, used to load in brand new cancer and directly preprocess, feature select etc. // use above functions and save preprocessed data, feature selected etc.
+#################### as this is needed for benchmark purposes
+"""
 def LoadNewCancer(direc_set = 'SUMO',name_cancer='KIRC',which_views=[],n_folds=5,preprocess_type='Standardize',
-                  feature_selection_type='PCA',nn_type='FCNN',nn_setting=['concat'],mode='train',components_PCA=[100,100,100,100]):
-    """
-    Load in a new cancer and choose a preprocessing, feature selection and NN type. Decide whether to optimize with
-    optuna or simply train the NN on own inputs.
-    :param name_cancer: Name of the cancer ; dtype : String
-    :param which_views: Name of the views to be analyzed ; dtype : List of strings
-    :param n_folds: Number of folds ; dtype : Int
-    :param preprocess_type: Type of preprocessing (MinMax/Robust/Standardize/MaxAbs) ; dtype : String
-    :param feature_selection_type: Type of feature selection (PCA/Variance/PPI) ; dtype : String
-    :param nn_type : Type of neural network (FCNN/AE/GCN) ; dtype : String
-    :param nn_setting : Setting of neural network (AE & GCN have different settings) ; dtype : List of strings
-    :param mode: Decide whether to train and optimize (Train/Tune) ; dtype : String
-    :param components_PCA: PCA components to choose ; dtype : List of int (one for each view)
-    """
+                  feature_selection_type='PCA',nn_type='FCNN',nn_setting=['concat'],mode='train',components_PCA=[100,100,100,100],folds_folder_name = 'KIRC2'):
+
+    
+  #  Load in a new cancer and choose a preprocessing, feature selection and NN type. Decide whether to optimize with
+  #  optuna or simply train the NN on own inputs.
+  #  :param name_cancer: Name of the cancer ; dtype : String
+  #  :param which_views: Name of the views to be analyzed ; dtype : List of strings
+  #  :param n_folds: Number of folds ; dtype : Int
+  #  :param preprocess_type: Type of preprocessing (MinMax/Robust/Standardize/MaxAbs) ; dtype : String
+  #  :param feature_selection_type: Type of feature selection (PCA/Variance/PPI) ; dtype : String
+  #  :param nn_type : Type of neural network (FCNN/AE/GCN) ; dtype : String
+  #  :param nn_setting : Setting of neural network (AE & GCN have different settings) ; dtype : List of strings
+  #  :param mode: Decide whether to train and optimize (Train/Tune) ; dtype : String
+  #  :param components_PCA: PCA components to choose ; dtype : List of int (one for each view)
+  #  :param folds_folder_name : Folder to save folds into ; dtype : String
+
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print("Running on device : ", device)
     # Define Cancer to load
@@ -461,12 +489,13 @@ def LoadNewCancer(direc_set = 'SUMO',name_cancer='KIRC',which_views=[],n_folds=5
                                                           n_folds = n_folds,
                                                           type_preprocess= preprocess_type,
                                                           save_folds= False,
-                                                          saved_folds_processing=False)
+                                                          saved_folds_processing=False,
+                                                          folds_folder_name=folds_folder_name)
 
 
     n_train_samples, n_test_samples,n_val_samples, view_names_fix = multimodule.setup()
 
-    # After preprocessing, views might have been deleted due to missing data
+    # After preprocessing, views might have been deleted due to missing data 
     dir = os.path.expanduser('~/{}/Project/TCGAData/cancerviews.txt'.format(direc_set))
     with open(dir, 'w') as fp:
         for item in view_names_fix:
@@ -481,7 +510,7 @@ def LoadNewCancer(direc_set = 'SUMO',name_cancer='KIRC',which_views=[],n_folds=5
             val_duration, val_event, \
             test_duration, test_event = multimodule.feature_selection(feature_selection_type.lower(), feature_names)
 
-            # For each fold
+            # For each fold 
             for c_fold in range(n_folds):
                 print("For Fold {}".format(c_fold))
                 print("Train data has shape : {}".format(train_data[c_fold].shape))
@@ -785,7 +814,7 @@ def LoadNewCancer(direc_set = 'SUMO',name_cancer='KIRC',which_views=[],n_folds=5
 
 
 
-
+"""
 
 if __name__ == '__main__':
     try:
@@ -796,25 +825,28 @@ if __name__ == '__main__':
         print(e)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print("Running on device : ", device)
-    #  LoadNewCancer(name_cancer='LIHC',which_views=[])
-    # Folds saved in folder FoldsNew
-    #  SaveFolds(name_cancer='KIRC',n_folds=5,folds_folder_name='KIRC4VIEWS',which_views=[])
+    # Folds saved in folder FoldsNew 
+  #  SaveFolds(name_cancer='KIRC',n_folds=5,folds_folder_name='KIRC4VIEWS',which_views=[])
     # Saved in folder : ProcessedNotFeatSelectedData
-
-    # PreprocessFoldsAndSave(name_cancer='KIRC',n_folds=5,folds_folder_name='KIRC4VIEWS',preprocess_type='Robust')
+  
+   # PreprocessFoldsAndSave(name_cancer='KIRC',n_folds=5,folds_folder_name='KIRC4VIEWS',preprocess_type='Robust')
     # Saved in folder : Prepared Data
-    # FeatureSelectFoldsAndSave(name_cancer='LIHC',n_folds=5,folds_folder_name='LIHC4VIEWS',preprocess_type='MinMax', feature_selection_type = 'PCA')
-    # FeatureSelectFoldsAndSave(name_cancer='STAD',n_folds=5,folds_folder_name='STAD4VIEWS',preprocess_type='MinMax', feature_selection_type = 'Variance_2')
-    #  FeatureSelectFoldsAndSave(name_cancer='STAD',n_folds=5,folds_folder_name='STAD4VIEWS',preprocess_type='Robust', feature_selection_type = 'PCA')
-    # FeatureSelectFoldsAndSave(name_cancer='KIRC',n_folds=5,folds_folder_name='KIRC4VIEWS',preprocess_type='Standardize', feature_selection_type = 'PCA')
-    #
+   # FeatureSelectFoldsAndSave(name_cancer='LIHC',n_folds=5,folds_folder_name='LIHC4VIEWS',preprocess_type='MinMax', feature_selection_type = 'PCA')
+   # FeatureSelectFoldsAndSave(name_cancer='STAD',n_folds=5,folds_folder_name='STAD4VIEWS',preprocess_type='MinMax', feature_selection_type = 'Variance_2')
+  #  FeatureSelectFoldsAndSave(name_cancer='STAD',n_folds=5,folds_folder_name='STAD4VIEWS',preprocess_type='Robust', feature_selection_type = 'PCA')
+   # FeatureSelectFoldsAndSave(name_cancer='KIRC',n_folds=5,folds_folder_name='KIRC4VIEWS',preprocess_type='Standardize', feature_selection_type = 'PCA')
+  #
 
     # NOTE : For AE setting, everything can be set here, but if you wish to only use 1 Layer in FCNN when the last AE has overall as setting
     # NOTE : this needs to be set in AE code itself.
-    #  LoadPreparedCancer(name_cancer_folder = 'LUSC4VIEWS',feature_selection_type='PCA',nn_type='FCNN',nn_setting= ['cross_elementwisemax','overallavg'],preprocess_type='MaxAbs')
-    # LoadPreparedCancer(name_cancer_folder = 'LUAD4VIEWS',feature_selection_type='PCA',nn_type='AE',nn_setting= ['concat','overallmax'],preprocess_type='MinMax')
-    LoadPreparedCancer(name_cancer_folder = 'KIRC4VIEWS',feature_selection_type='PCA',nn_type='AE',nn_setting= ['overallavg'],preprocess_type='MinMax')
-#   LoadNewCancer(name_cancer='KIRC',feature_selection_type='PPI', mode='tune', nn_type='GCN')
+  #  LoadPreparedCancer(name_cancer_folder = 'LUSC4VIEWS',feature_selection_type='PCA',nn_type='FCNN',nn_setting= ['cross_elementwisemax','overallavg'],preprocess_type='MaxAbs')
+   # LoadPreparedCancer(name_cancer_folder = 'LUAD4VIEWS',feature_selection_type='PCA',nn_type='AE',nn_setting= ['concat','overallmax'],preprocess_type='MinMax')
+  #  LoadPreparedCancer(name_cancer_folder = 'KIRC4VIEWS',feature_selection_type='PCA',nn_type='AE',nn_setting= ['overallavg'],preprocess_type='MinMax')
+
+    #   FCNN.test_model(n_fold=0,t_preprocess='MinMax',feature_selection_type='PCA',cancer='KIRC4VIEWS')
+    #   AE.test_model(n_fold=3,t_preprocess='MinMax',feature_selection_type='PCA',model_types=['elementwisemax'],cancer='KIRC4VIEWS',decoder_bool=False)
+ #   LoadNewCancer(name_cancer='KIRC',feature_selection_type='PPI', mode='tune', nn_type='GCN')
+
 
 
 

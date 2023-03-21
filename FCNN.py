@@ -576,7 +576,267 @@ def objective(trial, n_fold, t_preprocess,feature_selection_type,cancer,mode):
     _ = model.compute_baseline_hazards()
 
 
-    # Predict based on test data
+    # Predict based on validation data
+    surv = model.predict_surv_df(val_data[c_fold])
+
+    # Plot it
+    #     surv.iloc[:, :5].plot()
+    #     plt.ylabel('S(t | x)')
+    #     _ = plt.xlabel('Time')
+
+
+    # Evaluate with concordance, brier score and binomial log-likelihood
+    ev = EvalSurv(surv, val_duration[c_fold], val_event[c_fold], censor_surv='km') # censor_surv : Kaplan-Meier
+
+    # Concordance Index ; Used for Optimization
+    concordance_index = ev.concordance_td()
+
+    if concordance_index < 0.5:
+        concordance_index = 1 - concordance_index
+
+
+    # These two scores can also be used for Optimization if wanted
+    #Brier score
+    #   time_grid = np.linspace(test_duration.min(), test_duration.max(), 100)
+    #   _ = ev.brier_score(time_grid).plot
+    #   brier_score = ev.integrated_brier_score(time_grid)
+
+    #Binomial log-likelihood
+    #   binomial_score = ev.integrated_nbll(time_grid)
+
+    # SAVING MODEL POSSIBILITY
+    # dir = os.path.expanduser(r'~/SUMO/Project/Trial/Models/Fold_{}_Trial_{}'.format(c_fold,trial.number))
+
+    # torch.save(net,dir)
+    return concordance_index
+
+
+
+
+def test_model(n_fold,t_preprocess,feature_selection_type,cancer):
+    """Function to test the model on optimized hyperparameter settings.
+    :param n_fold : Number of the fold to test ; dtype : Int
+    :param t_preprocess : Type of preprocessing ; dtype : String
+    :param feature_selection_type : Feature selection type ; dtype : String
+    :param cancer : Name of the cancer folder ; dtype : String"""
+
+    #JUMPER1
+    direc_set = 'SUMO'
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # Load in data
+    preprocess_type = t_preprocess
+
+    dir = os.path.expanduser('~/{}/Project/PreparedData/{}/{}/{}/'.format(direc_set,cancer,feature_selection_type,preprocess_type))
+
+
+
+    trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4,testset_0,testset_1,testset_2,testset_3,testset_4,trainset_feat_0, \
+    trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4,view_names= load_data(data_dir = dir)
+
+
+    # For tests, we just look at mRNA and DNA
+    view_names = ['MRNA','DNA']
+    # Feature offsets need to be the same in train/val/test for each fold, otherwise NN wouldn't work (diff dimension inputs)
+    feat_offs = [trainset_feat_0,trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4]
+
+
+    for c2,_ in enumerate(feat_offs):
+        feat_offs[c2] = list(feat_offs[c2].values)
+        for idx,_ in enumerate(feat_offs[c2]):
+            feat_offs[c2][idx] = feat_offs[c2][idx].item()
+
+
+    # Split data in feature values, duration, event
+
+    trainset = [trainset_0 ,trainset_1,trainset_2,trainset_3,trainset_4]
+    valset = [valset_0 ,valset_1,valset_2,valset_3,valset_4]
+    testset = [testset_0,testset_1,testset_2,testset_3,testset_4]
+    n_folds = len(trainset)
+    train_data_folds = []
+    train_duration_folds = []
+    train_event_folds = []
+    val_data_folds = []
+    val_duration_folds = []
+    val_event_folds = []
+    test_data_folds = []
+
+    # LOAD IN DATA
+    for c2,_ in enumerate(trainset):
+        train_data = []
+        for c,feat in enumerate(feat_offs[c2]):
+            if c < len(feat_offs[c2]) - 5:  # train data views # CHANGED -3 to -5  TO NOT LOOK AT microRNA and RPPA
+                data_np = np.array((trainset[c2].iloc[:, feat_offs[c2][c] : feat_offs[c2][c+1]]).values).astype('float32')
+                data_tensor = torch.from_numpy(data_np).to(torch.float32)
+                data_tensor = data_tensor.to(device)
+                train_data.append(data_tensor)
+            elif c == len(feat_offs[c2]) - 3: # duration
+                duration_np = (np.array((trainset[c2].iloc[:, feat_offs[c2][c] : feat_offs[c2][c+1]]).values).astype('float32')).squeeze(axis=1)
+                duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
+                duration_tensor = duration_tensor.to(device)
+                train_duration = duration_tensor
+
+            elif c == len(feat_offs[c2]) -2: # event
+                event_np = (np.array((trainset[c2].iloc[:, feat_offs[c2][c] : feat_offs[c2][c+1]]).values).astype('float32')).squeeze(axis=1)
+                event_tensor = torch.from_numpy(event_np).to(torch.float32)
+                event_tensor = event_tensor.to(device)
+                train_event = event_tensor
+
+        train_data = tuple(train_data)
+
+        val_data = []
+        for c,feat in enumerate(feat_offs[c2]):
+            if c < len(feat_offs[c2]) - 5: # train data views # CHANGED -3 to -5  TO NOT LOOK AT microRNA and RPPA
+                data_np = np.array((valset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')
+                data_tensor = torch.from_numpy(data_np).to(torch.float32)
+                data_tensor = data_tensor.to(device)
+                val_data.append(data_tensor)
+
+            elif c == len(feat_offs[c2]) - 3: # duration
+                duration_np = (np.array((valset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')).squeeze(axis=1)
+                duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
+                duration_tensor = duration_tensor.to(device)
+                val_duration = duration_tensor
+
+            elif c == len(feat_offs[c2]) -2: # event
+                event_np = (np.array((valset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')).squeeze(axis=1)
+                event_tensor = torch.from_numpy(event_np).to(torch.float32)
+                event_tensor = event_tensor.to(device)
+                val_event = event_tensor
+
+
+
+        test_data = []
+        for c,feat in enumerate(feat_offs[c2]):
+            if c < len(feat_offs[c2]) - 5: # train data views # CHANGED -3 to -5  TO NOT LOOK AT microRNA and RPPA
+                data_np = np.array((testset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')
+                data_tensor = torch.from_numpy(data_np).to(torch.float32)
+                data_tensor = data_tensor.to(device)
+                test_data.append(data_tensor)
+
+            elif c == len(feat_offs[c2]) - 3: # duration
+                duration_np = (np.array((testset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')).squeeze(axis=1)
+                duration_tensor = torch.from_numpy(duration_np).to(torch.float32)
+                duration_tensor = duration_tensor.to(device)
+                test_duration = duration_tensor
+
+            elif c == len(feat_offs[c2]) -2: # event
+                event_np = (np.array((testset[c2].iloc[:, feat_offs[c2][c]: feat_offs[c2][c + 1]]).values).astype('float32')).squeeze(axis=1)
+                event_tensor = torch.from_numpy(event_np).to(torch.float32)
+                event_tensor = event_tensor.to(device)
+                test_event = event_tensor
+
+        train_data_folds.append(train_data)
+        val_data_folds.append(val_data)
+        train_duration_folds.append(train_duration)
+        val_duration_folds.append(val_duration)
+        train_event_folds.append(train_event)
+        val_event_folds.append(val_event)
+        test_data_folds.append(test_data)
+
+    # Rename so we have same structure as in train function
+    train_data = train_data_folds
+    train_duration = train_duration_folds
+    train_event = train_event_folds
+    val_data = val_data_folds
+    val_duration = val_duration_folds
+    val_event = val_event_folds
+    test_data = test_data_folds
+
+
+
+
+    #JUMPER1
+    # Current fold to be optimized
+    c_fold = n_fold
+    # Optimize each fold on its own
+
+    dimensions_train = [x.shape[1] for x in train_data[c_fold]]
+    dimensions_val = [x.shape[1] for x in val_data[c_fold]]
+    dimensions_test = [x.shape[1] for x in test_data[c_fold]]
+
+    assert (dimensions_train == dimensions_val == dimensions_test), 'Feature mismatch between train/test'
+
+    dimensions = dimensions_train
+
+    # Transforms for PyCox
+    train_surv = (train_duration[c_fold], train_event[c_fold])
+    val_data_full = (val_data[c_fold], (val_duration[c_fold], val_event[c_fold]))
+
+
+    params={'l2_regularization_bool': True, 'learning_rate': 0.03179547997936081, 'l2_regularization_rate': 3.158678050616449e-05, 'batch_size': 64, 'dropout_prob': 0.1, 'dropout_bool': False, 'batchnorm_bool': True, 'prelu_rate': 0.75, 'layers_1_mRNA': 64, 'layers_2_mRNA': 32, 'layers_1_mRNA_activfunc': 'prelu', 'layers_2_mRNA_activfunc': 'sigmoid', 'layers_1_mRNA_dropout': 'no', 'layers_2_mRNA_dropout': 'no', 'layers_1_mRNA_batchnorm': 'no', 'layers_2_mRNA_batchnorm': 'no', 'layers_1_DNA': 32, 'layers_2_DNA': 16, 'layers_1_DNA_activfunc': 'sigmoid', 'layers_2_DNA_activfunc': 'sigmoid', 'layers_1_DNA_dropout': 'no', 'layers_2_DNA_dropout': 'no', 'layers_1_DNA_batchnorm': 'no', 'layers_2_DNA_batchnorm': 'yes', 'layers_final_activfunc': 'prelu', 'layer_final_dropout': 'yes', 'layer_final_batchnorm': 'yes'}
+    # LOAD MODEL IN DIRECTLY
+    #  dir = os.path.expanduser(r'~/SUMO/Project/Trial/Models/Fold_{}_Trial_1'.format(c_fold))
+    #  net = torch.load(dir).to(device)
+
+    net = NN_changeable(views=view_names,
+                        in_features=dimensions,
+                        n_hidden_layers_dims=[[params['layers_1_mRNA'], params['layers_2_mRNA']],
+                                              [params['layers_1_DNA'], params['layers_2_DNA']]],
+                        activ_funcs=[[params['layers_1_mRNA_activfunc'], params['layers_2_mRNA_activfunc']],
+                                     [params['layers_1_DNA_activfunc'], params['layers_2_DNA_activfunc']],['none']],
+                        dropout_prob=params['dropout_prob'],
+                        dropout_layers=[[params['layers_1_mRNA_dropout'],params['layers_2_mRNA_dropout']],
+                                        [params['layers_1_DNA_dropout'],params['layers_2_DNA_dropout']]],
+                        batch_norm=[[params['layers_1_mRNA_batchnorm'], params['layers_2_mRNA_batchnorm']],
+                                    [params['layers_1_DNA_batchnorm'], params['layers_2_DNA_batchnorm']]],
+                        dropout_bool=params['dropout_bool'],
+                        batch_norm_bool=params['batchnorm_bool'],
+                        print_bool=False,
+                        prelu_init= params['prelu_rate']
+                        ).to(device)
+
+
+    if params['l2_regularization_bool'] == True:
+        optimizer = Adam(net.parameters(), lr=params['learning_rate'] ,weight_decay=params['l2_regularization_rate'])
+    else:
+        optimizer = Adam(net.parameters(), lr=params['learning_rate'])
+
+    callbacks = [tt.callbacks.EarlyStopping(patience=10)]
+
+
+    model = models.CoxPH(net,optimizer)
+    model.set_device(torch.device(device))
+    print_loss = False
+
+
+    # Fit model
+    log = model.fit(train_data[c_fold],
+                    train_surv,
+                    params['batch_size'],
+                    100,
+                    callbacks = callbacks,
+                    val_data=val_data_full,
+                    val_batch_size= params['batch_size'],
+                    verbose=print_loss)
+
+
+    # Plot it
+    # _ = log.plot()
+
+    # Change for EvalSurv-Function
+    try:
+        test_duration = test_duration.cpu().detach().numpy()
+        test_event = test_event.cpu().detach().numpy()
+    except AttributeError:
+        pass
+
+
+    for c,fold in enumerate(train_data):
+        try:
+            train_duration[c_fold] = train_duration[c_fold].cpu().detach().numpy()
+            train_event[c_fold] = train_event[c_fold].cpu().detach().numpy()
+            val_duration[c_fold] = val_duration[c_fold].cpu().detach().numpy()
+            val_event[c_fold] = val_event[c_fold].cpu().detach().numpy()
+        except AttributeError: # in this case already numpy arrays
+            pass
+
+
+
+    # Since Cox semi parametric, we calculate a baseline hazard to introduce a time variable
+    _ = model.compute_baseline_hazards()
+
+
+    # Predict based on validation data
     surv = model.predict_surv_df(test_data[c_fold])
 
     # Plot it
@@ -605,8 +865,7 @@ def objective(trial, n_fold, t_preprocess,feature_selection_type,cancer,mode):
     #   binomial_score = ev.integrated_nbll(time_grid)
 
 
-    return concordance_index
-
+    print(concordance_index)
 
 
 def optuna_optimization(n_fold,t_preprocess,feature_selection_type,cancer, mode):
@@ -616,7 +875,7 @@ def optuna_optimization(n_fold,t_preprocess,feature_selection_type,cancer, mode)
 
 
     # Set amount of different trials
-    EPOCHS = 100
+    EPOCHS = 2
     func = lambda trial: objective(trial, n_fold, t_preprocess,feature_selection_type,cancer,mode)
 
     study = optuna.create_study(directions=['maximize'],sampler=optuna.samplers.TPESampler(),pruner=optuna.pruners.MedianPruner())

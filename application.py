@@ -32,7 +32,6 @@ def FeatureSelectFoldsAndSave(direc_set = 'SUMO', name_cancer ='KIRC', which_vie
     :param preprocess_type: Type of preprocessing (MinMax/Robust/Standardize/MaxAbs) ; dtype : String
     :param feature_selection_type: Type of feature selection (PCA/Variance/PPI) ; dtype : String
     :param components_PCA: PCA components to choose ; dtype : List of int (one for each view)
-    :return:
     """
 
     cancer_data = ReadInData.readcancerdata(name_cancer)
@@ -337,9 +336,8 @@ def LoadPreparedCancer(direc_set = 'SUMO', name_cancer_folder = 'KIRC2', n_folds
     :param feature_selection_type: Type of feature selection (PCA/Variance/PPI) ; dtype : String
     :param nn_type: Type of neural network (FCNN/AE/GCN) ; dtype : String
     :param nn_setting: Setting of neural network (AE & GCN have different settings) ; dtype : List of strings
-    :param mode: Decide whether to train and optimize (Train/Tune) ; dtype : String
+    :param mode: Always set to tune ; dtype : String
     :param components_PCA: PCA components to choose ; dtype : List of int (one for each view)
-    :return:
     """
 
     if preprocess_type.lower() == 'all':
@@ -378,7 +376,7 @@ def LoadPreparedCancer(direc_set = 'SUMO', name_cancer_folder = 'KIRC2', n_folds
 
     elif nn_type.lower() == 'ae':
 
-        decoder_bool = False
+        decoder_bool = True
         if decoder_bool == True:
             decoder = "decoder"
         else:
@@ -426,6 +424,43 @@ def LoadPreparedCancer(direc_set = 'SUMO', name_cancer_folder = 'KIRC2', n_folds
                     fp.write("%s\n" % item)
 
 
+
+
+
+
+
+
+if __name__ == '__main__':
+    try:
+        gpu_idx = get_free_gpu_idx()
+        print("Using GPU #%s" % gpu_idx)
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_idx)
+    except Exception as e:
+        print(e)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print("Running on device : ", device)
+    # Folds saved in folder FoldsNew
+    # SaveFolds(name_cancer='BRCA',n_folds=5,folds_folder_name='PRAD1VIEW',which_views=['microRNA'])
+    # Saved in folder : ProcessedNotFeatSelectedData
+
+    # PreprocessFoldsAndSave(name_cancer='BRCA',n_folds=5,folds_folder_name='PRAD1VIEW',preprocess_type='MinMax')
+    # Saved in folder : Prepared Data
+    # FeatureSelectFoldsAndSave(name_cancer='BRCA',n_folds=5,folds_folder_name='PRAD1VIEW',preprocess_type='MinMax', feature_selection_type = 'PCA')
+    # FeatureSelectFoldsAndSave(name_cancer='STAD',n_folds=5,folds_folder_name='STAD4VIEWS',preprocess_type='MinMax', feature_selection_type = 'Variance_2')
+    #  FeatureSelectFoldsAndSave(name_cancer='STAD',n_folds=5,folds_folder_name='STAD4VIEWS',preprocess_type='Robust', feature_selection_type = 'PCA')
+    # FeatureSelectFoldsAndSave(name_cancer='KIRC',n_folds=5,folds_folder_name='KIRC4VIEWS',preprocess_type='Standardize', feature_selection_type = 'PCA')
+    #
+
+    # NOTE : For AE setting, everything can be set here, but if you wish to only use 1 Layer in FCNN when the last AE has overall as setting
+    # NOTE : this needs to be set in AE code itself.
+    # LoadPreparedCancer(name_cancer_folder = 'LUSC4VIEWS',feature_selection_type='PCA',nn_type='FCNN',nn_setting= ['cross_elementwisemax','overallavg'],preprocess_type='MaxAbs')
+    # LoadPreparedCancer(name_cancer_folder = 'LUAD4VIEWS',feature_selection_type='PCA',nn_type='AE',nn_setting= ['cross_concat','overallavg'],preprocess_type='MinMax')
+    # LoadPreparedCancer(name_cancer_folder = 'KIRC4VIEWS',feature_selection_type='PPI',nn_type='GCN',nn_setting= ['overallavg'],preprocess_type='MinMax')
+
+    # FCNN.test_model(n_fold=0,t_preprocess='MinMax',feature_selection_type='PCA',cancer='KIRC4VIEWS')
+    AE.test_model(n_fold=3,t_preprocess='MinMax',feature_selection_type='PCA',model_types=['elementwisemax'],cancer='KIRC4VIEWS',decoder_bool=False)
+#  GCN.test_model(n_fold=0,t_preprocess='MinMax',cancer='KIRC4VIEWS')
+#   LoadNewCancer(name_cancer='KIRC',feature_selection_type='PPI', mode='tune', nn_type='GCN')
 
 
 
@@ -813,41 +848,7 @@ def LoadNewCancer(direc_set = 'SUMO',name_cancer='KIRC',which_views=[],n_folds=5
                      loss_rate = params['loss_surv'])
 
 
-
 """
-
-if __name__ == '__main__':
-    try:
-        gpu_idx = get_free_gpu_idx()
-        print("Using GPU #%s" % gpu_idx)
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_idx)
-    except Exception as e:
-        print(e)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print("Running on device : ", device)
-    # Folds saved in folder FoldsNew 
-  #  SaveFolds(name_cancer='KIRC',n_folds=5,folds_folder_name='KIRC4VIEWS',which_views=[])
-    # Saved in folder : ProcessedNotFeatSelectedData
-  
-   # PreprocessFoldsAndSave(name_cancer='KIRC',n_folds=5,folds_folder_name='KIRC4VIEWS',preprocess_type='Robust')
-    # Saved in folder : Prepared Data
-   # FeatureSelectFoldsAndSave(name_cancer='LIHC',n_folds=5,folds_folder_name='LIHC4VIEWS',preprocess_type='MinMax', feature_selection_type = 'PCA')
-   # FeatureSelectFoldsAndSave(name_cancer='STAD',n_folds=5,folds_folder_name='STAD4VIEWS',preprocess_type='MinMax', feature_selection_type = 'Variance_2')
-  #  FeatureSelectFoldsAndSave(name_cancer='STAD',n_folds=5,folds_folder_name='STAD4VIEWS',preprocess_type='Robust', feature_selection_type = 'PCA')
-   # FeatureSelectFoldsAndSave(name_cancer='KIRC',n_folds=5,folds_folder_name='KIRC4VIEWS',preprocess_type='Standardize', feature_selection_type = 'PCA')
-  #
-
-    # NOTE : For AE setting, everything can be set here, but if you wish to only use 1 Layer in FCNN when the last AE has overall as setting
-    # NOTE : this needs to be set in AE code itself.
-  #  LoadPreparedCancer(name_cancer_folder = 'LUSC4VIEWS',feature_selection_type='PCA',nn_type='FCNN',nn_setting= ['cross_elementwisemax','overallavg'],preprocess_type='MaxAbs')
-   # LoadPreparedCancer(name_cancer_folder = 'LUAD4VIEWS',feature_selection_type='PCA',nn_type='AE',nn_setting= ['concat','overallmax'],preprocess_type='MinMax')
-  #  LoadPreparedCancer(name_cancer_folder = 'KIRC4VIEWS',feature_selection_type='PCA',nn_type='AE',nn_setting= ['overallavg'],preprocess_type='MinMax')
-
-    #   FCNN.test_model(n_fold=0,t_preprocess='MinMax',feature_selection_type='PCA',cancer='KIRC4VIEWS')
-    #   AE.test_model(n_fold=3,t_preprocess='MinMax',feature_selection_type='PCA',model_types=['elementwisemax'],cancer='KIRC4VIEWS',decoder_bool=False)
- #   LoadNewCancer(name_cancer='KIRC',feature_selection_type='PPI', mode='tune', nn_type='GCN')
-
-
 
 
 

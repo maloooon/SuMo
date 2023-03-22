@@ -267,6 +267,9 @@ def objective(trial, n_fold, t_preprocess,feature_selection_type,cancer,mode):
     """
     Optuna Optimization for Hyperparameters.
     :param trial: Settings of the current trial of Hyperparameters
+    :param t_preprocess : Type of preprocessing ; dtype : String
+    :param feature_selection_type : Type of feature selection ; dtype : String
+    :param cancer : Name of cancer (folder) ; dtype : String
     :return: Concordance Index ; dtype : Float
     """
 

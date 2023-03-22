@@ -46,9 +46,10 @@ class GCN(nn.Module):
         :param prelu_init: Initial Value for PreLU activation ; dtype : Float [between 0 and 1]
         :param print_bool: Decide whether to print the models structure ; dtype : Boolean
         """
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         super(GCN, self).__init__()
         self.num_nodes = num_nodes # number of proteins
-        self.edge_index = edge_index
+        self.edge_index = edge_index.to(device)
         self.ratio = ratio # SAGPooling ratio
         self.in_features = in_features # how many features per node
         self.n_hidden_layer_dims = n_hidden_layer_dims
@@ -178,6 +179,7 @@ class GCN(nn.Module):
         :param data: Data Input ; dtype : Tuple/List of Tensor(n_samples_in_batch,n_proteins * n_features)
         :return: "Risk ratio" ; dtype : Tensor(n_samples_in_batch,1)
         """
+
         batch_size = data.shape[0]
         x = data[:, :self.num_nodes * self.in_features]
         input_size = self.num_nodes
@@ -228,6 +230,7 @@ class GCN(nn.Module):
 
         # 2 Graph Convolutional Layers
         else:
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
             x = x.reshape(-1, self.in_features)
             batches = []
             for i in range(batch_size):
@@ -239,7 +242,9 @@ class GCN(nn.Module):
                 x = F.relu(self.conv1(x=x, edge_index=self.edge_index))
             elif self.activ_funcs_graphconv[0].lower() == 'sigmoid':
                 x = torch.sigmoid(self.conv1(x=x, edge_index=self.edge_index))
-
+            x = x.to(device)
+            batch = batch.to(device)
+            self.edge_index = self.edge_index.to(device)
             x, edge_index, _, batch, perm, score = self.pool1(x, self.edge_index, None, batch)
 
             if self.activ_funcs_graphconv[1].lower() == 'relu':
@@ -304,15 +309,18 @@ def objective(trial,n_fold,cancer,t_preprocess,layer_amount):
     """
     Optuna Optimization for Hyperparameters.
     :param trial: Settings of the current trial of Hyperparameters
+    :param n_fold : Number of fold to be optimized ; dtype : Int
+    :param cancer : Name of cancer (folder) ; dtype : String
+    :param t_preprocess : Type of preprocessing ; dtype : String
     :return: Concordance Index ; dtype : Float
     """
 
-    direc_set = 'Desktop'
+    direc_set = 'SUMO'
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # Load in data
     dir = os.path.expanduser('~/{}/Project/PreparedData/{}/PPI/median/{}/'.format(direc_set,cancer,t_preprocess))
 
-    print("Runnin for cancer {} with preprocessing type {} on fold {}".format(cancer,t_preprocess,n_fold))
+    print("Running for cancer {} with preprocessing type {} on fold {}".format(cancer,t_preprocess,n_fold))
     trainset_0,trainset_1,trainset_2,trainset_3,trainset_4,valset_0,valset_1,valset_2,valset_3,valset_4,testset_0,testset_1,testset_2,testset_3,testset_4,trainset_feat_0, \
     trainset_feat_1,trainset_feat_2,trainset_feat_3,trainset_feat_4, num_nodes, num_features, edge_index = load_data(data_dir = dir)
 
@@ -659,7 +667,7 @@ def test_model(n_fold,cancer,t_preprocess):
     :param cancer : Name of the cancer folder ; dtype : String"""
 
 
-    direc_set = 'Desktop'
+    direc_set = 'SUMO'
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # Load in data
     dir = os.path.expanduser('~/{}/Project/PreparedData/{}/PPI/median/{}/'.format(direc_set,cancer,t_preprocess))
@@ -849,6 +857,8 @@ def test_model(n_fold,cancer,t_preprocess):
             'layer_final_batchnorm': 'no', 'out_1_graphconv': 2, 'graphconv_1_activation_function': 'relu',
             'out_2_graphconv': 1, 'graphconv_2_activation_function': 'sigmoid'}
 
+
+
     net = GCN(num_nodes = num_nodes,
               edge_index = edge_index,
               in_features=num_features,
@@ -937,7 +947,7 @@ def test_model(n_fold,cancer,t_preprocess):
     # binomial_score = ev.integrated_nbll(time_grid)
 
 
-    return concordance_index
+    print(concordance_index)
 
 
 def optuna_optimization(n_fold,cancer,t_preprocess,layer_amount):

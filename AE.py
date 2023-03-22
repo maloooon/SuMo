@@ -960,6 +960,7 @@ def objective(trial, n_fold, t_preprocess,feature_selection_type, model_types, d
     :param model_type : types of AE model(s) ; dtype : List of String(s)
     :param decoder_bool : decide whether second decoder will be applied ; dtype : Boolean
     :param cancer : name of the cancer used to load the data ; dtype : String
+    :param mode : Decide whether to use prepared data or if we load in new data
     :return: Concordance Index ; dtype : Float
     """
 
@@ -972,7 +973,8 @@ def objective(trial, n_fold, t_preprocess,feature_selection_type, model_types, d
     if mode == 'prepared_data':
         dir = os.path.expanduser('~/{}/Project/PreparedData/{}/{}/{}/'.format(direc_set,cancer,feature_selection_type,preprocess_type))
     else:
-        dir = os.path.expanduser('~/{}/Project/PreparedData/'.format(direc_set))
+        dir = os.path.expanduser('~/{}/Project/PreparedData/'.format(direc_set)) #
+
 
 
 
@@ -1812,16 +1814,7 @@ def test_model(n_fold,t_preprocess,feature_selection_type,model_types,decoder_bo
     else:
         cross_setting = None
 
-    params={'l2_regularization_bool': True, 'learning_rate': 0.07300060328864527,
-            'l2_regularization_rate': 0.00014574521739069339, 'batch_size': 17, 'dropout_prob': 0.5,
-            'dropout_bool': True, 'batchnorm_bool': True, 'prelu_rate': 0.9500000000000001, 'loss_surv': 0.6326619879947547,
-            'layers_1_mRNA': 128, 'layers_2_mRNA': 8, 'layers_1_mRNA_activfunc': 'prelu', 'layers_2_mRNA_activfunc': 'prelu',
-            'layers_1_mRNA_dropout': 'no', 'layers_2_mRNA_dropout': 'no', 'layers_1_mRNA_batchnorm': 'no', 'layers_2_mRNA_batchnorm': 'yes',
-            'layers_1_DNA': 128, 'layers_1_DNA_activfunc': 'sigmoid', 'layers_2_DNA_activfunc': 'sigmoid', 'layers_1_DNA_dropout': 'no',
-            'layers_2_DNA_dropout': 'no', 'layers_1_DNA_batchnorm': 'no', 'layers_2_DNA_batchnorm': 'yes', 'layers_2_FCNN': 8,
-            'layers_1_FCNN_activfunc': 'relu', 'layers_2_FCNN_activfunc': 'relu', 'FCNN_dropout_prob': 0.2, 'FCNN_dropout_bool': True,
-            'FCNN_batchnorm_bool': True, 'layers_1_FCNN_dropout': 'no', 'layers_2_FCNN_dropout': 'yes', 'layers_1_FCNN_batchnorm': 'no',
-            'layers_2_FCNN_batchnorm': 'no'}
+    params={'l2_regularization_bool': False, 'learning_rate': 0.00139967793982214, 'l2_regularization_rate': 1.6487875319869825e-06, 'batch_size': 17, 'dropout_prob': 0.30000000000000004, 'dropout_bool': False, 'batchnorm_bool': False, 'prelu_rate': 0.35000000000000003, 'loss_surv': 0.231493808823674, 'layers_1_mRNA': 64, 'layers_2_mRNA': 32, 'layers_1_mRNA_activfunc': 'sigmoid', 'layers_2_mRNA_activfunc': 'prelu', 'layers_1_mRNA_dropout': 'no', 'layers_2_mRNA_dropout': 'yes', 'layers_1_mRNA_batchnorm': 'no', 'layers_2_mRNA_batchnorm': 'yes', 'layers_1_DNA': 64, 'layers_1_DNA_activfunc': 'sigmoid', 'layers_2_DNA_activfunc': 'relu', 'layers_1_DNA_dropout': 'yes', 'layers_2_DNA_dropout': 'no', 'layers_1_DNA_batchnorm': 'no', 'layers_2_DNA_batchnorm': 'no', 'layers_2_FCNN': 24, 'layers_1_FCNN_activfunc': 'relu', 'layers_2_FCNN_activfunc': 'prelu', 'FCNN_dropout_prob': 0.2, 'FCNN_dropout_bool': False, 'FCNN_batchnorm_bool': True, 'layers_1_FCNN_dropout': 'yes', 'layers_2_FCNN_dropout': 'no', 'layers_1_FCNN_batchnorm': 'yes', 'layers_2_FCNN_batchnorm': 'no'}
 
 
     layers = [[params['layers_1_mRNA'],params['layers_2_mRNA']],[params['layers_1_DNA'],params['layers_2_mRNA']]]
@@ -1874,20 +1867,48 @@ def test_model(n_fold,t_preprocess,feature_selection_type,model_types,decoder_bo
             size_of_fcnn_layer_1 = 1
 
 
+    if len(model_types) == 2:
+        if "elementwise" in model_types[0] and "overall" in model_types[1]:
+            feature_dimension_h = in_feats_second_NN_element_wise
+            feature_dimension_FCNN = [1]
+        #  feature_dimension = in_feats_third_NN_elementwise_hierachical
+        if "concat" in model_types[0] and "overall" in model_types[1]:
+            feature_dimension_h = in_feats_second_NN_concat
+            feature_dimension_FCNN = [1]
+        #   feature_dimension = in_feats_third_NN_concat_hierachical
+
+
+    if len(model_types) == 2 and model_types[0] != 'none':
+        # In this case we already have done integration method and have single omic data structure left
+        if 'concat' in model_types[0]:
+            feats_in = sum(out_sizes)
+        if 'elementwise' in model_types[0]:
+            # can be the last layer of aribtrary view from the first AE, as they need to have the same size
+            # for elementwise integration
+            feats_in = params['layers_2_mRNA']
+
+    if len(model_types) == 2:
+        # Since we definetly had overall averaging/maximizing in second AE
+        size_of_fcnn_layer_1 = 1
+
+
     #JUMPER1 (layer size)
 
 
-    # all_models.append(FCNN.NN_changeable(views = ['AE'],
-    #                                    in_features = feature_dimension_FCNN,
-    #                                    n_hidden_layers_dims= [[size_of_fcnn_layer_1,params['layers_2_FCNN']]],
-    #                                   activ_funcs = [[params['layers_1_FCNN_activfunc'],params['layers_2_FCNN_activfunc']],['none']],
-    #                                    dropout_prob=params['FCNN_dropout_prob'],
-    #                                    dropout_layers=[[params['layers_1_FCNN_dropout'],params['layers_2_FCNN_dropout']]],
-    #                                    batch_norm = [[params['layers_1_FCNN_batchnorm'],params['layers_2_FCNN_batchnorm']]],
-    #                                    dropout_bool=params['FCNN_dropout_bool'],
-    #                                    batch_norm_bool=params['FCNN_batchnorm_bool'],
-    #                                    print_bool=False,
-    #                                    prelu_init = params['prelu_rate'])).to(device)
+    if len(model_types) == 2:
+        all_models.append(AE(views = ['AE'],
+                             in_features= feature_dimension_h,
+                             n_hidden_layers_dims= [[feats_in, params['layers_2_hierarichcal_integrated']]],
+                             activ_funcs=[[params['layers_1_activfunc_hierarichcal_integrated'],params['layers_2_activfunc_hierarichcal_integrated']]],
+                             dropout_bool= params['dropout_bool_hierachical_integrated'],
+                             dropout_prob= params['dropout_prob_hierachical_integrated'],
+                             dropout_layers= [[params['layers_1_dropout_hierarichcal_integrated'],params['layers_2_hierarichcal_integrated']]],
+                             batch_norm_bool= params['batchnorm_bool'],
+                             batch_norm= [[params['layers_1_batchnorm_hierarichcal_integrated'],params['layers_2_batchnorm_hierarichcal_integrated']]],
+                             type_ae=model_types[1],
+                             cross_mutation=None,
+                             print_bool=False,
+                             prelu_init= params['prelu_rate'])).to(device)
 
 
     all_models.append(FCNN.NN_changeable(views = ['AE'],
@@ -1921,6 +1942,13 @@ def test_model(n_fold,t_preprocess,feature_selection_type,model_types,decoder_bo
     #   cross_pos = model_types.index("cross") + 1
     #   model = models.CoxPH(full_net,optimizer, loss=LossHierarichcalAESingleCross(alpha=[0.4,0.4,0.2], decoding_bool=True, cross_position=cross_pos)) # Change Loss here
 
+    if second_decoder_bool == True:
+        loss_MSE = params['loss_MSE']
+        loss_MSE_2 = params['loss_MSE_2']
+        # losses need to sum up to 1
+        summed_losses = loss_MSE + loss_MSE_2 + params['loss_surv']
+        loss_3_values_hierarchical = [loss_MSE/summed_losses, loss_MSE_2/summed_losses, params['loss_surv']/summed_losses]
+
 
     if len(model_types) == 1:
         if "cross" in model_types[0]:
@@ -1930,22 +1958,22 @@ def test_model(n_fold,t_preprocess,feature_selection_type,model_types,decoder_bo
 
 
     # if second decoder, we need to use loss_3 ; else normal 2 valued loss
-    #   if len(model_types) == 2:
-    #       if second_decoder_bool == False:
-    #           loss_val  = [params['loss_surv'], 1-params['loss_surv']]
-    #           if "cross" in model_types[0]:
-    #               loss_func = LossHierarichcalAESingleCross(loss_val, cross_position=1,decoding_bool=second_decoder_bool)
-    #           else:
-    #               loss_func = LossHierarichcalAE(loss_val,decoding_bool=second_decoder_bool)
-    #       else:
-    #           loss_val = loss_3_values_hierarchical
-    #           if "cross" in model_types[0]:
-    #               loss_func = LossHierarichcalAESingleCross(loss_val, cross_position=1,decoding_bool=second_decoder_bool)
-    #           else:
-    #               loss_func = LossHierarichcalAE(loss_val,decoding_bool=second_decoder_bool)
+    if len(model_types) == 2:
+        if second_decoder_bool == False:
+            loss_val  = [params['loss_surv'], 1-params['loss_surv']]
+            if "cross" in model_types[0]:
+                loss_func = LossHierarichcalAESingleCross(loss_val, cross_position=1,decoding_bool=second_decoder_bool)
+            else:
+                loss_func = LossHierarichcalAE(loss_val,decoding_bool=second_decoder_bool)
+        else:
+            loss_val = loss_3_values_hierarchical
+            if "cross" in model_types[0]:
+                loss_func = LossHierarichcalAESingleCross(loss_val, cross_position=1,decoding_bool=second_decoder_bool)
+            else:
+                loss_func = LossHierarichcalAE(loss_val,decoding_bool=second_decoder_bool)
 
 
-    # decoding bool False : loss = [loss_surv, 1-loss_surv] ; else loss_3_values_hierarchical
+        # decoding bool False : loss = [loss_surv, 1-loss_surv] ; else loss_3_values_hierarchical
     #   loss_hierachical_no_cross = LossHierarichcalAE(loss_3_values_hierarchical,decoding_bool=second_decoder_bool)
     # loss : alpha * surv_loss + (1-alpha) * ae_loss
     model = models.CoxPH(full_net,

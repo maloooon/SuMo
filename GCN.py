@@ -315,7 +315,7 @@ def objective(trial,n_fold,cancer,t_preprocess,layer_amount):
     :return: Concordance Index ; dtype : Float
     """
 
-    direc_set = 'SUMO'
+    direc_set = 'Desktop'
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # Load in data
     dir = os.path.expanduser('~/{}/Project/PreparedData/{}/PPI/median/{}/'.format(direc_set,cancer,t_preprocess))
@@ -667,7 +667,7 @@ def test_model(n_fold,cancer,t_preprocess):
     :param cancer : Name of the cancer folder ; dtype : String"""
 
 
-    direc_set = 'SUMO'
+    direc_set = 'Desktop'
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # Load in data
     dir = os.path.expanduser('~/{}/Project/PreparedData/{}/PPI/median/{}/'.format(direc_set,cancer,t_preprocess))

@@ -445,21 +445,21 @@ if __name__ == '__main__':
 
     # PreprocessFoldsAndSave(name_cancer='BRCA',n_folds=5,folds_folder_name='PRAD1VIEW',preprocess_type='MinMax')
     # Saved in folder : Prepared Data
-    # FeatureSelectFoldsAndSave(name_cancer='BRCA',n_folds=5,folds_folder_name='PRAD1VIEW',preprocess_type='MinMax', feature_selection_type = 'PCA')
-    # FeatureSelectFoldsAndSave(name_cancer='STAD',n_folds=5,folds_folder_name='STAD4VIEWS',preprocess_type='MinMax', feature_selection_type = 'Variance_2')
-    #  FeatureSelectFoldsAndSave(name_cancer='STAD',n_folds=5,folds_folder_name='STAD4VIEWS',preprocess_type='Robust', feature_selection_type = 'PCA')
-    # FeatureSelectFoldsAndSave(name_cancer='KIRC',n_folds=5,folds_folder_name='KIRC4VIEWS',preprocess_type='Standardize', feature_selection_type = 'PCA')
-    #
+ #   FeatureSelectFoldsAndSave(name_cancer='BRCA',n_folds=5,folds_folder_name='PRAD1VIEW',preprocess_type='MinMax', feature_selection_type = 'PCA')
+# FeatureSelectFoldsAndSave(name_cancer='STAD',n_folds=5,folds_folder_name='STAD4VIEWS',preprocess_type='MinMax', feature_selection_type = 'Variance_2')
+#  FeatureSelectFoldsAndSave(name_cancer='STAD',n_folds=5,folds_folder_name='STAD4VIEWS',preprocess_type='Robust', feature_selection_type = 'PCA')
+# FeatureSelectFoldsAndSave(name_cancer='KIRC',n_folds=5,folds_folder_name='KIRC4VIEWS',preprocess_type='Standardize', feature_selection_type = 'PCA')
+#
 
-    # NOTE : For AE setting, everything can be set here, but if you wish to only use 1 Layer in FCNN when the last AE has overall as setting
-    # NOTE : this needs to be set in AE code itself.
-    # LoadPreparedCancer(name_cancer_folder = 'LUSC4VIEWS',feature_selection_type='PCA',nn_type='FCNN',nn_setting= ['cross_elementwisemax','overallavg'],preprocess_type='MaxAbs')
-    # LoadPreparedCancer(name_cancer_folder = 'LUAD4VIEWS',feature_selection_type='PCA',nn_type='AE',nn_setting= ['cross_concat','overallavg'],preprocess_type='MinMax')
-    # LoadPreparedCancer(name_cancer_folder = 'KIRC4VIEWS',feature_selection_type='PPI',nn_type='GCN',nn_setting= ['overallavg'],preprocess_type='MinMax')
+# NOTE : For AE setting, everything can be set here, but if you wish to only use 1 Layer in FCNN when the last AE has overall as setting
+# NOTE : this needs to be set in AE code itself.
+# LoadPreparedCancer(name_cancer_folder = 'LUSC4VIEWS',feature_selection_type='PCA',nn_type='FCNN',nn_setting= ['cross_elementwisemax','overallavg'],preprocess_type='MaxAbs')
+# LoadPreparedCancer(name_cancer_folder = 'LUAD4VIEWS',feature_selection_type='PCA',nn_type='AE',nn_setting= ['cross_concat','overallavg'],preprocess_type='MinMax')
+    LoadPreparedCancer(name_cancer_folder = 'KIRC4VIEWS',feature_selection_type='PPI',nn_type='GCN',nn_setting= ['overallavg'],preprocess_type='MinMax')
 
-    # FCNN.test_model(n_fold=0,t_preprocess='MinMax',feature_selection_type='PCA',cancer='KIRC4VIEWS')
-    AE.test_model(n_fold=3,t_preprocess='MinMax',feature_selection_type='PCA',model_types=['elementwisemax'],cancer='KIRC4VIEWS',decoder_bool=False)
-#  GCN.test_model(n_fold=0,t_preprocess='MinMax',cancer='KIRC4VIEWS')
+# FCNN.test_model(n_fold=0,t_preprocess='MinMax',feature_selection_type='PCA',cancer='KIRC4VIEWS')
+#  AE.test_model(n_fold=3,t_preprocess='MinMax',feature_selection_type='PCA',model_types=['elementwisemax'],cancer='KIRC4VIEWS',decoder_bool=False)
+#   GCN.test_model(n_fold=0,t_preprocess='MinMax',cancer='KIRC4VIEWS')
 #   LoadNewCancer(name_cancer='KIRC',feature_selection_type='PPI', mode='tune', nn_type='GCN')
 
 
